@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import type { CrmCustomer } from "@/modules/crm/types";
 
 type ChartSlice = {
@@ -10,6 +12,18 @@ type BarRow = {
   color: string;
   label: string;
   value: number;
+};
+
+const generoLabels: Record<CrmCustomer["genero"], string> = {
+  h: "Hombres",
+  m: "Mujeres",
+  o: "Otro",
+};
+
+const generoColors: Record<CrmCustomer["genero"], string> = {
+  h: "#13aee5",
+  m: "#ff5f78",
+  o: "#64748b",
 };
 
 const estadoLabels: Record<CrmCustomer["estado"], string> = {
@@ -49,7 +63,17 @@ function countBy<T extends string>(
   );
 }
 
-function getDonutSlices(customers: CrmCustomer[]): ChartSlice[] {
+function getGenderRows(customers: CrmCustomer[]): ChartSlice[] {
+  const counts = countBy(customers, (customer) => customer.genero ?? "o");
+
+  return (["h", "m", "o"] as const).map((genero) => ({
+    color: generoColors[genero],
+    label: generoLabels[genero],
+    value: counts[genero] ?? 0,
+  }));
+}
+
+function getStatusDonutSlices(customers: CrmCustomer[]): ChartSlice[] {
   const counts = countBy(customers, (customer) => customer.estado);
 
   return Object.entries(counts)
@@ -76,7 +100,7 @@ function getBarRows(customers: CrmCustomer[]): BarRow[] {
       value,
     }))
     .sort((first, second) => second.value - first.value)
-    .slice(0, 7);
+    .slice(0, 4);
 }
 
 function buildConicGradient(slices: ChartSlice[]) {
@@ -109,18 +133,19 @@ export function CustomerAnalyticsCharts({
 }: {
   customers: CrmCustomer[];
 }) {
-  const donutSlices = getDonutSlices(customers);
+  const genderRows = getGenderRows(customers);
+  const statusDonutSlices = getStatusDonutSlices(customers);
   const barRows = getBarRows(customers);
   const total = customers.length;
   const maxBarValue = Math.max(...barRows.map((row) => row.value), 1);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]">
+    <div className="grid gap-4 xl:grid-cols-[0.75fr_0.82fr_1.15fr]">
       <section className="rounded-lg border bg-background p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-sm font-black text-slate-900">
-              Clientes por estado
+              Clientes por genero
             </h2>
             <p className="text-xs text-muted-foreground">
               Distribucion actual de la base CRM
@@ -131,14 +156,53 @@ export function CustomerAnalyticsCharts({
           </span>
         </div>
 
-        <div className="mt-4 grid items-center gap-5 md:grid-cols-[180px_1fr]">
-          <div className="relative mx-auto size-40">
+        <div className="mt-4 grid items-center gap-4 sm:grid-cols-[150px_1fr]">
+          <GenderPictogram />
+
+          <div className="flex flex-col items-end space-y-3 text-right">
+            {genderRows.map((row) => (
+              <div className="flex items-start justify-end gap-2" key={row.label}>
+                <div>
+                  <p className="text-sm font-black leading-none text-slate-700">
+                    {formatPercent(row.value, total)}
+                  </p>
+                  <p className="mt-0.5 text-xs font-bold leading-none text-slate-600">
+                    {row.label}
+                  </p>
+                </div>
+                <span
+                  className="mt-0.5 size-2 rounded-full"
+                  style={{ backgroundColor: row.color }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-background p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-black text-slate-900">
+              Clientes por estado
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Avance comercial actual
+            </p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+            {total}
+          </span>
+        </div>
+
+        <div className="mt-4 grid items-center gap-5 sm:grid-cols-[150px_1fr]">
+          <div className="relative mx-auto size-36">
             <div
               aria-hidden="true"
-              className="size-40 rounded-full"
-              style={{ background: buildConicGradient(donutSlices) }}
+              className="size-36 rounded-full"
+              style={{ background: buildConicGradient(statusDonutSlices) }}
             />
-            <div className="absolute inset-10 flex flex-col items-center justify-center rounded-full bg-background text-center shadow-inner">
+            <div className="absolute inset-9 flex flex-col items-center justify-center rounded-full bg-background text-center shadow-inner">
               <span className="text-2xl font-black">{total}</span>
               <span className="text-[10px] font-bold uppercase text-muted-foreground">
                 registros
@@ -147,8 +211,8 @@ export function CustomerAnalyticsCharts({
           </div>
 
           <div className="space-y-2">
-            {donutSlices.length > 0 ? (
-              donutSlices.map((slice) => (
+            {statusDonutSlices.length > 0 ? (
+              statusDonutSlices.map((slice) => (
                 <div className="flex items-center justify-between gap-3" key={slice.label}>
                   <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700">
                     <span
@@ -210,6 +274,20 @@ export function CustomerAnalyticsCharts({
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function GenderPictogram() {
+  return (
+    <div className="mx-auto flex h-32 w-[132px] items-center justify-center overflow-hidden">
+      <Image
+        alt=""
+        className="h-32 w-32 object-contain"
+        height={128}
+        src="/images/simbolos-femeninos-masculinos-diseno-plano.png"
+        width={128}
+      />
     </div>
   );
 }

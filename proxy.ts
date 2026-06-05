@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PENDING_INVITATION_COOKIE = "bizos_pending_invitation_token";
 const PENDING_INVITATION_MAX_AGE = 60 * 60 * 24 * 7;
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next();
   const token =
     request.nextUrl.searchParams.get("token") ??
@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
 
   if (normalizedToken) {
     if (process.env.NODE_ENV !== "production") {
-      console.info("[middleware] pending invitation token captured", {
+      console.info("[proxy] pending invitation token captured", {
         path: request.nextUrl.pathname,
         tokenLength: normalizedToken.length,
       });
@@ -25,7 +25,7 @@ export function middleware(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
     });
   } else if (process.env.NODE_ENV !== "production") {
-    console.info("[middleware] pass", {
+    console.info("[proxy] pass", {
       path: request.nextUrl.pathname,
       setsInvitationCookie: false,
     });

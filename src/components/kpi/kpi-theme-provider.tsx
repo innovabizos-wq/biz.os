@@ -29,6 +29,7 @@ export const KPI_THEME_VALUES = [
   "mono-pop",
   "candy-tech",
   "primario-enfoque",
+  "biz-dashboard",
 ] as const;
 
 export const KPI_THEMES = [
@@ -146,6 +147,11 @@ export const KPI_THEMES = [
     description: "Azul, verde, amarillo y rojo de alto enfoque.",
     label: "Primario enfoque",
     value: "primario-enfoque",
+  },
+  {
+    description: "Dashboard claro biz.os con sidebar azul, vidrio blanco y KPIs suaves.",
+    label: "Dashboard biz.os",
+    value: "biz-dashboard",
   },
 ] as const;
 

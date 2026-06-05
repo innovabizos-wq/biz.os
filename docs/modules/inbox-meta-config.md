@@ -13,11 +13,12 @@ Messenger o Instagram Messaging.
 - Regeneracion local de `verify_token`.
 - URL sugerida de webhook: `/api/webhooks/meta`.
 - RPCs con `SECURITY DEFINER`, permisos y resolucion server-side de empresa.
+- Formulario guiado por canal para pedir solo los datos necesarios.
+- Checklist de preparacion para saber si falta configuracion publica, secretos o
+  webhook.
 
 ## No incluye todavia
 
-- Webhook GET verification.
-- Webhook POST receive.
 - Envio real por WhatsApp, Facebook o Instagram.
 - OAuth completo.
 - Meta Embedded Signup.
@@ -40,6 +41,12 @@ Datos publicos:
 - `business_id`
 - `app_id`
 
+Campos minimos recomendados:
+
+- WhatsApp: `phone_number_id`, `waba_id`, `app_id`.
+- Facebook Messenger: `page_id`, `app_id`.
+- Instagram Messaging: `instagram_business_account_id`, `page_id`, `app_id`.
+
 Secretos:
 
 - `access_token`
@@ -57,8 +64,9 @@ Aplicar manualmente:
 database/migrations/0018_inbox_meta_channels.sql
 ```
 
-No usar `SUPABASE_SERVICE_ROLE_KEY` desde la app y no ejecutar migraciones
-automaticamente.
+Usar `SUPABASE_SERVICE_ROLE_KEY` solo en la ruta backend del webhook Meta.
+No usarlo en frontend, server actions de usuario ni ejecucion automatica de
+migraciones.
 
 ## Prueba funcional
 
@@ -69,6 +77,8 @@ automaticamente.
 5. Guardar secretos.
 6. Regenerar `verify_token` y copiarlo.
 7. Revisar el estado seguro de secretos.
+8. Revisar la checklist de preparacion.
+9. Configurar en Meta el callback `/api/webhooks/meta` y suscribir `messages`.
 
 ## Rutas
 
@@ -78,8 +88,7 @@ automaticamente.
 
 ## Proximos pasos
 
-- Webhook GET verification.
-- Webhook POST receive.
-- Normalizar mensajes entrantes.
 - Envio real.
 - Plantillas oficiales.
+- OAuth / Embedded Signup para reducir copia manual de IDs y tokens.
+- Estados delivered/read.

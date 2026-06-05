@@ -8,7 +8,9 @@ export type InvitacionEstado =
 
 export type UserInvitation = {
   aceptadaAt: string | null;
+  cargo: string | null;
   canceladaAt: string | null;
+  cedula: string | null;
   correo: string;
   createdAt: string;
   estado: InvitacionEstado;
@@ -17,6 +19,7 @@ export type UserInvitation = {
   nombre: string;
   rol: Pick<Rol, "id" | "nombre"> | null;
   sucursal: Pick<Sucursal, "id" | "nombre"> | null;
+  telefono: string | null;
   token: string;
 };
 

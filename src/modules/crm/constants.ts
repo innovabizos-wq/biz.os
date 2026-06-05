@@ -1,5 +1,6 @@
 import type {
   CrmClienteEstado,
+  CrmClienteGenero,
   CrmClienteTipo,
   CrmInteraccionTipo,
   CrmSeguimientoEstado,
@@ -19,6 +20,12 @@ export const CRM_CLIENTE_ESTADOS = [
   "perdido",
   "inactivo",
 ] as const satisfies readonly CrmClienteEstado[];
+
+export const CRM_CLIENTE_GENEROS = [
+  "h",
+  "m",
+  "o",
+] as const satisfies readonly CrmClienteGenero[];
 
 export const CRM_INTERACCION_TIPOS = [
   "nota",

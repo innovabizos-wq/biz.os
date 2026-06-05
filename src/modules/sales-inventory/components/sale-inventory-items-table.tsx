@@ -8,6 +8,13 @@ function formatQuantity(value: number | null) {
   return value === null ? "-" : value.toLocaleString("es-CR");
 }
 
+function getInventoryLabel(item: SaleInventorySummaryItem) {
+  if (item.requiereInventario) return "Producto fisico";
+  if (item.productoId) return "No aplica: servicio";
+
+  return "No aplica: item manual";
+}
+
 export function SaleInventoryItemsTable({ items }: SaleInventoryItemsTableProps) {
   return (
     <div className="overflow-hidden rounded-lg border bg-background">
@@ -40,7 +47,7 @@ export function SaleInventoryItemsTable({ items }: SaleInventoryItemsTableProps)
                 {formatQuantity(item.cantidadRequerida)}
               </td>
               <td className="px-4 py-3">
-                {item.requiereInventario ? "Requiere" : "No aplica"}
+                {getInventoryLabel(item)}
               </td>
               <td className="px-4 py-3">
                 {formatQuantity(item.stockDisponible)}
@@ -49,7 +56,7 @@ export function SaleInventoryItemsTable({ items }: SaleInventoryItemsTableProps)
                 {item.requiereInventario
                   ? item.stockSuficiente
                     ? "Suficiente"
-                    : "Insuficiente"
+                    : "Requiere stock disponible en bodega"
                   : "-"}
               </td>
             </tr>

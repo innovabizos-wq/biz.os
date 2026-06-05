@@ -148,7 +148,7 @@ async function getTenantForTimesheets() {
   }
 
   if (!tenantResult.data) {
-    return fail("INVALID_TENANT_CONTEXT", "Tenant context requerido.");
+    return fail("INVALID_TENANT_CONTEXT", "No hay empresa activa.");
   }
 
   return ok(tenantResult.data);

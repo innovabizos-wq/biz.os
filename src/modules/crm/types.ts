@@ -1,4 +1,5 @@
 export type CrmClienteTipo = "prospecto" | "cliente";
+export type CrmClienteGenero = "h" | "m" | "o";
 
 export type CrmClienteEstado =
   | "nuevo"
@@ -26,6 +27,7 @@ export type CrmCustomer = {
   createdAt: string;
   empresaId: string;
   estado: CrmClienteEstado;
+  genero: CrmClienteGenero;
   id: string;
   identificacion: string | null;
   nombre: string;

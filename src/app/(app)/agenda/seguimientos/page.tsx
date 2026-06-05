@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
@@ -70,11 +71,7 @@ export default async function AgendaFollowupsPage({
         />
       </div>
 
-      {params?.error ? (
-        <p className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       <div className="rounded-3xl border border-slate-100 bg-white/90 p-4 shadow-sm">
         <AgendaFilters estado={filters.estado} range={range} scope={filters.scope} />

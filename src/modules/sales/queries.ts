@@ -9,6 +9,10 @@ type NameRelation = {
   nombre: string | null;
 };
 
+type ProfileRelation = NameRelation & {
+  sucursales: NameRelation | NameRelation[] | null;
+};
+
 type NumberRelation = {
   numero: string | null;
 };
@@ -34,7 +38,7 @@ type SaleRow = {
   moneda: string;
   notas: string | null;
   numero: string;
-  profiles: NameRelation | NameRelation[] | null;
+  profiles: ProfileRelation | ProfileRelation[] | null;
   subtotal: number;
   total: number;
   updated_at: string;
@@ -70,6 +74,8 @@ function mapSale(row: SaleRow): Sale {
     cotizacionId: row.cotizacion_id,
     cotizacionNumero: firstRelation(row.cotizaciones)?.numero ?? null,
     creadoPorNombre: firstRelation(row.profiles)?.nombre ?? null,
+    creadoPorSucursalNombre:
+      firstRelation(firstRelation(row.profiles)?.sucursales ?? null)?.nombre ?? null,
     createdAt: row.created_at,
     descuentoTotal: row.descuento_total,
     estado: row.estado,
@@ -127,7 +133,7 @@ export async function getSales(
   let query = supabase
     .from("ventas")
     .select(
-      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre)",
+      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre, sucursales(nombre))",
     )
     .eq("empresa_id", tenant.empresaId)
     .order("created_at", { ascending: false });
@@ -157,7 +163,7 @@ export async function getSaleDetail(
   const { data, error } = await supabase
     .from("ventas")
     .select(
-      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre)",
+      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre, sucursales(nombre))",
     )
     .eq("empresa_id", tenant.empresaId)
     .eq("id", ventaId)
@@ -207,7 +213,7 @@ export async function getSaleForQuote(
   const { data, error } = await supabase
     .from("ventas")
     .select(
-      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre)",
+      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre, sucursales(nombre))",
     )
     .eq("empresa_id", tenant.empresaId)
     .eq("cotizacion_id", cotizacionId)
@@ -218,4 +224,67 @@ export async function getSaleForQuote(
   }
 
   return ok(data ? mapSale(data) : null);
+}
+
+export async function getSalesForQuotes(
+  tenant: TenantContext,
+  cotizacionIds: string[],
+): Promise<CoreResult<Record<string, Sale>>> {
+  if (
+    !hasAnyPermission(tenant.permissions, [
+      "sales.orders.view",
+      "sales.orders.create",
+      "sales.orders.edit",
+      "sales.orders.status.change",
+    ]) ||
+    cotizacionIds.length === 0
+  ) {
+    return ok({});
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ventas")
+    .select(
+      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre, sucursales(nombre))",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .in("cotizacion_id", cotizacionIds);
+
+  if (error) {
+    return ok({});
+  }
+
+  return ok(
+    ((data ?? []) as SaleRow[]).reduce<Record<string, Sale>>((accumulator, row) => {
+      const sale = mapSale(row);
+      if (sale.cotizacionId) accumulator[sale.cotizacionId] = sale;
+      return accumulator;
+    }, {}),
+  );
+}
+
+export async function getSalesForCustomer(
+  tenant: TenantContext,
+  clienteId: string,
+): Promise<CoreResult<Sale[]>> {
+  if (!hasPermission(tenant.permissions, "sales.orders.view")) {
+    return ok([]);
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ventas")
+    .select(
+      "id, cotizacion_id, cliente_id, numero, estado, inventario_estado, inventario_aplicado_at, fecha_venta, moneda, subtotal, descuento_total, impuesto_total, total, notas, created_at, updated_at, crm_clientes!ventas_cliente_empresa_fkey(nombre), cotizaciones!ventas_cotizacion_empresa_fkey(numero), profiles!ventas_creado_por_empresa_fkey(nombre, sucursales(nombre))",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .eq("cliente_id", clienteId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return ok([]);
+  }
+
+  return ok(((data ?? []) as SaleRow[]).map(mapSale));
 }

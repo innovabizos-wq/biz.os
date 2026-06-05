@@ -94,6 +94,26 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   { code: "sales.quotes.view", moduleCode: "sales", name: "Ver cotizaciones" },
   { code: "sales.quotes.create", moduleCode: "sales", name: "Crear cotizaciones" },
   {
+    code: "billing.fiscal.view",
+    moduleCode: "billing",
+    name: "Ver configuracion fiscal",
+  },
+  {
+    code: "billing.fiscal.manage",
+    moduleCode: "billing",
+    name: "Gestionar configuracion fiscal",
+  },
+  {
+    code: "billing.invoices.view",
+    moduleCode: "billing",
+    name: "Ver facturas electronicas",
+  },
+  {
+    code: "billing.invoices.create",
+    moduleCode: "billing",
+    name: "Crear facturas electronicas",
+  },
+  {
     code: "inventory.products.view",
     moduleCode: "inventory",
     name: "Ver productos",
@@ -190,9 +210,60 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
     name: "Administrar seguimiento de choferes",
   },
   {
+    code: "hr.timesheets.view",
+    moduleCode: "hr",
+    name: "Ver planillas",
+  },
+  {
+    code: "hr.timesheets.manage",
+    moduleCode: "hr",
+    name: "Gestionar planillas",
+  },
+  {
+    code: "hr.timesheets.register",
+    moduleCode: "hr",
+    name: "Registrar jornada",
+  },
+  {
+    code: "hr.timesheets.dashboard",
+    moduleCode: "hr",
+    name: "Ver dashboard de planillas",
+  },
+  {
+    code: "hr.timesheets.states.manage",
+    moduleCode: "hr",
+    name: "Gestionar estados de planilla",
+  },
+  {
+    code: "hr.timesheets.create",
+    moduleCode: "hr",
+    name: "Crear registros de planilla",
+  },
+  {
     code: "reports.dashboard.view",
     moduleCode: "reports",
     name: "Ver dashboards",
   },
   { code: "ai.reports.use", moduleCode: "ai", name: "Usar reportes IA" },
+  { code: "autoblog.view", moduleCode: "autoblog", name: "Ver Autoblog" },
+  {
+    code: "autoblog.create",
+    moduleCode: "autoblog",
+    name: "Crear articulos de Autoblog",
+  },
+  {
+    code: "autoblog.edit",
+    moduleCode: "autoblog",
+    name: "Editar articulos de Autoblog",
+  },
+  {
+    code: "autoblog.publish",
+    moduleCode: "autoblog",
+    name: "Aprobar/publicar articulos",
+  },
+  {
+    code: "autoblog.manage",
+    moduleCode: "autoblog",
+    name: "Administrar Autoblog",
+  },
 ] as const;

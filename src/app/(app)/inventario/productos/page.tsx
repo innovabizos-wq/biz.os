@@ -1,8 +1,12 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { getActiveCategoriesForProductForm } from "@/modules/catalog/queries";
 import { InventoryMovementForm } from "@/modules/inventory/components/inventory-movement-form";
 import { InventoryStockTable } from "@/modules/inventory/components/inventory-stock-table";
+import { InventoryTransferForm } from "@/modules/inventory/components/inventory-transfer-form";
+import { MaterialIntakePanel } from "@/modules/inventory/components/material-intake-panel";
 import {
   getInventoryStock,
   getProductsForInventory,
@@ -25,6 +29,10 @@ export default async function InventoryProductsPage({
     access.tenant.permissions,
     "inventory.stock.adjust",
   );
+  const canCreateProducts = hasPermission(
+    access.tenant.permissions,
+    "catalog.products.create",
+  );
 
   if (!canView) {
     return (
@@ -42,27 +50,37 @@ export default async function InventoryProductsPage({
     );
   }
 
-  const [stock, products, warehouses] = await Promise.all([
+  const [stock, products, warehouses, categories] = await Promise.all([
     getInventoryStock(access.tenant),
     getProductsForInventory(access.tenant),
     getWarehouses(access.tenant),
+    getActiveCategoriesForProductForm(access.tenant),
   ]);
 
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Usa esta pantalla para registrar entradas, salidas o ajustes manuales."
+        description="Crea materiales, importa inventarios, ajusta stock y traslada existencias entre bodegas."
         eyebrow="Inventario"
         title="Stock por producto"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
+
+      <MaterialIntakePanel
+        canAdjust={canAdjust}
+        canCreateProducts={canCreateProducts}
+        categories={categories.ok ? categories.data : []}
+        warehouses={warehouses.ok ? warehouses.data : []}
+      />
 
       <InventoryMovementForm
+        canAdjust={canAdjust}
+        products={products.ok ? products.data : []}
+        warehouses={warehouses.ok ? warehouses.data : []}
+      />
+
+      <InventoryTransferForm
         canAdjust={canAdjust}
         products={products.ok ? products.data : []}
         warehouses={warehouses.ok ? warehouses.data : []}

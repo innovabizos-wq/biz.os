@@ -14,6 +14,8 @@ import { InteractionForm } from "@/modules/crm/components/interaction-form";
 import { InteractionsList } from "@/modules/crm/components/interactions-list";
 import { CustomerQuotesList } from "@/modules/quotes/components/customer-quotes-list";
 import { getQuotesForCustomer } from "@/modules/quotes/queries";
+import { CustomerSalesList } from "@/modules/sales/components/customer-sales-list";
+import { getSalesForCustomer } from "@/modules/sales/queries";
 import {
   getAssignableUsersForCrm,
   getCrmCustomerDetail,
@@ -47,6 +49,7 @@ export default async function CustomerDetailPage({
     crmActive && hasPermission(access.tenant.permissions, "crm.followups.edit");
   const canViewQuotes = hasPermission(access.tenant.permissions, "quotes.view");
   const canCreateQuotes = hasPermission(access.tenant.permissions, "quotes.create");
+  const canViewSales = hasPermission(access.tenant.permissions, "sales.orders.view");
   const canViewActivity =
     crmActive &&
     hasAnyPermission(access.tenant.permissions, [
@@ -73,12 +76,13 @@ export default async function CustomerDetailPage({
     );
   }
 
-  const [customer, interactions, followups, assignableUsers, quotes] = await Promise.all([
+  const [customer, interactions, followups, assignableUsers, quotes, sales] = await Promise.all([
     getCrmCustomerDetail(access.tenant, clienteId),
     getCrmCustomerInteractions(access.tenant, clienteId),
     getCrmCustomerFollowups(access.tenant, clienteId),
     getAssignableUsersForCrm(access.tenant),
     getQuotesForCustomer(access.tenant, clienteId),
+    canViewSales ? getSalesForCustomer(access.tenant, clienteId) : Promise.resolve(null),
   ]);
 
   if (!customer.ok || !customer.data) {
@@ -153,6 +157,16 @@ export default async function CustomerDetailPage({
             clienteId={clienteId}
             quotes={quotes.ok ? quotes.data : []}
           />
+        </section>
+      ) : null}
+
+      {canViewSales ? (
+        <section className="space-y-4">
+          <SectionHeader
+            description="Ventas generadas para este cliente con datos comerciales congelados."
+            title="Ventas"
+          />
+          <CustomerSalesList sales={sales?.ok ? sales.data : []} />
         </section>
       ) : null}
 

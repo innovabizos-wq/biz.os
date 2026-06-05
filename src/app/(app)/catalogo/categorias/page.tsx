@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { CategoriesTable } from "@/modules/catalog/components/categories-table";
@@ -53,11 +54,7 @@ export default async function CatalogCategoriesPage({
         title="Categorias"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       {canCreate ? <CategoryForm mode="create" /> : null}
 

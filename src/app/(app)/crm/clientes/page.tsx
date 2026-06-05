@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
@@ -63,11 +64,7 @@ export default async function CrmCustomersPage({
         titleClassName="app-page-title-compact normal-case"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       <CustomerAnalyticsCharts customers={customerRows} />
 

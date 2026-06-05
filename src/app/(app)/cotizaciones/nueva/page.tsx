@@ -1,8 +1,12 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
-import { QuoteForm } from "@/modules/quotes/components/quote-form";
-import { getCustomersForQuote } from "@/modules/quotes/queries";
+import { FloatingQuoteButton } from "@/modules/quotes/components/floating-quote-button";
+import {
+  getActiveCatalogProductsForQuote,
+  getCustomersForQuote,
+} from "@/modules/quotes/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type NewQuotePageProps = {
@@ -19,7 +23,7 @@ export default async function NewQuotePage({ searchParams }: NewQuotePageProps) 
         <SectionHeader
           description="No tienes permiso para crear cotizaciones."
           eyebrow="Comercial"
-          title="Nueva cotización"
+          title="Nueva cotizacion"
         />
         <EmptyState
           description="Solicita permisos al administrador de tu empresa."
@@ -29,25 +33,31 @@ export default async function NewQuotePage({ searchParams }: NewQuotePageProps) 
     );
   }
 
-  const customers = await getCustomersForQuote(access.tenant);
+  const [customers, activeProducts] = await Promise.all([
+    getCustomersForQuote(access.tenant),
+    getActiveCatalogProductsForQuote(access.tenant),
+  ]);
 
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Crea la cotización base; los items se agregan en el detalle."
+        description="Arma la proforma primero. La cotizacion y su numero se crean al final."
         eyebrow="Comercial"
-        title="Nueva cotización"
+        title="Nueva cotizacion"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
-      <QuoteForm
+      <div className="rounded-lg border border-dashed bg-background p-6 text-sm text-muted-foreground">
+        El constructor esta abierto. Agrega cliente e items; el boton Crear
+        cotizacion guardara todo y asignara el numero.
+      </div>
+
+      <FloatingQuoteButton
+        activeProducts={activeProducts.ok ? activeProducts.data : []}
         customers={customers.ok ? customers.data : []}
-        mode="create"
+        hideTrigger
+        initialOpen
         preselectedClienteId={params?.clienteId}
       />
     </section>

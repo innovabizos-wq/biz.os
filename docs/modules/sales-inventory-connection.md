@@ -77,13 +77,17 @@ Para revisar movimientos:
 1. Crear producto fisico activo en catalogo.
 2. Crear bodega y registrar entrada de stock.
 3. Crear cotizacion con ese producto.
-4. Aceptar cotizacion y generar venta.
+4. Confirmar venta desde el listado de cotizaciones.
 5. Cambiar venta a `confirmada`.
 6. Abrir `/ventas/[ventaId]`.
 7. Elegir bodega y aplicar salida de inventario.
 8. Revisar que el stock bajo en `/inventario/productos`.
 9. Revisar movimiento en `/inventario/movimientos`.
 10. Intentar aplicar la salida otra vez y confirmar que se bloquea.
+
+Para probar inventario, la cotizacion debe incluir un producto fisico del
+catalogo. Los items manuales y servicios no rebajan stock y la venta puede
+marcarse como `no_aplica`.
 
 ## Proximos pasos
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 
 import {
   markAllNotificationsReadAction,
@@ -11,67 +11,76 @@ import { NotificationItem } from "@/modules/notifications/components/notificatio
 import type { UserNotification } from "@/modules/notifications/types";
 
 type NotificationDropdownProps = {
+  isBusy: boolean;
   notifications: UserNotification[];
   onAllRead: () => void;
-  onAnyRead: () => void;
+  onAnyRead: (notificationId: string) => void;
+  onBusyChange: (isBusy: boolean) => void;
+  onSoundPreferenceChange: (enabled: boolean) => void;
+  soundEnabled: boolean;
 };
 
 export function NotificationDropdown({
+  isBusy,
   notifications,
   onAllRead,
   onAnyRead,
+  onBusyChange,
+  onSoundPreferenceChange,
+  soundEnabled,
 }: NotificationDropdownProps) {
   const router = useRouter();
-  const [items, setItems] = useState(notifications);
   const [isPending, startTransition] = useTransition();
-  const hasUnread = items.some((item) => !item.isRead);
+  const hasUnread = notifications.some((item) => !item.isRead);
+  const disabled = isBusy || isPending;
 
   function markLocallyAsRead(notification: UserNotification) {
     if (notification.isRead) return false;
 
-    setItems((current) =>
-      current.map((item) =>
-        item.id === notification.id
-          ? { ...item, isRead: true, readAt: new Date().toISOString() }
-          : item,
-      ),
-    );
-    onAnyRead();
+    onAnyRead(notification.id);
 
     return true;
   }
 
   function handleMarkRead(notification: UserNotification) {
+    onBusyChange(true);
     startTransition(async () => {
-      if (markLocallyAsRead(notification)) {
-        await markNotificationReadAction({ notificationId: notification.id });
+      try {
+        if (markLocallyAsRead(notification)) {
+          await markNotificationReadAction({ notificationId: notification.id });
+        }
+      } finally {
+        onBusyChange(false);
       }
     });
   }
 
   function handleView(notification: UserNotification) {
+    onBusyChange(true);
     startTransition(async () => {
-      if (markLocallyAsRead(notification)) {
-        await markNotificationReadAction({ notificationId: notification.id });
-      }
-      if (notification.href) {
-        router.push(notification.href);
+      try {
+        if (markLocallyAsRead(notification)) {
+          await markNotificationReadAction({ notificationId: notification.id });
+        }
+        if (notification.href) {
+          router.push(notification.href);
+        }
+      } finally {
+        onBusyChange(false);
       }
     });
   }
 
   function handleMarkAll() {
+    onBusyChange(true);
     startTransition(async () => {
-      setItems((current) =>
-        current.map((item) => ({
-          ...item,
-          isRead: true,
-          readAt: item.readAt ?? new Date().toISOString(),
-        })),
-      );
-      onAllRead();
-      await markAllNotificationsReadAction();
-      router.refresh();
+      try {
+        onAllRead();
+        await markAllNotificationsReadAction();
+        router.refresh();
+      } finally {
+        onBusyChange(false);
+      }
     });
   }
 
@@ -83,17 +92,30 @@ export function NotificationDropdown({
           <p className="text-xs text-muted-foreground">Actividad reciente para tu usuario</p>
         </div>
         <button
+          aria-label="Marcar todas las notificaciones como leidas"
           className="text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
-          disabled={!hasUnread || isPending}
+          disabled={!hasUnread || disabled}
           onClick={handleMarkAll}
           type="button"
         >
           Marcar todas
         </button>
       </div>
+      <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-2 text-xs">
+        <span className="font-medium text-muted-foreground">
+          Zumbido de notificaciones
+        </span>
+        <button
+          className="rounded-full border bg-background px-2.5 py-1 font-semibold text-foreground hover:bg-muted"
+          onClick={() => onSoundPreferenceChange(!soundEnabled)}
+          type="button"
+        >
+          {soundEnabled ? "Activado" : "Desactivado"}
+        </button>
+      </div>
       <div className="max-h-[420px] overflow-auto">
-        {items.length > 0 ? (
-          items.map((notification) => (
+        {notifications.length > 0 ? (
+          notifications.map((notification) => (
             <NotificationItem
               key={notification.id}
               notification={notification}

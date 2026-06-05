@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 type InboxInternalNoteFormProps = {
   canReply: boolean;
   conversacionId: string;
+  redirectTo?: string;
 };
 
 export function InboxInternalNoteForm({
   canReply,
   conversacionId,
+  redirectTo,
 }: InboxInternalNoteFormProps) {
   if (!canReply) return null;
 
@@ -17,6 +19,9 @@ export function InboxInternalNoteForm({
       <input name="conversacionId" type="hidden" value={conversacionId} />
       <input name="direccion" type="hidden" value="interna" />
       <input name="esNotaInterna" type="hidden" value="true" />
+      {redirectTo ? (
+        <input name="redirectTo" type="hidden" value={redirectTo} />
+      ) : null}
       <label className="space-y-1 text-sm">
         <span className="font-medium">Nota interna</span>
         <textarea

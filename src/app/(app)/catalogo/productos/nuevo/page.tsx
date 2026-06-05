@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { ProductForm } from "@/modules/catalog/components/product-form";
@@ -44,11 +45,7 @@ export default async function NewCatalogProductPage({
         title="Nuevo producto/servicio"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       <ProductForm
         categories={categories.ok ? categories.data : []}

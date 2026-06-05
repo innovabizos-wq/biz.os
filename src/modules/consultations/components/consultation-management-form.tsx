@@ -1,12 +1,13 @@
 import { FileText, Save } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { PendingSubmitButton } from "@/components/shared/pending-submit-button";
 import { saveConsultationAction } from "@/modules/consultations/actions";
 import { ConsultationClientForm } from "@/modules/consultations/components/consultation-client-form";
 import type { ConsultationSearchResult } from "@/modules/consultations/types";
 
 type ConsultationManagementFormProps = {
   canCreateCustomer: boolean;
+  canCreateQuote: boolean;
   canSaveInteraction: boolean;
   result: ConsultationSearchResult | null;
   returnTo?: "/consultas/nueva" | "/dashboard";
@@ -14,6 +15,7 @@ type ConsultationManagementFormProps = {
 
 export function ConsultationManagementForm({
   canCreateCustomer,
+  canCreateQuote,
   canSaveInteraction,
   result,
   returnTo = "/consultas/nueva",
@@ -52,28 +54,34 @@ export function ConsultationManagementForm({
 
       <div className="flex flex-col gap-3 rounded-lg border bg-background p-5 md:flex-row md:items-center md:justify-end">
         <div className="flex flex-col gap-3 md:flex-row">
-          <Button
+          <PendingSubmitButton
             className="bg-black text-white hover:bg-black/90"
             disabled={!canSubmit}
+            icon={Save}
             name="intent"
+            pendingLabel="Guardando..."
             size="lg"
-            type="submit"
             value="save"
           >
-            <Save aria-hidden="true" />
             Guardar
-          </Button>
-          <Button
-            className="bg-emerald-600 text-white hover:bg-emerald-700"
-            disabled={!canSubmit}
+          </PendingSubmitButton>
+          <PendingSubmitButton
+            className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
+            disabled={!canSubmit || !canCreateQuote}
+            icon={FileText}
             name="intent"
+            pendingLabel="Preparando cotizacion..."
             size="lg"
-            type="submit"
+            title={
+              canCreateQuote
+                ? "Guardar gestion y crear una cotizacion"
+                : "No tienes permiso para crear cotizaciones."
+            }
             value="quote"
+            variant="outline"
           >
-            <FileText aria-hidden="true" />
             Cotizar
-          </Button>
+          </PendingSubmitButton>
         </div>
       </div>
     </form>

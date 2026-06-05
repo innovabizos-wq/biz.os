@@ -7,11 +7,29 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { QUOTE_STATUSES } from "@/modules/quotes/constants";
 import { QuotesTable } from "@/modules/quotes/components/quotes-table";
-import type { Quote, QuoteStatus } from "@/modules/quotes/types";
+import type {
+  Quote,
+  QuoteCatalogProduct,
+  QuoteCustomer,
+  QuoteItem,
+  QuoteStatus,
+} from "@/modules/quotes/types";
+import type { ElectronicInvoice, FiscalConfiguration } from "@/modules/billing/types";
+import type { Sale } from "@/modules/sales/types";
 
 type QuotesDatabaseProps = {
+  canCreateInvoice: boolean;
+  canDeleteQuote: boolean;
+  canEditQuote: boolean;
+  canConfirmSale: boolean;
   className?: string;
+  customers: QuoteCustomer[];
+  fiscalConfiguration: FiscalConfiguration | null;
+  invoicesBySaleId: Record<string, ElectronicInvoice>;
+  itemsByQuoteId: Record<string, QuoteItem[]>;
+  products: QuoteCatalogProduct[];
   quotes: Quote[];
+  salesByQuoteId: Record<string, Sale>;
 };
 
 type QuoteFilters = {
@@ -56,7 +74,20 @@ function getUniqueOptions(values: Array<string | null>) {
   );
 }
 
-export function QuotesDatabase({ className, quotes }: QuotesDatabaseProps) {
+export function QuotesDatabase({
+  canCreateInvoice,
+  canDeleteQuote,
+  canEditQuote,
+  canConfirmSale,
+  className,
+  customers,
+  fiscalConfiguration,
+  invoicesBySaleId,
+  itemsByQuoteId,
+  products,
+  quotes,
+  salesByQuoteId,
+}: QuotesDatabaseProps) {
   const [filters, setFilters] = useState<QuoteFilters>({
     creadoPor: "",
     estado: "",
@@ -78,12 +109,12 @@ export function QuotesDatabase({ className, quotes }: QuotesDatabaseProps) {
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-3 pt-5", className)}>
-      <div className="rounded-2xl border border-[rgba(var(--kpi-theme-accent-rgb),0.34)] bg-white p-4 shadow-[0_14px_30px_rgba(var(--kpi-theme-accent-rgb),0.14)]">
+      <div className="app-filter-shell p-4">
         <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_160px_160px_190px]">
           <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-blue-500" />
             <input
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm shadow-inner outline-none transition focus:border-[rgba(var(--kpi-theme-accent-rgb),0.7)] focus:bg-white focus:ring-2 focus:ring-[rgba(var(--kpi-theme-accent-rgb),0.18)]"
+              className="app-filter-control h-11 w-full rounded-xl pl-9 pr-3 text-sm outline-none transition"
               onChange={(event) =>
                 setFilters((current) => ({ ...current, q: event.target.value }))
               }
@@ -94,7 +125,7 @@ export function QuotesDatabase({ className, quotes }: QuotesDatabaseProps) {
           </label>
 
           <select
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm shadow-inner outline-none transition focus:border-[rgba(var(--kpi-theme-accent-rgb),0.7)] focus:bg-white focus:ring-2 focus:ring-[rgba(var(--kpi-theme-accent-rgb),0.18)]"
+            className="app-filter-control h-11 rounded-xl px-3 text-sm outline-none transition"
             onChange={(event) =>
               setFilters((current) => ({
                 ...current,
@@ -112,7 +143,7 @@ export function QuotesDatabase({ className, quotes }: QuotesDatabaseProps) {
           </select>
 
           <select
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm shadow-inner outline-none transition focus:border-[rgba(var(--kpi-theme-accent-rgb),0.7)] focus:bg-white focus:ring-2 focus:ring-[rgba(var(--kpi-theme-accent-rgb),0.18)]"
+            className="app-filter-control h-11 rounded-xl px-3 text-sm outline-none transition"
             onChange={(event) =>
               setFilters((current) => ({ ...current, moneda: event.target.value }))
             }
@@ -127,7 +158,7 @@ export function QuotesDatabase({ className, quotes }: QuotesDatabaseProps) {
           </select>
 
           <select
-            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm shadow-inner outline-none transition focus:border-[rgba(var(--kpi-theme-accent-rgb),0.7)] focus:bg-white focus:ring-2 focus:ring-[rgba(var(--kpi-theme-accent-rgb),0.18)]"
+            className="app-filter-control h-11 rounded-xl px-3 text-sm outline-none transition"
             onChange={(event) =>
               setFilters((current) => ({ ...current, creadoPor: event.target.value }))
             }
@@ -144,7 +175,20 @@ export function QuotesDatabase({ className, quotes }: QuotesDatabaseProps) {
       </div>
 
       {filteredQuotes.length > 0 ? (
-        <QuotesTable className="min-h-0 flex-1" quotes={filteredQuotes} />
+        <QuotesTable
+          canConfirmSale={canConfirmSale}
+          canCreateInvoice={canCreateInvoice}
+          canDeleteQuote={canDeleteQuote}
+          canEditQuote={canEditQuote}
+          className="min-h-0 flex-1"
+          customers={customers}
+          fiscalConfiguration={fiscalConfiguration}
+          invoicesBySaleId={invoicesBySaleId}
+          itemsByQuoteId={itemsByQuoteId}
+          products={products}
+          quotes={filteredQuotes}
+          salesByQuoteId={salesByQuoteId}
+        />
       ) : (
         <div className="min-h-0 flex-1 rounded-lg border bg-background">
           <EmptyState

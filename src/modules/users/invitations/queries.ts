@@ -11,7 +11,9 @@ type Relation = {
 
 type InvitationRow = {
   aceptada_at: string | null;
+  cargo: string | null;
   cancelada_at: string | null;
+  cedula: string | null;
   correo: string;
   created_at: string;
   estado: InvitacionEstado;
@@ -20,6 +22,7 @@ type InvitationRow = {
   nombre: string;
   roles: Relation | Relation[] | null;
   sucursales: Relation | Relation[] | null;
+  telefono: string | null;
   token: string;
 };
 
@@ -30,7 +33,9 @@ function firstRelation(value: Relation | Relation[] | null): Relation | null {
 function mapInvitation(row: InvitationRow): UserInvitation {
   return {
     aceptadaAt: row.aceptada_at,
+    cargo: row.cargo,
     canceladaAt: row.cancelada_at,
+    cedula: row.cedula,
     correo: row.correo,
     createdAt: row.created_at,
     estado: row.estado,
@@ -39,6 +44,7 @@ function mapInvitation(row: InvitationRow): UserInvitation {
     nombre: row.nombre,
     rol: firstRelation(row.roles),
     sucursal: firstRelation(row.sucursales),
+    telefono: row.telefono,
     token: row.token,
   };
 }
@@ -56,7 +62,7 @@ export async function getInvitationsForCurrentTenant(): Promise<
   const { data, error } = await supabase
     .from("invitaciones_usuarios")
     .select(
-      "id, correo, nombre, token, estado, fecha_expiracion, aceptada_at, cancelada_at, created_at, roles(id, nombre), sucursales(id, nombre)",
+      "id, correo, nombre, cedula, telefono, cargo, token, estado, fecha_expiracion, aceptada_at, cancelada_at, created_at, roles(id, nombre), sucursales(id, nombre)",
     )
     .eq("empresa_id", tenantResult.data.empresaId)
     .order("created_at", { ascending: false });

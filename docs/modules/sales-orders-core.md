@@ -1,12 +1,12 @@
 # Ventas / Ordenes Basicas
 
-Ventas / Ordenes es el puente entre cotizaciones aceptadas y futuros modulos de
+Ventas / Ordenes es el puente entre cotizaciones confirmadas y futuros modulos de
 facturacion, inventario y despacho. En esta fase solo congela la informacion
-comercial de una cotizacion aceptada.
+comercial de una cotizacion confirmada.
 
 ## Incluye
 
-- generar venta desde cotizacion aceptada
+- confirmar venta desde cotizacion con items
 - listado de ventas
 - detalle de venta
 - items congelados
@@ -70,7 +70,7 @@ de mutar.
 
 ## Precio E Items Congelados
 
-La venta copia los items desde la cotizacion aceptada. Si la cotizacion, el
+La venta copia los items desde la cotizacion confirmada. Si la cotizacion, el
 catalogo o los precios cambian despues, la venta no cambia automaticamente.
 Esto conserva la orden comercial aprobada.
 
@@ -87,10 +87,10 @@ No ejecutar automaticamente desde la app y no usar `SUPABASE_SERVICE_ROLE_KEY`.
 ## Prueba Manual
 
 1. Crear una cotizacion con items.
-2. Cambiar la cotizacion a `enviada`.
-3. Cambiar la cotizacion a `aceptada`.
-4. Abrir `/cotizaciones/[cotizacionId]`.
-5. Usar `Generar venta`.
+2. Abrir `/cotizaciones`.
+3. Usar `Confirmar venta`.
+4. Confirmar que no se duplica la venta si se intenta de nuevo.
+5. Usar `Ver venta`.
 6. Abrir `/ventas`.
 7. Abrir `/ventas/[ventaId]`.
 8. Cambiar estado de venta.

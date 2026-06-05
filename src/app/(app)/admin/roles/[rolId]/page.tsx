@@ -115,6 +115,7 @@ export default async function RoleDetailPage({
         canManage={canManage}
         catalog={catalog.ok ? catalog.data : []}
         rolId={role.data.id}
+        roleName={role.data.nombre}
       />
     </section>
   );

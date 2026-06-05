@@ -1,10 +1,15 @@
 # biz.os
 
-biz.os es la base de un sistema operativo empresarial SaaS, multiempresa,
-modular y preparado para una capa de IA transversal futura.
+biz.os es un sistema operativo empresarial SaaS, multiempresa, modular y
+preparado para crecer con nuevas capacidades sobre una base de permisos, RLS y
+flujos operativos.
 
-Este entregable inicial crea solamente la base tecnica del proyecto. No incluye
-CRM, ventas, inventario, despacho, facturacion, dashboards avanzados ni IA.
+El MVP actual incluye Auth, empresas, usuarios, roles, permisos, Dashboard, CRM,
+Nueva consulta, Agenda, Cotizaciones, Catalogo, Ventas, Inventario, Despacho con
+mapa real, RRHH Planillas, Contexto del negocio, Autoblog MVP y notificaciones
+persistentes por usuario. Facturacion real completa, compras/proveedores, IA
+operativa, WhatsApp real avanzado, publicacion automatica y app movil quedan
+fuera de esta fase.
 
 ## Stack
 
@@ -40,22 +45,208 @@ Copiar `.env.example` a `.env.local` y completar:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_APP_URL=
+PUBLIC_SIGNUP_ENABLED=true
+FISCAL_CONFIG_ENCRYPTION_KEY=
+HACIENDA_ENVIRONMENT=pruebas
+META_WEBHOOK_SKIP_SIGNATURE=false
+META_WEBHOOK_DEBUG_LOGS=false
+META_GRAPH_API_VERSION=v25.0
+AI_PROVIDER=
+AI_API_KEY=
+AUTOBLOG_PUBLISHING_ENABLED=false
+MOBILE_API_ENABLED=false
+PURCHASES_ENABLED=false
+PAYMENTS_ENABLED=false
 ```
 
-No incluir claves reales en `.env.example`. Las claves server-only, como una
-posible service role futura, no deben exponerse al navegador ni usarse en
-helpers de frontend.
+No incluir claves reales en `.env.example`. `SUPABASE_SERVICE_ROLE_KEY` es
+server-only: solo puede usarse en rutas backend aisladas como webhooks externos;
+nunca en helpers de frontend ni server actions de usuario.
 
 `NEXT_PUBLIC_APP_URL` se usa para construir enlaces de invitacion. Si queda
 vacia, biz.os genera rutas relativas.
+
+`PUBLIC_SIGNUP_ENABLED` controla el registro libre. Si no existe o esta en
+`true`, `/signup` permite crear una cuenta para luego crear empresa en
+`/onboarding`. Si esta en `false`, `/signup` solo permite continuar con
+`invitation_token`; sin invitacion muestra que el registro publico no esta
+disponible.
 
 ## Comandos
 
 ```bash
 npm run dev
+npm run test
+npm run typecheck
 npm run lint
 npm run build
+```
+
+Antes de una demo seria, entrega o despliegue usar:
+
+```text
+docs/release-checklist.md
+```
+
+## Estado MVP
+
+La fase de consolidacion MVP esta documentada en:
+
+```text
+docs/modules/mvp-consolidation.md
+```
+
+Rutas principales para demo:
+
+```text
+/dashboard
+/consultas/nueva
+/crm/clientes
+/agenda
+/cotizaciones
+/ventas
+/inventario
+/despacho
+/rrhh/planillas/dashboard
+/admin/fiscal
+/admin/contexto
+/autoblog
+```
+
+Modulos listos para demo controlada:
+
+- Dashboard con KPIs reales disponibles.
+- Nueva consulta, CRM, Agenda, Cotizaciones, Ventas, Inventario y Despacho.
+- RRHH/Planillas y notificaciones por usuario.
+- Contexto del negocio transversal y Autoblog MVP para borradores, revision,
+  aprobacion y contenido listo para publicar manualmente.
+
+Modulos en desarrollo o no listos para venta:
+
+- Facturacion electronica real: falta XAdES-EPES, XML firmado, envio y consulta Hacienda.
+- Whapp/Inbox real extremo a extremo: requiere credenciales Meta y prueba operacional.
+- Autoblog futuro: publicacion automatica, WordPress/sitio web, redes sociales,
+  programacion automatica y cron de 3 a 5 articulos diarios.
+- Compras/proveedores, pagos/cuentas por cobrar, IA operativa y app movil.
+
+Migraciones recientes que pueden requerir aplicacion manual en Supabase dev:
+
+```text
+database/migrations/0020_user_notifications.sql
+database/migrations/0022_inbox_meta_reliability_send.sql
+database/migrations/0023_whapp_core_status_crm_link.sql
+database/migrations/0027_roles_estandar_empresa.sql
+database/migrations/0029_fiscal_commercial_flow.sql
+database/migrations/0030_quotes_edit_until_sale.sql
+database/migrations/0031_business_context.sql
+database/migrations/0032_autoblog.sql
+database/migrations/0033_company_modules_management.sql
+database/migrations/0034_platform_module_contract.sql
+```
+
+No ejecutar migraciones desde la aplicacion. `SUPABASE_SERVICE_ROLE_KEY` queda
+reservado para rutas backend sin sesion de usuario, como webhooks externos.
+
+## Modulos Activos Por Empresa
+
+`/admin/modulos` permite activar o desactivar modulos para la empresa actual.
+La pantalla usa RPCs seguras que resuelven `empresa_id` server-side; el frontend
+solo envia `moduloId` y el proximo estado (`activo` o `inactivo`).
+
+La regla de acceso modular es:
+
+```text
+modulo activo para la empresa + permiso del usuario = acceso
+```
+
+`modulos` es el catalogo global, `empresa_modulos` es la activacion por empresa
+y los permisos son el acceso por usuario. El modulo activo no reemplaza
+permisos, y los permisos no reemplazan un modulo inactivo.
+
+Modulos madre actuales: `admin`, `crm`, `agenda`, `quotes`, `catalog`, `sales`,
+`inventory`, `dispatch` y `hr`. Se consideran siempre activos, aparecen como
+bloqueados en `/admin/modulos` y la RPC tambien impide desactivarlos aunque se
+intente llamar manualmente.
+
+Modulos opcionales actuales: `billing`, `whapp`, `reports`, `ai`, `autoblog`,
+`purchases`, `payments` y `mobile`. Cuando un modulo opcional esta inactivo no
+debe aparecer en la barra lateral y las rutas principales bloqueadas muestran
+que el modulo no esta activo para la empresa.
+
+El contrato tecnico de modulos vive en
+`src/modules/platform-modules/module-catalog.ts`: codigo, nombre, tipo, rutas,
+permisos requeridos, configuracion requerida, claves de salud y dependencias
+blandas. No se debe duplicar esta politica en pantallas individuales.
+
+## Contexto Del Negocio
+
+`/admin/contexto` define la identidad, reglas y conocimiento base que biz.os
+usara para asistir a la empresa. Es transversal: no pertenece a Autoblog y puede
+alimentar IA, WhatsApp/Inbox, cotizaciones, reportes y automatizaciones futuras.
+
+Documento tecnico:
+
+```text
+docs/modules/business-context.md
+```
+
+## Autoblog
+
+Autoblog es un modulo principal de la barra lateral, no una seccion Marketing.
+Usa `business_context` para crear articulos, guardar borradores, revisar,
+aprobar, dejar contenido listo para publicar manualmente y preparar copys para
+redes.
+
+Rutas:
+
+```text
+/autoblog
+/autoblog/nuevo
+/autoblog/[articleId]
+```
+
+En el MVP no publica en internet, WordPress ni redes sociales. Tampoco ejecuta
+cron, scraping ni busqueda web desde frontend. La publicacion automatica,
+conexiones sociales y generacion diaria quedan para fases futuras.
+
+Autoblog se activa por empresa desde `/admin/modulos`. No se debe activar con
+SQL manual por cliente.
+
+Documento tecnico:
+
+```text
+docs/modules/autoblog.md
+```
+
+## Whapp
+
+Whapp es el centro operativo WhatsApp de biz.os. La primera fase reutiliza el
+Inbox existente para conversaciones, canales Meta, webhook, diagnostico, envio
+manual real, asignacion, notas internas y vinculo CRM basico.
+
+Rutas principales:
+
+```text
+/whapp
+/whapp/conversaciones
+/whapp/canales
+/whapp/salud
+/whapp/reportes
+```
+
+Antes de probar estados Meta y vinculo CRM automatico por telefono, aplicar
+manualmente la migracion local correspondiente. No se ejecuta automaticamente:
+
+```text
+database/migrations/0023_whapp_core_status_crm_link.sql
+```
+
+Documento tecnico:
+
+```text
+docs/modules/whapp-core.md
 ```
 
 ## Notificaciones Por Usuario
@@ -86,12 +277,21 @@ El layout autenticado incluye un boton flotante verde de mensajeria sobre el
 boton `+`. Abre una mini bandeja tipo WhatsApp con lista de conversaciones y
 chat activo, conectada a conversaciones/mensajes existentes del Inbox.
 
-No envia mensajes reales ni usa IA en esta fase.
+El Inbox principal queda preparado para recibir webhooks Meta y enviar mensajes
+WhatsApp reales solamente cuando un usuario presiona enviar desde una
+conversacion WhatsApp Meta configurada. No hay respuestas automaticas ni IA.
+
+Para robustecer webhooks y envio manual, aplicar manualmente:
+
+```text
+database/migrations/0022_inbox_meta_reliability_send.sql
+```
 
 Documento tecnico:
 
 ```text
 docs/modules/inbox-widget.md
+docs/modules/inbox-meta-webhooks.md
 ```
 
 ## RRHH / Planillas
@@ -103,6 +303,8 @@ seguro por RPC y un dashboard operativo separado del dashboard general.
 Rutas:
 
 ```text
+/rrhh/personal
+/rrhh/personal/nuevo
 /rrhh/planillas
 /rrhh/planillas/dashboard
 /rrhh/planillas/estados
@@ -143,7 +345,8 @@ Antes de probar onboarding en Supabase dev, aplicar manualmente en SQL Editor:
 database/migrations/0002_bootstrap_empresa.sql
 ```
 
-No se usa `SUPABASE_SERVICE_ROLE_KEY` y el frontend no envia `empresa_id`.
+El frontend no envia `empresa_id`. `SUPABASE_SERVICE_ROLE_KEY` no se usa en el
+flujo de onboarding.
 
 Flujo para empresa nueva:
 
@@ -154,6 +357,36 @@ Flujo para empresa nueva:
 `/onboarding` crea una empresa nueva. Si el usuario recibio una invitacion, debe
 usar el enlace de invitacion y no este formulario.
 
+Si existe una cookie `bizos_pending_invitation_token`, `/onboarding` redirige a
+`/invitation` y no permite crear una empresa nueva por error.
+
+Al crear empresa, `bootstrap_empresa_inicial` crea roles estandar y asigna al
+fundador como `Super Admin`. Antes de probar esa mejora, aplicar manualmente:
+
+```text
+database/migrations/0027_roles_estandar_empresa.sql
+```
+
+Roles creados:
+
+```text
+Super Admin
+Administrador
+Supervisor
+Vendedor
+Servicio al cliente
+Bodeguero
+Chofer / Repartidor
+Contabilidad / Facturacion
+RRHH
+```
+
+Documento tecnico:
+
+```text
+docs/modules/roles-defaults.md
+```
+
 ## Administración Base
 
 Despues del onboarding, `/admin` muestra en solo lectura el nucleo multiempresa:
@@ -162,13 +395,17 @@ empresa, usuario, sucursal, rol, permisos, modulos activos y plan.
 Tambien existen vistas de lectura para `/admin/usuarios`, `/admin/roles` y
 `/admin/permisos`.
 
-`/admin/invitaciones` permite crear invitaciones seguras para usuarios nuevos.
-No crea usuarios manualmente ni envia correos todavia; genera un enlace
-`/invitation?token=...` que el invitado acepta con una cuenta de Supabase Auth.
+`/admin/invitaciones` y `/rrhh/personal/nuevo` muestran la experiencia
+"Agregar personal". El admin captura nombre, cedula/identificacion, telefono,
+correo, rol, sucursal y cargo opcional. No crea usuarios manualmente, no ve
+contrasenas y no genera contrasenas temporales; genera un enlace
+`/invitation?token=...` para que el colaborador cree su propia cuenta o inicie
+sesion con Supabase Auth.
 Antes de usarlo en Supabase dev, aplicar manualmente:
 
 ```text
 database/migrations/0003_invitaciones_usuarios.sql
+database/migrations/0026_personal_invitations_flow.sql
 ```
 
 Flujo para usuario invitado:
@@ -185,6 +422,12 @@ Durante signup con confirmacion de correo, biz.os guarda temporalmente el token
 en una cookie httpOnly de navegacion. Despues de confirmar e iniciar sesion, el
 usuario vuelve automaticamente a `/invitation?token=...` y no a `/onboarding`.
 
+Documento tecnico:
+
+```text
+docs/modules/users-invitations.md
+```
+
 `/admin/roles`, `/admin/roles/nuevo` y `/admin/roles/[rolId]` permiten
 administrar roles basicos y asignar permisos existentes. Antes de usar esa fase,
 aplicar manualmente:
@@ -194,6 +437,8 @@ database/migrations/0004_roles_admin.sql
 ```
 
 La UI no crea permisos nuevos ni edita el catalogo global de permisos.
+Si faltan roles estandar, `/admin/roles` muestra "Instalar roles estandar"; la
+RPC usa `current_empresa_id()` y no acepta `empresa_id`.
 
 `/admin/usuarios` y `/admin/usuarios/[profileId]` permiten administrar usuarios
 existentes de la empresa: datos basicos, rol, sucursal y estado. Los usuarios se
@@ -237,8 +482,8 @@ permite completar manualmente cuando no hay datos. Al guardar, vuelve a buscar
 por documento para evitar duplicados y registra la gestion en
 `crm_interacciones`.
 
-El boton Cotizar guarda la gestion y queda preparado para conectar el flujo de
-cotizaciones en una fase posterior.
+El boton Cotizar guarda la gestion y abre `/cotizaciones/nueva?clienteId=...`
+con el cliente creado o existente.
 
 ## Agenda Operativa
 
@@ -268,8 +513,10 @@ Cotizaciones permite crear propuestas comerciales simples conectadas al CRM:
 /cotizaciones/[cotizacionId]
 ```
 
-Incluye items manuales, totales calculados y estados comerciales. No genera PDF,
-no envia correos, no crea ventas, no factura y no mueve inventario. Antes de
+Incluye items manuales/catalogo, totales calculados y confirmacion de venta. En
+el MVP no se guardan cotizaciones vacias: se crea la cotizacion solo con al
+menos un item valido. No genera PDF,
+no envia correos, no factura y no mueve inventario. Antes de
 usarlo, aplicar manualmente:
 
 ```text
@@ -310,7 +557,7 @@ database/migrations/0011_quotes_catalog_connection.sql
 
 ## Ventas / Ordenes Basicas
 
-Una cotizacion aceptada puede generar una venta/orden que congela cliente,
+Una cotizacion confirmada puede generar una venta/orden que congela cliente,
 cotizacion origen, items, precios y totales:
 
 ```text
@@ -471,7 +718,7 @@ No se crean carpetas operativas futuras hasta que se implementen sus modulos.
 El flujo operativo actual ya cubre:
 
 ```text
-Cliente -> Agenda -> Cotización -> Venta -> Inventario -> Despacho
+Nueva consulta -> Cotizacion con items -> Confirmar venta -> Orden de venta -> Inventario -> Despacho
 ```
 
 Siguientes fases sugeridas, sin mezclar responsabilidades:

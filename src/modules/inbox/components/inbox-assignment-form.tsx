@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 type InboxAssignmentFormProps = {
   canAssign: boolean;
   conversation: InboxConversation;
+  redirectTo?: string;
   users: InboxAssignableUser[];
 };
 
 export function InboxAssignmentForm({
   canAssign,
   conversation,
+  redirectTo,
   users,
 }: InboxAssignmentFormProps) {
   if (!canAssign) return null;
@@ -18,6 +20,9 @@ export function InboxAssignmentForm({
   return (
     <form action={assignInboxConversationAction} className="space-y-2">
       <input name="conversacionId" type="hidden" value={conversation.id} />
+      {redirectTo ? (
+        <input name="redirectTo" type="hidden" value={redirectTo} />
+      ) : null}
       <label className="space-y-1 text-sm">
         <span className="font-medium">Asignado a</span>
         <select

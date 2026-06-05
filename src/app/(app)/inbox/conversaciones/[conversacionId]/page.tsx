@@ -15,6 +15,7 @@ import {
   getAssignableUsersForInbox,
   getCustomersForInbox,
   getInboxConversationDetail,
+  getInboxConversationMetaSendStatus,
   getInboxEvents,
   getInboxMessages,
 } from "@/modules/inbox/queries";
@@ -84,6 +85,10 @@ export default async function InboxConversationDetailPage({
     notFound();
   }
 
+  const metaSendStatus = await getInboxConversationMetaSendStatus(
+    conversation.data,
+  );
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -115,7 +120,16 @@ export default async function InboxConversationDetailPage({
         <div className="space-y-4">
           <InboxMessageThread messages={messages.ok ? messages.data : []} />
           <div className="grid gap-4 lg:grid-cols-3">
-            <InboxReplyForm canReply={canReply} conversacionId={conversation.data.id} />
+            <InboxReplyForm
+              canReply={canReply}
+              conversacionId={conversation.data.id}
+              realWhatsAppReady={
+                metaSendStatus.ok ? metaSendStatus.data.isReady : false
+              }
+              realWhatsAppReason={
+                metaSendStatus.ok ? metaSendStatus.data.reason : null
+              }
+            />
             <InboxInternalNoteForm
               canReply={canReply}
               conversacionId={conversation.data.id}

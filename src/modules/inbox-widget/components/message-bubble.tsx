@@ -15,12 +15,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       }`}
     >
       <div
-        className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+        className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-[0_14px_30px_rgba(15,23,42,0.13)] ring-1 backdrop-blur ${
           isInternal
-            ? "bg-amber-50 text-amber-900 ring-1 ring-amber-100"
+            ? "bg-amber-50/95 text-amber-900 ring-amber-100"
             : isOutgoing
-              ? "rounded-br-md bg-[#dcf8c6] text-slate-900"
-              : "rounded-bl-md bg-white text-slate-900"
+              ? "rounded-br-md bg-gradient-to-br from-[#e7ffd9] via-[#dcf8c6] to-[#c7f3b7] text-slate-900 ring-emerald-100"
+              : "rounded-bl-md bg-white/95 text-slate-900 ring-white/80"
         }`}
       >
         <p className="whitespace-pre-wrap break-words">

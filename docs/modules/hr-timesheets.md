@@ -42,9 +42,10 @@ El dashboard general sigue siendo `/dashboard`.
 
 ## Sidebar
 
-El widget inferior del sidebar muestra el estado actual del usuario, desde
-cuando esta en ese estado, hasta seis acciones rapidas y enlaces a Dashboard o
-Configuracion segun permisos.
+El widget inferior del sidebar muestra el estado actual del usuario, el nombre
+visible y una accion principal para cambiar estado. Las opciones se agrupan en
+un menu compacto para evitar botones amontonados. Tambien expone el acceso al
+dashboard operativo cuando el usuario tiene permisos.
 
 ## Prueba Manual
 

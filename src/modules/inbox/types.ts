@@ -43,6 +43,8 @@ export type InboxChannelConfig = {
 };
 
 export type InboxMetaChannelStatus = {
+  accessTokenSuffix?: string | null;
+  accessTokenUpdatedAt?: string | null;
   canal: InboxChannel;
   canalId: string;
   conexionEstado: InboxConnectionStatus;
@@ -114,6 +116,31 @@ export type InboxEvent = {
   id: string;
   metadata: JsonRecord;
   tipo: string;
+};
+
+export type InboxWebhookEvent = {
+  canal: string | null;
+  canalId: string | null;
+  error: string | null;
+  eventType: string | null;
+  externalMessageId: string | null;
+  externalRecipientId: string | null;
+  externalSenderId: string | null;
+  id: string;
+  objectType: string | null;
+  procesado: boolean;
+  receivedAt: string;
+};
+
+export type InboxMetaChannelDiagnostic = {
+  activeMetaWhatsappChannels: number;
+  duplicatePhoneNumberIds: string[];
+  warnings: string[];
+};
+
+export type InboxConversationMetaSendStatus = {
+  isReady: boolean;
+  reason: string | null;
 };
 
 export type InboxAssignableUser = {

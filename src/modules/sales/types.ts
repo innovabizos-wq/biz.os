@@ -17,6 +17,7 @@ export type Sale = {
   cotizacionId: string | null;
   cotizacionNumero: string | null;
   creadoPorNombre: string | null;
+  creadoPorSucursalNombre: string | null;
   createdAt: string;
   descuentoTotal: number;
   estado: SaleStatus;

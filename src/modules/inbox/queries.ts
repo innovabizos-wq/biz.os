@@ -5,11 +5,14 @@ import type {
   InboxAssignableUser,
   InboxChannelConfig,
   InboxConversation,
+  InboxConversationMetaSendStatus,
   InboxCustomer,
   InboxEvent,
+  InboxMetaChannelDiagnostic,
   InboxMetaChannelStatus,
   InboxMessage,
   InboxSummary,
+  InboxWebhookEvent,
 } from "@/modules/inbox/types";
 import type { CoreResult, JsonRecord, TenantContext } from "@/types/core";
 import { fail, ok } from "@/types/core";
@@ -37,6 +40,8 @@ type ChannelRow = {
 };
 
 type MetaStatusRow = {
+  access_token_suffix?: string | null;
+  access_token_updated_at?: string | null;
   canal: InboxMetaChannelStatus["canal"];
   canal_id: string;
   conexion_estado: InboxMetaChannelStatus["conexionEstado"];
@@ -94,6 +99,20 @@ type EventRow = {
   metadata: JsonRecord;
   profiles: NameRelation | NameRelation[] | null;
   tipo: string;
+};
+
+type WebhookEventRow = {
+  canal: string | null;
+  canal_id: string | null;
+  error: string | null;
+  event_type: string | null;
+  external_message_id: string | null;
+  external_recipient_id: string | null;
+  external_sender_id: string | null;
+  id: string;
+  object_type: string | null;
+  procesado: boolean;
+  received_at: string;
 };
 
 type UserRow = {
@@ -170,6 +189,8 @@ function mapChannel(row: ChannelRow): InboxChannelConfig {
 
 function mapMetaStatus(row: MetaStatusRow): InboxMetaChannelStatus {
   return {
+    accessTokenSuffix: row.access_token_suffix ?? null,
+    accessTokenUpdatedAt: row.access_token_updated_at ?? null,
     canal: row.canal,
     canalId: row.canal_id,
     conexionEstado: row.conexion_estado,
@@ -179,6 +200,22 @@ function mapMetaStatus(row: MetaStatusRow): InboxMetaChannelStatus {
     tieneVerifyToken: row.tiene_verify_token,
     tokenExpiresAt: row.token_expires_at,
     webhookUrl: row.webhook_url,
+  };
+}
+
+function mapWebhookEvent(row: WebhookEventRow): InboxWebhookEvent {
+  return {
+    canal: row.canal,
+    canalId: row.canal_id,
+    error: row.error,
+    eventType: row.event_type,
+    externalMessageId: row.external_message_id,
+    externalRecipientId: row.external_recipient_id,
+    externalSenderId: row.external_sender_id,
+    id: row.id,
+    objectType: row.object_type,
+    procesado: row.procesado,
+    receivedAt: row.received_at,
   };
 }
 
@@ -343,6 +380,134 @@ export async function getInboxChannelMetaStatus(
   return ok(row ? mapMetaStatus(row) : null);
 }
 
+export async function getInboxWebhookEventsForChannel(
+  canalId: string,
+): Promise<CoreResult<InboxWebhookEvent[]>> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (!canViewChannels(tenant.data)) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver canales.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_webhook_eventos")
+    .select(
+      "id, canal_id, canal, object_type, event_type, external_message_id, external_sender_id, external_recipient_id, procesado, error, received_at",
+    )
+    .eq("empresa_id", tenant.data.empresaId)
+    .eq("canal_id", canalId)
+    .order("received_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    return fail(
+      "PERMISSION_DENIED",
+      "No se pudieron consultar eventos webhook.",
+      error,
+    );
+  }
+
+  return ok(((data ?? []) as WebhookEventRow[]).map(mapWebhookEvent));
+}
+
+export async function getInboxUnassociatedWebhookEventsForChannel(
+  canalId: string,
+): Promise<CoreResult<InboxWebhookEvent[]>> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (!canViewChannels(tenant.data)) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver canales.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(
+    "obtener_inbox_webhook_eventos_no_asociados",
+    {
+      p_canal_id: canalId,
+      p_limit: 10,
+    },
+  );
+
+  if (error) {
+    return ok([]);
+  }
+
+  return ok(((data ?? []) as WebhookEventRow[]).map(mapWebhookEvent));
+}
+
+export async function getInboxMetaChannelDiagnostic(
+  canalId: string,
+): Promise<CoreResult<InboxMetaChannelDiagnostic>> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (!canViewChannels(tenant.data)) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver canales.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_canales")
+    .select("id, estado, configuracion_publica")
+    .eq("empresa_id", tenant.data.empresaId)
+    .eq("proveedor", "meta")
+    .eq("canal", "whatsapp")
+    .neq("estado", "inactivo");
+
+  if (error) {
+    return ok({
+      activeMetaWhatsappChannels: 0,
+      duplicatePhoneNumberIds: [],
+      warnings: [],
+    });
+  }
+
+  const rows = (data ?? []) as Array<{
+    configuracion_publica: JsonRecord;
+    estado: string;
+    id: string;
+  }>;
+  const phoneCounts = new Map<string, number>();
+
+  for (const row of rows) {
+    const phoneNumberId = String(row.configuracion_publica.phone_number_id ?? "");
+
+    if (phoneNumberId) {
+      phoneCounts.set(phoneNumberId, (phoneCounts.get(phoneNumberId) ?? 0) + 1);
+    }
+  }
+
+  const duplicatePhoneNumberIds = Array.from(phoneCounts.entries())
+    .filter(([, count]) => count > 1)
+    .map(([phoneNumberId]) => phoneNumberId);
+  const warnings: string[] = [];
+
+  if (rows.length > 1) {
+    warnings.push(
+      "Hay varios canales WhatsApp Meta activos. Verifica que el phone_number_id correcto este en este canal.",
+    );
+  }
+
+  if (duplicatePhoneNumberIds.length > 0) {
+    warnings.push(
+      `Hay phone_number_id duplicados: ${duplicatePhoneNumberIds.join(", ")}.`,
+    );
+  }
+
+  if (!rows.some((row) => row.id === canalId)) {
+    warnings.push("Este canal no esta activo como WhatsApp Meta.");
+  }
+
+  return ok({
+    activeMetaWhatsappChannels: rows.length,
+    duplicatePhoneNumberIds,
+    warnings,
+  });
+}
+
 export async function getInboxConversations(): Promise<
   CoreResult<InboxConversation[]>
 > {
@@ -395,6 +560,57 @@ export async function getInboxConversationDetail(
   }
 
   return ok(data ? mapConversation(data) : null);
+}
+
+export async function getInboxConversationMetaSendStatus(
+  conversation: InboxConversation,
+): Promise<CoreResult<InboxConversationMetaSendStatus>> {
+  if (conversation.canal !== "whatsapp" || !conversation.canalId) {
+    return ok({
+      isReady: false,
+      reason: "Esta conversacion no pertenece a un canal WhatsApp Meta.",
+    });
+  }
+
+  const [channel, metaStatus] = await Promise.all([
+    getInboxChannelDetail(conversation.canalId),
+    getInboxChannelMetaStatus(conversation.canalId),
+  ]);
+
+  if (!channel.ok || !channel.data || channel.data.proveedor !== "meta") {
+    return ok({
+      isReady: false,
+      reason: "El canal no es proveedor Meta.",
+    });
+  }
+
+  if (
+    channel.data.estado !== "activo" ||
+    channel.data.conexionEstado !== "configurado"
+  ) {
+    return ok({
+      isReady: false,
+      reason: "El canal WhatsApp Meta no esta activo/configurado.",
+    });
+  }
+
+  const phoneNumberId = channel.data.configuracionPublica.phone_number_id;
+
+  if (typeof phoneNumberId !== "string" || !phoneNumberId.trim()) {
+    return ok({
+      isReady: false,
+      reason: "Falta phone_number_id en la configuracion del canal.",
+    });
+  }
+
+  if (!metaStatus.ok || !metaStatus.data?.tieneAccessToken) {
+    return ok({
+      isReady: false,
+      reason: "Falta access_token configurado.",
+    });
+  }
+
+  return ok({ isReady: true, reason: null });
 }
 
 export async function getInboxMessages(

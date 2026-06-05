@@ -21,7 +21,7 @@ export function FloatingInboxButton({ conversations }: FloatingInboxButtonProps)
       <button
         aria-label={isOpen ? "Minimizar mensajeria" : "Abrir mensajeria"}
         aria-pressed={isOpen}
-        className={`fixed bottom-24 right-6 z-40 flex size-14 items-center justify-center rounded-full text-white shadow-xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
+        className={`floating-inbox-trigger fixed bottom-24 right-6 z-40 flex size-14 items-center justify-center rounded-full text-white shadow-xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
           isOpen ? "bg-slate-950" : "bg-[#25d366]"
         }`}
         onClick={() => setIsOpen((current) => !current)}

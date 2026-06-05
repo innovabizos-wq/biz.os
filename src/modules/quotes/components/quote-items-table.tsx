@@ -76,7 +76,7 @@ export function QuoteItemsTable({
                 <input
                   className="h-9 rounded-md border bg-background px-3 text-sm"
                   defaultValue={item.precioUnitario}
-                  min="0"
+                  min="0.01"
                   name="precioUnitario"
                   step="0.01"
                   type="number"

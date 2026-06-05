@@ -1,19 +1,27 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
-  AlertTriangle,
-  FileText,
-  X,
+  Banknote,
+  CalendarDays,
+  CheckCircle2,
+  Inbox,
+  Plus,
   ShoppingCart,
+  Truck,
   Users,
+  X,
 } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
 
-import { PremiumKpiCard } from "@/components/kpi/premium-kpi-card";
-import { PremiumKpiGrid } from "@/components/kpi/premium-kpi-grid";
+import { DashboardAiSearch } from "@/app/(app)/dashboard/dashboard-ai-search";
+import {
+  DashboardTop3Chart,
+  type DashboardTop3Option,
+} from "@/app/(app)/dashboard/dashboard-top3-chart";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { getCurrentProfile, getCurrentTenantContext } from "@/lib/auth/session";
-import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
-import { getAgendaSummary } from "@/modules/agenda/queries";
+import { hasPermission } from "@/lib/permissions/permission-checks";
 import { ConsultationManagementForm } from "@/modules/consultations/components/consultation-management-form";
 import { ConsultationResultCard } from "@/modules/consultations/components/consultation-result-card";
 import { ConsultationSearchForm } from "@/modules/consultations/components/consultation-search-form";
@@ -21,14 +29,33 @@ import { getConsultationSearchResult } from "@/modules/consultations/queries";
 import { consultationSearchSchema } from "@/modules/consultations/schemas";
 import type { ConsultationSearchResult } from "@/modules/consultations/types";
 import { getCrmCustomers } from "@/modules/crm/queries";
+import type { CrmCustomer } from "@/modules/crm/types";
 import { getDispatchOrders } from "@/modules/dispatch/queries";
 import { getQuotes } from "@/modules/quotes/queries";
 import { getSales } from "@/modules/sales/queries";
+import type { Sale } from "@/modules/sales/types";
 
-function formatCurrency(value: number) {
+type DashboardPageProps = {
+  searchParams?: Promise<{
+    consulta?: string;
+    consulta_estado?: string;
+    documento?: string;
+    error?: string;
+  }>;
+};
+
+type DashboardKpi = {
+  accent: "dark" | "amber" | "teal" | "silver";
+  href: string;
+  title: string;
+  value: string;
+};
+
+function formatCurrency(value: number, compact = false) {
   return new Intl.NumberFormat("es-CR", {
     currency: "CRC",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: compact ? 2 : 0,
+    notation: compact ? "compact" : "standard",
     style: "currency",
   }).format(value);
 }
@@ -63,21 +90,154 @@ function getSettledValue<T>(
   return fallback;
 }
 
-type DashboardPageProps = {
-  searchParams?: Promise<{
-    consulta?: string;
-    consulta_estado?: string;
-    documento?: string;
-    error?: string;
-  }>;
-};
-
 function getBlankConsultationResult(documento = ""): ConsultationSearchResult {
   return {
     documento,
     message: "Completa la informacion para iniciar una gestion.",
     source: "manual",
   };
+}
+
+function getFirstName(name?: string) {
+  return name?.split(" ")[0] || "equipo";
+}
+
+function sumSales(sales: Sale[]) {
+  return sales.reduce((sum, sale) => sum + sale.total, 0);
+}
+
+function getDateParts(dateValue: string) {
+  const [year, month, day] = dateValue.slice(0, 10).split("-").map(Number);
+
+  if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+    return { day, month: month - 1, year };
+  }
+
+  const fallback = new Date(dateValue);
+
+  return {
+    day: fallback.getDate(),
+    month: fallback.getMonth(),
+    year: fallback.getFullYear(),
+  };
+}
+
+function getDayIndex(dateValue: string) {
+  return getDateParts(dateValue).day - 1;
+}
+
+function isCurrentMonth(dateValue: string) {
+  const value = getDateParts(dateValue);
+  const today = new Date();
+
+  return value.year === today.getFullYear() && value.month === today.getMonth();
+}
+
+function buildTop3Option({
+  id,
+  label,
+  records,
+  subtitle,
+}: {
+  id: string;
+  label: string;
+  records: Array<{ date: string; group: string; value: number }>;
+  subtitle: string;
+}): DashboardTop3Option {
+  const grouped = new Map<string, { total: number; values: number[] }>();
+
+  records.filter((record) => isCurrentMonth(record.date)).forEach((record) => {
+    const dayIndex = getDayIndex(record.date);
+
+    if (dayIndex < 0 || dayIndex > 30) {
+      return;
+    }
+
+    const current = grouped.get(record.group) ?? {
+      total: 0,
+      values: Array.from({ length: 31 }, () => 0),
+    };
+
+    current.total += record.value;
+    current.values[dayIndex] += record.value;
+    grouped.set(record.group, current);
+  });
+
+  return {
+    id,
+    label,
+    series: Array.from(grouped.entries())
+      .map(([seriesLabel, data]) => ({
+        label: seriesLabel,
+        total: data.total,
+        values: data.values,
+      }))
+      .sort((left, right) => right.total - left.total)
+      .slice(0, 3),
+    subtitle,
+  };
+}
+
+function buildDashboardTop3Options({
+  customers,
+  sales,
+}: {
+  customers: CrmCustomer[];
+  sales: Sale[];
+}): DashboardTop3Option[] {
+  const crmScore: Record<CrmCustomer["estado"], number> = {
+    calificado: 68,
+    contactado: 45,
+    cotizado: 82,
+    ganado: 100,
+    inactivo: 10,
+    nuevo: 25,
+    perdido: 5,
+  };
+
+  const options = [
+    buildTop3Option({
+      id: "sales-branch",
+      label: "Ventas por sucursal",
+      records: sales.map((sale) => ({
+        date: sale.fechaVenta,
+        group: sale.creadoPorSucursalNombre ?? "Sucursal sin asignar",
+        value: sale.total,
+      })),
+      subtitle: "Las 3 sucursales que mas vendieron este mes.",
+    }),
+    buildTop3Option({
+      id: "sales-seller",
+      label: "Ventas por vendedor",
+      records: sales.map((sale) => ({
+        date: sale.fechaVenta,
+        group: sale.creadoPorNombre ?? "Sin vendedor",
+        value: sale.total,
+      })),
+      subtitle: "Los 3 vendedores con mas ventas este mes.",
+    }),
+    buildTop3Option({
+      id: "crm-evaluated",
+      label: "Clientes mejor evaluados",
+      records: customers.map((customer) => ({
+        date: customer.createdAt,
+        group: customer.estado,
+        value: crmScore[customer.estado],
+      })),
+      subtitle: "Los 3 grupos de clientes con mejor avance este mes.",
+    }),
+  ];
+
+  return options.some((option) => option.series.length > 0)
+    ? options
+    : [
+        {
+          id: "empty",
+          label: "Top 3 del negocio",
+          series: [],
+          subtitle: "Los datos apareceran cuando los modulos empiecen a registrar actividad.",
+        },
+      ];
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -88,30 +248,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   ]);
 
   if (!profileResult.ok || !tenantResult.ok) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[dashboard] auth context failed", {
-        profile: profileResult.ok ? "ok" : profileResult.error.message,
-        tenant: tenantResult.ok ? "ok" : tenantResult.error.message,
-      });
-    }
     redirect("/login");
   }
 
-  if (!profileResult.data) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[dashboard] missing profile; redirect onboarding");
-    }
+  if (!profileResult.data || !tenantResult.data) {
     redirect("/onboarding");
   }
 
-  if (!tenantResult.data) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[dashboard] missing tenant; redirect onboarding");
-    }
-    redirect("/onboarding");
-  }
-
-  const permissions = tenantResult.data.permissions;
+  const tenant = tenantResult.data;
+  const permissions = tenant.permissions;
   const showConsultationModal = params?.consulta === "nueva";
   let consultationResult: ConsultationSearchResult | null = null;
   let consultationMessage: string | null = null;
@@ -121,7 +266,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   if (showConsultationModal && parsedConsultationDocument?.success) {
     const searchResult = await getConsultationSearchResult(
-      tenantResult.data,
+      tenant,
       parsedConsultationDocument.data.documento,
     );
 
@@ -144,283 +289,231 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const dashboardResults = await Promise.allSettled([
     hasPermission(permissions, "crm.customers.view")
-      ? getCrmCustomers(tenantResult.data)
+      ? getCrmCustomers(tenant)
       : Promise.resolve(null),
     hasPermission(permissions, "quotes.view")
-      ? getQuotes(tenantResult.data, "todos")
+      ? getQuotes(tenant, "todos")
       : Promise.resolve(null),
     hasPermission(permissions, "sales.orders.view")
-      ? getSales(tenantResult.data, "todos")
-      : Promise.resolve(null),
-    hasPermission(permissions, "crm.followups.view")
-      ? getAgendaSummary(tenantResult.data, {
-          source: "dashboard",
-          tolerateErrors: true,
-        })
+      ? getSales(tenant, "todos")
       : Promise.resolve(null),
     hasPermission(permissions, "dispatch.orders.view")
-      ? getDispatchOrders(tenantResult.data, "todos")
+      ? getDispatchOrders(tenant, "todos")
       : Promise.resolve(null),
   ]);
   const [
     dashboardCustomers,
     dashboardQuotes,
     dashboardSales,
-    dashboardAgenda,
     dashboardDispatches,
   ] = [
     getSettledValue(dashboardResults[0], null, "getCrmCustomers"),
     getSettledValue(dashboardResults[1], null, "getQuotes"),
     getSettledValue(dashboardResults[2], null, "getSales"),
-    getSettledValue(dashboardResults[3], null, "getAgendaSummary"),
-    getSettledValue(dashboardResults[4], null, "getDispatchOrders"),
+    getSettledValue(dashboardResults[3], null, "getDispatchOrders"),
   ];
-  const dashboardCustomerRows =
-    dashboardCustomers?.ok === true ? dashboardCustomers.data : [];
-  const dashboardQuoteRows =
-    dashboardQuotes?.ok === true ? dashboardQuotes.data : [];
-  const dashboardSaleRows = dashboardSales?.ok === true ? dashboardSales.data : [];
-  const dashboardAgendaData =
-    dashboardAgenda?.ok === true
-      ? dashboardAgenda.data
-      : { completadosRecientes: [], hoy: [], proximos: [], vencidos: [] };
-  const dashboardAgendaUnavailable =
-    hasPermission(permissions, "crm.followups.view") && dashboardAgenda?.ok !== true;
-  const dashboardDispatchRows =
+  const customerRows = dashboardCustomers?.ok === true ? dashboardCustomers.data : [];
+  const quoteRows = dashboardQuotes?.ok === true ? dashboardQuotes.data : [];
+  const saleRows = dashboardSales?.ok === true ? dashboardSales.data : [];
+  const dispatchRows =
     dashboardDispatches?.ok === true ? dashboardDispatches.data : [];
-  const dashboardOpenQuotes = dashboardQuoteRows.filter((quote) =>
-    ["borrador", "enviada"].includes(quote.estado),
+  const monthSales = saleRows.filter((sale) => isThisMonth(sale.fechaVenta));
+  const monthSalesTotal = sumSales(monthSales);
+  const top3Options = buildDashboardTop3Options({
+    customers: customerRows,
+    sales: saleRows,
+  });
+  const activeDispatches = dispatchRows.filter((dispatch) =>
+    ["pendiente", "preparando", "listo", "en_ruta"].includes(dispatch.estado),
   );
-  const dashboardActiveCustomers = dashboardCustomerRows.filter(
-    (customer) => !["inactivo", "perdido"].includes(customer.estado),
+  const recentSales = saleRows.slice(0, 2);
+  const recentDispatch = dispatchRows[0];
+  const openQuotes = quoteRows.filter((quote) =>
+    ["borrador", "enviada", "vencida"].includes(quote.estado),
   );
-  const dashboardMonthSales = dashboardSaleRows.filter((sale) =>
-    isThisMonth(sale.fechaVenta),
-  );
-  const dashboardOperationalPending =
-    dashboardAgendaData.hoy.length +
-    dashboardAgendaData.vencidos.length +
-    dashboardDispatchRows.filter((dispatch) =>
-      ["pendiente", "preparando", "listo", "en_ruta"].includes(dispatch.estado),
-    ).length;
-  const quickCards = [
+  const sentQuotes = quoteRows.filter((quote) => quote.estado === "enviada");
+  const activeCustomers = customerRows.filter((customer) => customer.tipo === "cliente");
+  const kpis: DashboardKpi[] = [
     {
-      description: "Gestiona clientes y prospectos.",
+      accent: "dark",
+      href: "/ventas",
+      title: "Ventas",
+      value: formatCurrency(monthSalesTotal, true),
+    },
+    {
+      accent: "amber",
       href: "/crm/clientes",
-      label: "Clientes",
-      show: hasPermission(permissions, "crm.customers.view"),
+      title: "Clientes",
+      value: activeCustomers.length.toLocaleString("es-CR"),
     },
     {
-      description: "Organiza seguimientos del día.",
-      href: "/agenda",
-      label: "Agenda",
-      show: hasPermission(permissions, "crm.followups.view"),
-    },
-    {
-      description: "Crea y revisa propuestas.",
+      accent: "teal",
       href: "/cotizaciones",
-      label: "Cotizaciones",
-      show: hasAnyPermission(permissions, [
-        "quotes.view",
-        "quotes.create",
-        "quotes.edit",
-      ]),
+      title: "Cotizaciones",
+      value: openQuotes.length.toLocaleString("es-CR"),
     },
     {
-      description: "Da seguimiento a órdenes.",
-      href: "/ventas",
-      label: "Ventas",
-      show: hasAnyPermission(permissions, [
-        "sales.orders.view",
-        "sales.orders.create",
-        "sales.orders.edit",
-      ]),
-    },
-    {
-      description: "Controla stock y movimientos.",
-      href: "/inventario",
-      label: "Inventario",
-      show: hasAnyPermission(permissions, [
-        "inventory.stock.view",
-        "inventory.stock.adjust",
-        "inventory.movements.view",
-      ]),
-    },
-    {
-      description: "Prepara entregas y trabajos.",
+      accent: "silver",
       href: "/despacho",
-      label: "Despacho",
-      show: hasAnyPermission(permissions, [
-        "dispatch.orders.view",
-        "dispatch.orders.create",
-        "dispatch.orders.edit",
-      ]),
+      title: "Despachos",
+      value: activeDispatches.length.toLocaleString("es-CR"),
     },
-  ].filter((card) => card.show);
-  const unusedQuickActions = [
-    {
-      href: "/cotizaciones/nueva",
-      label: "Nueva cotización",
-      show: hasPermission(permissions, "quotes.create"),
-    },
-    {
-      href: "/agenda",
-      label: "Ver agenda",
-      show: hasPermission(permissions, "crm.followups.view"),
-    },
-    {
-      href: "/ventas",
-      label: "Ver ventas",
-      show: hasPermission(permissions, "sales.orders.view"),
-    },
-    {
-      href: "/inventario",
-      label: "Ver inventario",
-      show: hasAnyPermission(permissions, [
-        "inventory.stock.view",
-        "inventory.stock.adjust",
-      ]),
-    },
-    {
-      href: "/despacho",
-      label: "Ver despacho",
-      show: hasPermission(permissions, "dispatch.orders.view"),
-    },
-  ].filter((action) => action.show);
-  void unusedQuickActions;
+  ];
 
   return (
-    <section className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
-      <SectionHeader
-        title="Dashboard"
-        titleClassName="app-page-title-compact normal-case"
-      />
+    <section className="dashboard-screen">
+      <div className="dashboard-topbar">
+        <div>
+          <h1>Buenos dias, {getFirstName(tenant.profileName)}!</h1>
+          <p>Aqui tienes el resumen de tu negocio.</p>
+        </div>
 
-      {dashboardAgendaUnavailable ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          No se pudo cargar agenda por ahora. El resto del dashboard sigue
-          disponible.
-        </p>
-      ) : null}
+        <DashboardAiSearch />
 
-      <PremiumKpiGrid>
-        <PremiumKpiCard
-          footerLeftLabel="Prospectos"
-          footerLeftValue={
-            dashboardCustomerRows.filter((customer) => customer.tipo === "prospecto")
-              .length
-          }
-          footerRightLabel="Activos"
-          footerRightValue={dashboardActiveCustomers.length}
-          href="/crm/clientes"
-          icon={<Users />}
-          sparklineTone="blue"
-          title="Clientes activos"
-          trendLabel="CRM"
-          trendTone="neutral"
-          trendValue="Real"
-          value={dashboardActiveCustomers.length}
-          variant="blue"
-        />
-        <PremiumKpiCard
-          footerLeftLabel="Borradores"
-          footerLeftValue={
-            dashboardQuoteRows.filter((quote) => quote.estado === "borrador").length
-          }
-          footerRightLabel="Enviadas"
-          footerRightValue={
-            dashboardQuoteRows.filter((quote) => quote.estado === "enviada").length
-          }
-          href="/cotizaciones"
-          icon={<FileText />}
-          sparklineTone="gold"
-          title="Cotizaciones abiertas"
-          trendLabel="abiertas"
-          trendTone="neutral"
-          trendValue={`${dashboardOpenQuotes.length}`}
-          value={dashboardOpenQuotes.length}
-          variant="red"
-        />
-        <PremiumKpiCard
-          footerLeftLabel="Ordenes mes"
-          footerLeftValue={dashboardMonthSales.length}
-          footerRightLabel="Total mes"
-          footerRightValue={formatCurrency(
-            dashboardMonthSales.reduce((sum, sale) => sum + sale.total, 0),
-          )}
-          href="/ventas"
-          icon={<ShoppingCart />}
-          sparklineTone="green"
-          title="Ventas del mes"
-          trendLabel="mes actual"
-          trendTone="neutral"
-          trendValue="Real"
-          value={dashboardMonthSales.length}
-          variant="green"
-        />
-        <PremiumKpiCard
-          footerLeftLabel="Agenda"
-          footerLeftValue={
-            dashboardAgendaData.hoy.length + dashboardAgendaData.vencidos.length
-          }
-          footerRightLabel="Despacho"
-          footerRightValue={
-            dashboardDispatchRows.filter((dispatch) =>
-              ["pendiente", "preparando", "listo", "en_ruta"].includes(
-                dispatch.estado,
-              ),
-            ).length
-          }
-          href="/agenda"
-          icon={<AlertTriangle />}
-          sparklineTone="red"
-          title="Pendientes operativos"
-          trendLabel="operacion"
-          trendTone={dashboardOperationalPending > 0 ? "negative" : "neutral"}
-          trendValue={`${dashboardOperationalPending}`}
-          value={dashboardOperationalPending}
-          variant="gold"
-        />
-      </PremiumKpiGrid>
+        <div className="dashboard-topbar-reserved" aria-hidden="true" />
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-auto pr-1">
-      {quickCards.length > 0 ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {quickCards.map((card) => (
-            <Link
-              className="rounded-lg border bg-background p-4 transition-colors hover:bg-muted"
-              href={card.href}
-              key={card.href}
-            >
-              <p className="text-sm font-semibold">{card.label}</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {card.description}
+      <div className="dashboard-kpi-row">
+        {kpis.map((kpi) => (
+          <KpiCard key={kpi.title} {...kpi} />
+        ))}
+      </div>
+
+      <div className="dashboard-grid-main">
+        <DashboardTop3Chart options={top3Options} />
+
+        <DashboardCard className="dashboard-activity-card">
+          <PanelHeader href="/ventas" linkLabel="Ver todas" title="Actividad reciente" />
+          <div className="dashboard-activity-list">
+            {recentSales.map((sale) => (
+              <ActivityRow
+                detail={`${sale.clienteNombre ?? "Cliente"} - ${formatCurrency(sale.total)}`}
+                icon={Banknote}
+                key={sale.id}
+                tone="green"
+                title="Venta registrada"
+                when={formatActivityDate(sale.createdAt)}
+              />
+            ))}
+            {sentQuotes[0] ? (
+              <ActivityRow
+                detail={`${sentQuotes[0].clienteNombre ?? "Cliente"} - ${formatCurrency(sentQuotes[0].total)}`}
+                icon={ShoppingCart}
+                tone="blue"
+                title="Cotizacion enviada"
+                when={formatActivityDate(sentQuotes[0].updatedAt)}
+              />
+            ) : null}
+            {recentDispatch ? (
+              <ActivityRow
+                detail={`${recentDispatch.numero} - ${recentDispatch.clienteNombre ?? "Cliente"}`}
+                icon={Truck}
+                tone="purple"
+                title="Orden de despacho creada"
+                when={formatActivityDate(recentDispatch.createdAt)}
+              />
+            ) : null}
+            {recentSales.length === 0 && !sentQuotes[0] && !recentDispatch ? (
+              <p className="rounded-lg border border-dashed border-slate-200 p-4 text-sm font-semibold text-slate-500">
+                No hay actividad reciente con los permisos actuales.
               </p>
-            </Link>
-          ))}
-        </div>
-      ) : null}
+            ) : null}
+          </div>
+        </DashboardCard>
+      </div>
 
-      <div className="mt-6 rounded-lg border bg-background p-5">
-        <p className="font-semibold">Flujo de trabajo</p>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          {["Cliente", "Cotización", "Venta", "Inventario", "Despacho"].map(
-            (step, index, steps) => (
-              <div className="flex items-center gap-2" key={step}>
-                <span className="rounded-md border bg-muted px-3 py-2 font-medium text-foreground">
-                  {step}
-                </span>
-                {index < steps.length - 1 ? <span>→</span> : null}
-              </div>
-            ),
-          )}
-        </div>
-        <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Usa CRM para iniciar la relación, cotiza, convierte a venta, controla
-          inventario cuando aplique y coordina el despacho operativo.
-        </p>
+      <div className="dashboard-grid-bottom">
+        <DashboardCard className="dashboard-whatsapp-card">
+          <PanelHeader href="/inbox/conversaciones" title="Inbox" />
+          <div className="dashboard-inbox-list">
+            <div className="rounded-lg border border-dashed border-slate-200 p-4 text-sm font-semibold text-slate-500">
+              Las conversaciones se muestran en el Inbox cuando hay canales y permisos activos.
+            </div>
+          </div>
+          <Link className="dashboard-card-action dashboard-whatsapp-action" href="/inbox">
+            <Inbox aria-hidden="true" size={17} />
+            Abrir Inbox
+          </Link>
+        </DashboardCard>
+
+        <DashboardAppointmentCard />
+
+        <DashboardCard className="dashboard-dispatch-card">
+          <PanelHeader href="/despacho" linkLabel="Ver todos" title="Despachos" />
+          <div className="dashboard-dispatch">
+            <div className="dashboard-ring">
+              <strong>{dispatchRows.length}</strong>
+              <span>DPO</span>
+            </div>
+            <div className="dashboard-dispatch-legend">
+              {[
+                ["Entregados", dispatchRows.filter((item) => item.estado === "entregado").length, "green"],
+                ["En transito", dispatchRows.filter((item) => item.estado === "en_ruta").length, "blue"],
+                ["Pendientes", activeDispatches.length, "amber"],
+              ].map(([label, value, tone]) => (
+                <p key={label}>
+                  <span data-tone={tone} />
+                  {label}
+                  <strong>{value}</strong>
+                </p>
+              ))}
+            </div>
+          </div>
+          <Link className="dashboard-card-action" href="/despacho">
+            <Plus aria-hidden="true" size={17} />
+            Ver despachos
+          </Link>
+        </DashboardCard>
+
+        <DashboardCard>
+          <PanelHeader href="/admin" linkLabel="Ver permisos" title="Modulos disponibles" />
+          <div className="dashboard-status-grid">
+            {[
+              [
+                "CRM",
+                hasPermission(permissions, "crm.customers.view") ? "Disponible" : "Sin acceso",
+                Users,
+                hasPermission(permissions, "crm.customers.view") ? "green" : "amber",
+              ],
+              [
+                "Ventas",
+                hasPermission(permissions, "sales.orders.view") ? "Disponible" : "Sin acceso",
+                ShoppingCart,
+                hasPermission(permissions, "sales.orders.view") ? "green" : "amber",
+              ],
+              [
+                "Inventario",
+                hasPermission(permissions, "inventory.stock.view") ? "Disponible" : "Sin acceso",
+                CheckCircle2,
+                hasPermission(permissions, "inventory.stock.view") ? "green" : "amber",
+              ],
+              [
+                "Despacho",
+                hasPermission(permissions, "dispatch.orders.view") ? "Disponible" : "Sin acceso",
+                Truck,
+                hasPermission(permissions, "dispatch.orders.view") ? "green" : "amber",
+              ],
+            ].map(([label, state, Icon, tone]) => {
+              const StatusIcon = Icon as ComponentType<{ size?: number; strokeWidth?: number }>;
+
+              return (
+                <div className="dashboard-status" data-tone={tone} key={label as string}>
+                  <StatusIcon aria-hidden="true" size={22} strokeWidth={2.2} />
+                  <div>
+                    <strong>{label as string}</strong>
+                    <span>{state as string}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="dashboard-status-ok">
+            <CheckCircle2 aria-hidden="true" size={18} />
+            Basado en permisos actuales
+          </p>
+        </DashboardCard>
       </div>
-      </div>
+
       {showConsultationModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/45 p-4 lg:p-8">
           <div className="w-full max-w-5xl rounded-xl border bg-background p-5 shadow-xl">
@@ -438,9 +531,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </Link>
             </div>
 
-            {params?.error || consultationMessage ? (
+            {params?.error ? <EphemeralPageAlert error={params.error} /> : null}
+            {consultationMessage ? (
               <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                {params?.error ?? consultationMessage}
+                {consultationMessage}
               </p>
             ) : null}
 
@@ -455,6 +549,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   permissions,
                   "crm.customers.create",
                 )}
+                canCreateQuote={hasPermission(permissions, "quotes.create")}
                 canSaveInteraction={hasPermission(
                   permissions,
                   "crm.interactions.create",
@@ -467,5 +562,103 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       ) : null}
     </section>
+  );
+}
+
+function KpiCard({
+  accent,
+  href,
+  title,
+  value,
+}: DashboardKpi) {
+  return (
+    <Link className="dashboard-kpi-card" data-accent={accent} href={href}>
+      <div className="dashboard-kpi-title">{title}</div>
+      <div className="dashboard-kpi-line" />
+      <div className="dashboard-kpi-value">{value}</div>
+    </Link>
+  );
+}
+
+function DashboardCard({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <article className={`dashboard-card ${className}`}>{children}</article>;
+}
+
+function PanelHeader({
+  badge,
+  href,
+  linkLabel = "Ver todas",
+  title,
+}: {
+  badge?: number;
+  href: string;
+  linkLabel?: string;
+  title: string;
+}) {
+  return (
+    <div className="dashboard-panel-header">
+      <h2>{title}</h2>
+      {typeof badge === "number" ? <span>{badge}</span> : null}
+      <Link href={href}>{linkLabel}</Link>
+    </div>
+  );
+}
+
+function formatActivityDate(value: string) {
+  return new Date(value).toLocaleDateString("es-CR", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function ActivityRow({
+  detail,
+  icon: Icon,
+  title,
+  tone,
+  when,
+}: {
+  detail: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+  title: string;
+  tone: string;
+  when: string;
+}) {
+  return (
+    <div className="dashboard-activity-row">
+      <span data-tone={tone}>
+        <Icon aria-hidden="true" size={24} strokeWidth={2.2} />
+      </span>
+      <div>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </div>
+      <time>{when}</time>
+    </div>
+  );
+}
+
+function DashboardAppointmentCard() {
+  return (
+    <DashboardCard className="dashboard-appointment-card">
+      <div className="dashboard-appointment-header">
+        <span>
+          <CalendarDays aria-hidden="true" size={18} />
+        </span>
+        <h2>Agenda</h2>
+      </div>
+      <div className="rounded-lg border border-dashed border-slate-200 p-4 text-sm font-semibold text-slate-500">
+        Los seguimientos abiertos aparecen en Agenda cuando se registran desde un cliente.
+      </div>
+      <Link className="dashboard-appointment-submit" href="/agenda">
+        Abrir Agenda
+      </Link>
+    </DashboardCard>
   );
 }

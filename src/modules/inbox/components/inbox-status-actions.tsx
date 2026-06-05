@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 type InboxStatusActionsProps = {
   canChangeStatus: boolean;
   conversation: InboxConversation;
+  redirectTo?: string;
 };
 
 export function InboxStatusActions({
   canChangeStatus,
   conversation,
+  redirectTo,
 }: InboxStatusActionsProps) {
   if (!canChangeStatus) return null;
 
@@ -20,6 +22,9 @@ export function InboxStatusActions({
     <form action={changeInboxConversationStatusAction}>
       <input name="conversacionId" type="hidden" value={conversation.id} />
       <input name="estado" type="hidden" value={nextStatus} />
+      {redirectTo ? (
+        <input name="redirectTo" type="hidden" value={redirectTo} />
+      ) : null}
       <Button type="submit" variant="outline">
         {conversation.estado === "cerrada" ? "Reabrir" : "Cerrar"} conversacion
         <span className="sr-only">{INBOX_STATUS_LABELS[nextStatus]}</span>

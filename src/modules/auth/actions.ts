@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -28,6 +29,49 @@ function appendInvitationToken(path: string, token?: string | null): string {
   }
 
   return `${path}?invitation_token=${encodeURIComponent(token)}`;
+}
+
+function isPublicSignupEnabled() {
+  return process.env.PUBLIC_SIGNUP_ENABLED !== "false";
+}
+
+async function getAppBaseUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  const headerStore = await headers();
+  const origin = headerStore.get("origin");
+
+  if (origin) {
+    return origin.replace(/\/$/, "");
+  }
+
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+
+  if (!host) {
+    return "http://localhost:3000";
+  }
+
+  const protocol =
+    headerStore.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
+      ? "http"
+      : "https");
+
+  return `${protocol}://${host}`;
+}
+
+async function getSignupEmailRedirectTo(invitationToken?: string | null) {
+  const baseUrl = await getAppBaseUrl();
+
+  if (invitationToken) {
+    return `${baseUrl}/invitation?token=${encodeURIComponent(invitationToken)}`;
+  }
+
+  return `${baseUrl}/onboarding`;
 }
 
 function redirectWithAuthError(
@@ -246,13 +290,25 @@ export async function signupAction(formData: FormData) {
   const invitationToken =
     parsed.data.invitation_token ?? (await getPendingInvitationToken());
 
+  if (!invitationToken && !isPublicSignupEnabled()) {
+    redirectWithAuthError(
+      "/signup",
+      "El registro publico no esta disponible. Solicita una invitacion.",
+      null,
+    );
+  }
+
   if (invitationToken) {
     await setPendingInvitationToken(invitationToken);
   }
 
+  const emailRedirectTo = await getSignupEmailRedirectTo(invitationToken);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
+    options: {
+      emailRedirectTo,
+    },
     password: parsed.data.password,
   });
 
@@ -288,6 +344,19 @@ export async function bootstrapEmpresaInicialAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+  const pendingInvitationToken = await getPendingInvitationToken();
+
+  if (pendingInvitationToken) {
+    redirect(`/invitation?token=${encodeURIComponent(pendingInvitationToken)}`);
+  }
+
+  if (!isPublicSignupEnabled()) {
+    redirectWithError(
+      "/onboarding",
+      "El registro publico no esta disponible. Solicita una invitacion.",
+    );
+  }
+
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
   if (userError || !userData.user) {

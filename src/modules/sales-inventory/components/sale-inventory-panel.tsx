@@ -61,7 +61,7 @@ export function SaleInventoryPanel({
               ? "La salida ya fue aplicada."
               : hasInventoryItems
                 ? "La salida se aplica manualmente desde una bodega."
-                : "Esta venta no tiene productos inventariables."}
+                : "Esta venta no tiene productos inventariables. Solo los productos fisicos agregados desde el catalogo descuentan stock. Los items manuales y servicios no afectan inventario."}
           </div>
         </div>
       </div>
@@ -76,8 +76,7 @@ export function SaleInventoryPanel({
 
       {hasInsufficientStock && !alreadyApplied ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Hay stock insuficiente. Registra entrada o ajusta stock antes de aplicar
-          la salida.
+          No hay stock suficiente en la bodega seleccionada.
         </p>
       ) : null}
 
@@ -94,12 +93,18 @@ export function SaleInventoryPanel({
       />
 
       {showMarkWithoutInventory ? (
-        <form action={markSaleWithoutInventoryAction}>
-          <input name="ventaId" type="hidden" value={sale.id} />
-          <Button type="submit" variant="outline">
-            Marcar sin inventario
-          </Button>
-        </form>
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Usa esta opcion para cerrar el paso de inventario cuando la venta no
+            requiere rebajo de stock.
+          </p>
+          <form action={markSaleWithoutInventoryAction}>
+            <input name="ventaId" type="hidden" value={sale.id} />
+            <Button type="submit" variant="outline">
+              Marcar sin inventario
+            </Button>
+          </form>
+        </div>
       ) : null}
     </section>
   );

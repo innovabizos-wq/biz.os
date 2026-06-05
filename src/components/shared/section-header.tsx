@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/layout/page-header";
 
 type SectionHeaderProps = {
   action?: ReactNode;
@@ -22,15 +22,12 @@ export function SectionHeader({
   const headerActions = actions ?? action;
 
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
-        {eyebrow ? <p className="app-page-eyebrow">{eyebrow}</p> : null}
-        <h2 className={cn("app-page-title", titleClassName)}>{title}</h2>
-        {description ? (
-          <p className="app-page-description">{description}</p>
-        ) : null}
-      </div>
-      {headerActions ? <div className="shrink-0 pt-1">{headerActions}</div> : null}
-    </div>
+    <PageHeader
+      actions={headerActions}
+      description={description}
+      eyebrow={eyebrow}
+      title={title}
+      titleClassName={titleClassName}
+    />
   );
 }

@@ -27,13 +27,12 @@ function getSafeSupabaseErrorMessage(error: {
   message?: string;
 }): string {
   const message = error.message?.replace(/\s+/g, " ").trim();
-  const code = error.code?.trim();
 
-  if (message && code) {
-    return `${message} (${code})`;
+  if (message?.toLowerCase().includes("permission")) {
+    return "No tienes permiso para completar esta accion.";
   }
 
-  return message || "Error desconocido de Supabase.";
+  return "No se pudo completar la accion de roles. Intenta de nuevo o solicita ayuda al administrador.";
 }
 
 function logRoleActionError(
@@ -202,4 +201,36 @@ export async function removePermissionFromRoleAction(formData: FormData) {
 
   revalidateRolePaths(parsed.data.rolId);
   redirect(`/admin/roles/${parsed.data.rolId}`);
+}
+
+export async function installStandardRolesAction() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("instalar_roles_estandar_empresa");
+
+  if (error) {
+    logRoleActionError("installStandardRolesAction", error, {});
+    redirectWithError(
+      "/admin/roles",
+      "No se pudieron instalar los roles estandar.",
+    );
+  }
+
+  const summary = (
+    data as
+      | {
+          permisos_asignados?: number;
+          roles_creados?: number;
+          roles_existentes?: number;
+        }[]
+      | null
+  )?.[0];
+  const params = new URLSearchParams({
+    permisosAsignados: String(summary?.permisos_asignados ?? 0),
+    rolesCreados: String(summary?.roles_creados ?? 0),
+    rolesExistentes: String(summary?.roles_existentes ?? 0),
+    standardRoles: "installed",
+  });
+
+  revalidateRolePaths();
+  redirect(`/admin/roles?${params.toString()}`);
 }

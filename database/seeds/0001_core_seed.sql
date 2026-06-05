@@ -5,13 +5,21 @@ insert into public.modulos (codigo, nombre, descripcion, estado, orden)
 values
   ('admin', 'Administracion', 'Nucleo administrativo de empresa.', 'activo', 10),
   ('crm', 'CRM', 'Clientes, prospectos y seguimiento comercial.', 'activo', 20),
-  ('sales', 'Ventas', 'Cotizaciones, proformas y ventas.', 'activo', 30),
-  ('inventory', 'Inventario', 'Productos, existencias y movimientos.', 'activo', 40),
-  ('billing', 'Facturacion', 'Facturacion e integraciones fiscales.', 'activo', 50),
-  ('dispatch', 'Despacho', 'Logistica, rutas y entregas.', 'activo', 60),
-  ('hr', 'RRHH', 'Planillas, asistencia y estados diarios.', 'activo', 70),
-  ('reports', 'Reportes', 'Dashboards y reportes operativos.', 'activo', 80),
-  ('ai', 'IA', 'Analisis y asistencia transversal futura.', 'activo', 90)
+  ('agenda', 'Agenda', 'Agenda comercial basada en seguimientos y compromisos.', 'activo', 25),
+  ('quotes', 'Cotizaciones', 'Cotizaciones, items comerciales y conversion a venta.', 'activo', 30),
+  ('catalog', 'Catalogo', 'Catalogo comercial de productos, servicios y categorias.', 'activo', 35),
+  ('sales', 'Ventas', 'Ventas, ordenes y puente hacia inventario, despacho y cobro.', 'activo', 40),
+  ('inventory', 'Inventario', 'Bodegas, stock, movimientos, entradas y traslados.', 'activo', 50),
+  ('dispatch', 'Despacho', 'Despacho, logistica, entregas y choferes en vivo.', 'activo', 60),
+  ('hr', 'RRHH', 'Personal, planillas, estados laborales y dashboard RRHH.', 'activo', 70),
+  ('billing', 'Facturacion', 'Configuracion fiscal y facturacion electronica Hacienda.', 'activo', 80),
+  ('whapp', 'Whapp', 'Operacion WhatsApp/Meta sobre Inbox, webhooks y conversaciones.', 'activo', 90),
+  ('reports', 'Reportes', 'Dashboards, reportes operativos y analitica transversal.', 'activo', 100),
+  ('autoblog', 'Autoblog', 'Articulos, borradores, aprobacion y publicacion automatizable.', 'activo', 110),
+  ('ai', 'IA', 'Asistencia operativa, analisis y uso del contexto del negocio.', 'activo', 120),
+  ('purchases', 'Compras', 'Proveedores, ordenes de compra, recepcion y costos.', 'activo', 130),
+  ('payments', 'Pagos', 'Pagos, cuentas por cobrar, saldos, abonos y vencimientos.', 'activo', 140),
+  ('mobile', 'App Movil', 'Contratos de API para app movil, choferes y operacion ligera.', 'activo', 150)
 on conflict (codigo) do update set
   nombre = excluded.nombre,
   descripcion = excluded.descripcion,
@@ -71,7 +79,14 @@ values
   ('hr.timesheets.dashboard', 'Ver dashboard de planillas', 'Permite ver el dashboard operativo de planillas.', 'hr', 'activo'),
   ('hr.timesheets.states.manage', 'Gestionar estados de planilla', 'Permite crear, editar y activar estados laborales.', 'hr', 'activo'),
   ('reports.dashboard.view', 'Ver dashboards', 'Permite consultar dashboards futuros.', 'reports', 'activo'),
-  ('ai.reports.use', 'Usar reportes IA', 'Permite usar reportes futuros asistidos por IA.', 'ai', 'activo')
+  ('ai.reports.use', 'Usar reportes IA', 'Permite usar reportes futuros asistidos por IA.', 'ai', 'activo'),
+  ('purchases.suppliers.view', 'Ver proveedores', 'Permite consultar proveedores.', 'purchases', 'activo'),
+  ('purchases.suppliers.manage', 'Gestionar proveedores', 'Permite crear y editar proveedores.', 'purchases', 'activo'),
+  ('purchases.orders.view', 'Ver ordenes de compra', 'Permite consultar ordenes de compra.', 'purchases', 'activo'),
+  ('purchases.orders.manage', 'Gestionar ordenes de compra', 'Permite crear, editar y recibir ordenes de compra.', 'purchases', 'activo'),
+  ('payments.accounts.view', 'Ver cuentas y pagos', 'Permite consultar cuentas por cobrar, cuentas por pagar y pagos.', 'payments', 'activo'),
+  ('payments.accounts.manage', 'Gestionar cuentas y pagos', 'Permite registrar pagos, abonos y ajustes.', 'payments', 'activo'),
+  ('mobile.access', 'Acceso app movil', 'Permite usar contratos de API movil habilitados para la empresa.', 'mobile', 'activo')
 on conflict (codigo) do update set
   nombre = excluded.nombre,
   descripcion = excluded.descripcion,

@@ -1,28 +1,74 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
+import { hasPermission } from "@/lib/permissions/permission-checks";
 import { ActiveModulesList } from "@/modules/platform-modules/components/active-modules-list";
-import { getActiveEmpresaModules } from "@/modules/platform-modules/queries";
+import { getCompanyModulesStatus } from "@/modules/platform-modules/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
-export default async function AdminModulosPage() {
-  const access = await requireAdminAccess();
-  const modules = await getActiveEmpresaModules(access.tenant);
+type AdminModulosPageProps = {
+  searchParams?: Promise<{ error?: string; success?: string }>;
+};
+
+export default async function AdminModulosPage({
+  searchParams,
+}: AdminModulosPageProps) {
+  const [params, access] = await Promise.all([searchParams, requireAdminAccess()]);
+  const canManage = hasPermission(
+    access.tenant.permissions,
+    "admin.settings.manage",
+  );
+
+  if (!canManage) {
+    return (
+      <section className="space-y-6">
+        <SectionHeader
+          description="Solicita permisos administrativos para cambiar modulos de la empresa."
+          eyebrow="Administracion"
+          title="Modulos activos"
+        />
+        <EmptyState
+          description="No tienes permiso para administrar modulos."
+          title="Acceso denegado"
+        />
+      </section>
+    );
+  }
+
+  const modules = await getCompanyModulesStatus(access.tenant);
 
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Los modulos activos definen que capacidades tiene disponible la empresa. Las pantallas operativas se construiran por fases."
-        eyebrow="Administración"
+        description="Activa o desactiva los modulos disponibles para esta empresa."
+        eyebrow="Administracion"
         title="Modulos activos"
       />
+
+      <EphemeralPageAlert error={params?.error} success={params?.success} />
+
+      <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
+        Los modulos activos definen que funciones estan disponibles para esta
+        empresa. Los permisos definen que usuarios pueden usar esas funciones.
+      </p>
+
       {modules.ok && modules.data.length > 0 ? (
         <ActiveModulesList modules={modules.data} />
       ) : (
         <EmptyState
-          description="No hay modulos activos visibles."
+          description={
+            modules.ok
+              ? "No hay modulos disponibles en el catalogo."
+              : modules.error.message
+          }
           title="Modulos activos"
         />
       )}
+
+      <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
+        En una fase posterior esta pantalla respetara modulos permitidos por
+        plan, modulos bloqueados y solicitudes de activacion.
+      </p>
     </section>
   );
 }

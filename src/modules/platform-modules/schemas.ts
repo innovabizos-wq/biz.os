@@ -6,7 +6,9 @@ import {
 } from "@/modules/platform-modules/constants";
 import { jsonRecordSchema, uuidSchema } from "@/lib/validation/shared-schemas";
 
-export const moduleCodeSchema = z.enum(MODULE_CODES);
+export const moduleCodeSchema = z.enum(
+  MODULE_CODES as [typeof MODULE_CODES[number], ...typeof MODULE_CODES[number][]],
+);
 export const moduloEstadoSchema = z.enum(MODULO_ESTADOS);
 
 export const activateModuleForCompanySchema = z.object({
@@ -19,9 +21,15 @@ export const activateModuleForCompanyInternalSchema =
     empresaId: uuidSchema,
   });
 
+export const toggleCompanyModuleSchema = z.object({
+  moduloId: uuidSchema,
+  nextState: moduloEstadoSchema,
+});
+
 export type ActivateModuleForCompanyInput = z.infer<
   typeof activateModuleForCompanySchema
 >;
 export type ActivateModuleForCompanyInternalInput = z.infer<
   typeof activateModuleForCompanyInternalSchema
 >;
+export type ToggleCompanyModuleInput = z.infer<typeof toggleCompanyModuleSchema>;

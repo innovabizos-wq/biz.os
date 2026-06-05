@@ -1,4 +1,5 @@
 import { AdminTabs, type AdminTabItem } from "@/components/admin/admin-tabs";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
@@ -12,6 +13,18 @@ export default async function AdminLayout({
     "admin.settings.view",
     "admin.settings.manage",
   ]);
+  const showAdminSettingsManage = hasAnyPermission(access.tenant.permissions, [
+    "admin.settings.manage",
+  ]);
+  const showBillingModule = isModuleActive(access.tenant.activeModules, "billing");
+  const showFiscalSettings =
+    showBillingModule &&
+    hasAnyPermission(access.tenant.permissions, [
+      "admin.settings.view",
+      "admin.settings.manage",
+      "billing.fiscal.view",
+      "billing.fiscal.manage",
+    ]);
   const showAdminUsers = hasAnyPermission(access.tenant.permissions, [
     "admin.users.view",
     "admin.users.manage",
@@ -28,8 +41,10 @@ export default async function AdminLayout({
     showAdminRoles ? { href: "/admin/roles", label: "Roles" } : null,
     showAdminRoles ? { href: "/admin/permisos", label: "Permisos" } : null,
     showAdminSettings ? { href: "/admin/plan", label: "Plan" } : null,
-    showAdminSettings ? { href: "/admin/modulos", label: "Modulos" } : null,
+    showAdminSettingsManage ? { href: "/admin/modulos", label: "Modulos" } : null,
     showAdminSettings ? { href: "/admin/apariencia", label: "Apariencia" } : null,
+    showFiscalSettings ? { href: "/admin/fiscal", label: "Fiscal" } : null,
+    showAdminSettings ? { href: "/admin/contexto", label: "Contexto del negocio" } : null,
   ].filter(Boolean) as AdminTabItem[];
 
   return (

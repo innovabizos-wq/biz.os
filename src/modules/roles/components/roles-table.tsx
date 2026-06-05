@@ -1,6 +1,12 @@
 import Link from "next/link";
 
 import type { AccessibleRole } from "@/modules/roles/queries";
+import {
+  isDriverRole,
+  isStandardRole,
+  isSuperAdminRole,
+  sortRolesByStandardOrder,
+} from "@/modules/roles/standard-roles";
 import { buttonVariants } from "@/components/ui/button";
 
 type RolesTableProps = {
@@ -9,6 +15,8 @@ type RolesTableProps = {
 };
 
 export function RolesTable({ canManage = false, roles }: RolesTableProps) {
+  const sortedRoles = sortRolesByStandardOrder(roles);
+
   return (
     <div className="overflow-hidden rounded-lg border bg-background">
       <table className="w-full text-left text-sm">
@@ -24,9 +32,33 @@ export function RolesTable({ canManage = false, roles }: RolesTableProps) {
           </tr>
         </thead>
         <tbody>
-          {roles.map((role) => (
+          {sortedRoles.map((role) => (
             <tr className="border-t" key={role.id}>
-              <td className="px-4 py-3 font-medium">{role.nombre}</td>
+              <td className="px-4 py-3">
+                <div className="font-medium">{role.nombre}</div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {isSuperAdminRole(role.nombre) ? (
+                    <>
+                      <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
+                        Acceso total
+                      </span>
+                      <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                        Protegido
+                      </span>
+                    </>
+                  ) : null}
+                  {isDriverRole(role.nombre) ? (
+                    <span className="rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-800">
+                      Despacho / Ubicacion
+                    </span>
+                  ) : null}
+                  {isStandardRole(role.nombre) ? (
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      Rol estandar
+                    </span>
+                  ) : null}
+                </div>
+              </td>
               <td className="px-4 py-3">
                 {role.descripcion ?? "No disponible"}
               </td>

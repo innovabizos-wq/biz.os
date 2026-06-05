@@ -1,18 +1,20 @@
 import Link from "next/link";
 
 import { buttonVariants, Button } from "@/components/ui/button";
-import { generateSaleFromQuoteAction } from "@/modules/sales/actions";
-import type { Sale } from "@/modules/sales/types";
+import { confirmSaleFromQuoteAction } from "@/modules/quotes/actions";
 import type { Quote } from "@/modules/quotes/types";
+import type { Sale } from "@/modules/sales/types";
 
 type QuoteSalePanelProps = {
-  canCreateSale: boolean;
+  canConfirmSale: boolean;
+  itemsCount: number;
   quote: Quote;
   sale: Sale | null;
 };
 
 export function QuoteSalePanel({
-  canCreateSale,
+  canConfirmSale,
+  itemsCount,
   quote,
   sale,
 }: QuoteSalePanelProps) {
@@ -20,9 +22,9 @@ export function QuoteSalePanel({
     return (
       <section className="space-y-3 rounded-lg border bg-background p-5">
         <div>
-          <h3 className="text-base font-semibold">Venta / Orden</h3>
+          <h3 className="text-base font-semibold">Orden de venta</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-          Esta cotización ya generó la venta {sale.numero}.
+            Esta cotizacion ya fue convertida en la venta {sale.numero}.
           </p>
         </div>
         <Link
@@ -35,12 +37,12 @@ export function QuoteSalePanel({
     );
   }
 
-  if (quote.estado !== "aceptada") {
+  if (itemsCount === 0) {
     return (
       <section className="rounded-lg border bg-background p-5">
-        <h3 className="text-base font-semibold">Venta / Orden</h3>
+        <h3 className="text-base font-semibold">Crear orden de venta</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Para generar una venta, la cotización debe estar aceptada.
+          Agrega al menos un item antes de confirmar la venta.
         </p>
       </section>
     );
@@ -49,19 +51,20 @@ export function QuoteSalePanel({
   return (
     <section className="space-y-3 rounded-lg border bg-background p-5">
       <div>
-        <h3 className="text-base font-semibold">Venta / Orden</h3>
+        <h3 className="text-base font-semibold">Crear orden de venta</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Genera una venta congelando cliente, items, precios y totales.
+          Confirmar venta convierte esta cotizacion en una orden de venta y
+          congela cliente, items y total para continuar con inventario y despacho.
         </p>
       </div>
-      {canCreateSale ? (
-        <form action={generateSaleFromQuoteAction}>
+      {canConfirmSale ? (
+        <form action={confirmSaleFromQuoteAction}>
           <input name="cotizacionId" type="hidden" value={quote.id} />
-          <Button type="submit">Generar venta</Button>
+          <Button type="submit">Confirmar venta</Button>
         </form>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No tienes permiso para generar ventas.
+          No tienes permiso para confirmar ventas.
         </p>
       )}
     </section>

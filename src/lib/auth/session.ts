@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import { createTenantContext } from "@/lib/tenant/tenant-context";
 import type { AuthSession, AuthUser } from "@/modules/auth/types";
@@ -84,21 +86,24 @@ function getZodIssues(error: unknown) {
   return undefined;
 }
 
-export async function getCurrentUser(): Promise<CoreResult<AuthUser | null>> {
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<
+  CoreResult<AuthUser | null>
+> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
   if (error) {
-    logSessionDiagnostic("getCurrentUser", "auth.getUser failed", {
-      message: error.message,
-      name: error.name,
-      status: error.status,
-    });
+    if (error.status !== 400) {
+      logSessionDiagnostic("getCurrentUser", "auth.getUser failed", {
+        message: error.message,
+        name: error.name,
+        status: error.status,
+      });
+    }
     return fail("AUTH_NOT_CONNECTED", "No hay usuario autenticado.", error);
   }
 
   if (!data.user) {
-    logSessionDiagnostic("getCurrentUser", "no authenticated user");
     return ok(null);
   }
 
@@ -106,9 +111,9 @@ export async function getCurrentUser(): Promise<CoreResult<AuthUser | null>> {
     email: data.user.email ?? null,
     id: data.user.id,
   });
-}
+});
 
-export async function getCurrentSession(): Promise<
+export const getCurrentSession = cache(async function getCurrentSession(): Promise<
   CoreResult<AuthSession | null>
 > {
   const userResult = await getCurrentUser();
@@ -125,9 +130,9 @@ export async function getCurrentSession(): Promise<
     email: userResult.data.email ?? undefined,
     userId: userResult.data.id,
   });
-}
+});
 
-export async function getCurrentProfile(): Promise<
+export const getCurrentProfile = cache(async function getCurrentProfile(): Promise<
   CoreResult<AuthenticatedProfile | null>
 > {
   const userResult = await getCurrentUser();
@@ -154,7 +159,11 @@ export async function getCurrentProfile(): Promise<
       message: error.message,
       userId: userResult.data.id,
     });
-    return fail("AUTH_NOT_CONNECTED", "No se pudo consultar el profile.", error);
+    return fail(
+      "AUTH_NOT_CONNECTED",
+      "No se pudo cargar tu perfil de usuario.",
+      error,
+    );
   }
 
   if (!data) {
@@ -171,13 +180,13 @@ export async function getCurrentProfile(): Promise<
       estado: profile.estado,
       profileId: profile.id,
     });
-    return fail("PERMISSION_DENIED", "El profile no esta activo.");
+    return fail("PERMISSION_DENIED", "Tu usuario no esta activo.");
   }
 
   return ok(profile as AuthenticatedProfile);
-}
+});
 
-export async function getCurrentTenantContext(): Promise<
+export const getCurrentTenantContext = cache(async function getCurrentTenantContext(): Promise<
   CoreResult<TenantContext | null>
 > {
   const profileResult = await getCurrentProfile();
@@ -226,7 +235,7 @@ export async function getCurrentTenantContext(): Promise<
     });
     return fail(
       "PERMISSION_DENIED",
-      "No se pudieron consultar permisos.",
+      "No se pudieron cargar tus permisos.",
       permissionsResult.error,
     );
   }
@@ -238,7 +247,7 @@ export async function getCurrentTenantContext(): Promise<
     });
     return fail(
       "MODULE_INACTIVE",
-      "No se pudieron consultar modulos activos.",
+      "No se pudieron cargar los modulos activos.",
       modulesResult.error,
     );
   }
@@ -248,7 +257,11 @@ export async function getCurrentTenantContext(): Promise<
       message: planResult.error.message,
       profileId: profile.id,
     });
-    return fail("PLAN_INACTIVE", "No se pudo consultar el plan.", planResult.error);
+    return fail(
+      "PLAN_INACTIVE",
+      "No se pudo cargar el plan activo.",
+      planResult.error,
+    );
   }
 
   const permissions = (permissionsResult.data ?? [])
@@ -310,4 +323,4 @@ export async function getCurrentTenantContext(): Promise<
   }
 
   return ok(tenantResult.data);
-}
+});

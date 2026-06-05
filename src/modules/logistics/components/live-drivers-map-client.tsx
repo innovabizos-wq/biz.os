@@ -3,7 +3,6 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
-import { MapPin } from "lucide-react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 
 import { DRIVER_STATUS_LABELS } from "@/modules/logistics/constants";
@@ -132,15 +131,13 @@ export default function LiveDriversMapClient({
         </MapContainer>
 
         {driversWithLocation.length === 0 ? (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 z-[500] w-[min(24rem,82%)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white/95 p-4 text-center shadow-lg">
-            <div className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-              <MapPin className="size-5" />
-            </div>
-            <p className="mt-3 text-sm font-black text-slate-950">
+          <div className="pointer-events-none absolute bottom-4 left-4 z-[500] w-[min(25rem,calc(100%-2rem))] rounded-xl border border-slate-200 bg-white/95 p-4 text-left shadow-lg">
+            <p className="text-sm font-black text-slate-950">
               Aun no hay choferes conectados compartiendo ubicacion.
             </p>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              Cuando un usuario con rol Chofer inicie jornada, aparecera aqui.
+              Cuando un usuario con rol Chofer inicie jornada desde la app o
+              vista movil, aparecera aqui.
             </p>
           </div>
         ) : null}

@@ -17,7 +17,8 @@ Si no hay choferes con ubicacion real, el mapa se mantiene visible y muestra:
 
 ```text
 Aun no hay choferes conectados compartiendo ubicacion.
-Cuando un usuario con rol Chofer inicie jornada, aparecera aqui.
+Cuando un usuario con rol Chofer inicie jornada desde la app o vista movil,
+aparecera aqui.
 ```
 
 No se muestran marcadores falsos.

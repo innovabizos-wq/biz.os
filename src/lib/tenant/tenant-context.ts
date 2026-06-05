@@ -65,12 +65,12 @@ function getTenantValidationMessage(error: unknown): string {
     if (firstIssue) {
       const path = firstIssue.path.join(".");
       return path
-        ? `Tenant context invalido en ${path}: ${firstIssue.message}`
-        : `Tenant context invalido: ${firstIssue.message}`;
+        ? `No se pudo validar la sesion de empresa (${path}).`
+        : "No se pudo validar la sesion de empresa.";
     }
   }
 
-  return "Tenant context invalido.";
+  return "No se pudo validar la sesion de empresa.";
 }
 
 function logTenantContextDiagnostic(input: unknown, error: unknown) {
@@ -121,7 +121,7 @@ export function assertTenantContext(
   if (!context?.empresaId || !context.profileId) {
     return fail(
       "INVALID_TENANT_CONTEXT",
-      "Tenant context requiere empresaId y profileId.",
+      "No se pudo validar la empresa activa.",
     );
   }
 

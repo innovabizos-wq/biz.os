@@ -83,7 +83,7 @@ export function QuoteItemForm({
           <span className="font-medium">Precio</span>
           <input
             className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            min="0"
+            min="0.01"
             name="precioUnitario"
             onChange={(event) => setPrecioUnitario(event.target.value)}
             step="0.01"

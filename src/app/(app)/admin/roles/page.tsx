@@ -1,16 +1,23 @@
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
+import { installStandardRolesAction } from "@/modules/roles/actions";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { RolesTable } from "@/modules/roles/components/roles-table";
 import { getAccessibleRolesForCurrentTenant } from "@/modules/roles/queries";
+import { getMissingStandardRoleNames } from "@/modules/roles/standard-roles";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type AdminRolesPageProps = {
   searchParams?: Promise<{
     error?: string;
+    permisosAsignados?: string;
+    rolesCreados?: string;
+    rolesExistentes?: string;
+    standardRoles?: string;
   }>;
 };
 
@@ -40,6 +47,7 @@ export default async function AdminRolesPage({ searchParams }: AdminRolesPagePro
   }
 
   const roles = await getAccessibleRolesForCurrentTenant(access.tenant);
+  const missingStandardRoles = roles.ok ? getMissingStandardRoleNames(roles.data) : [];
 
   return (
     <section className="space-y-6">
@@ -50,15 +58,28 @@ export default async function AdminRolesPage({ searchParams }: AdminRolesPagePro
           title="Roles"
         />
         {canManage ? (
-          <Link className={buttonVariants()} href="/admin/roles/nuevo">
-            Nuevo rol
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {missingStandardRoles.length > 0 ? (
+              <form action={installStandardRolesAction}>
+                <button className={buttonVariants({ variant: "outline" })} type="submit">
+                  Instalar roles estandar
+                </button>
+              </form>
+            ) : null}
+            <Link className={buttonVariants()} href="/admin/roles/nuevo">
+              Nuevo rol
+            </Link>
+          </div>
         ) : null}
       </div>
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
+      <EphemeralPageAlert error={params?.error} />
+
+      {params?.standardRoles === "installed" ? (
+        <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+          Roles estandar instalados. Creados: {params.rolesCreados ?? "0"}.
+          Existentes: {params.rolesExistentes ?? "0"}. Permisos asignados:{" "}
+          {params.permisosAsignados ?? "0"}.
         </p>
       ) : null}
 

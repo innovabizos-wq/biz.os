@@ -12,14 +12,14 @@ convertirlas todavia en ventas, facturas ni movimientos de inventario.
 - detalle de cotizacion
 - items manuales
 - calculo de subtotal, descuento, impuesto y total
-- cambio de estado comercial
+- confirmacion de venta desde cotizacion con items
 
 ## No Incluye Todavia
 
 - PDF
 - envio por correo
 - aceptacion por cliente
-- ventas
+- venta desde boton Confirmar venta
 - facturacion
 - inventario
 - productos reales
@@ -88,15 +88,18 @@ No ejecutar automaticamente desde la app y no usar `SUPABASE_SERVICE_ROLE_KEY`.
 4. Completar datos base y crear.
 5. Agregar items manuales en el detalle.
 6. Confirmar que subtotal, descuento, impuesto y total se recalculan.
-7. Cambiar estado de borrador a enviada.
-8. Cambiar de enviada a aceptada, rechazada, vencida o anulada.
-9. Abrir `/cotizaciones` y confirmar que la cotizacion aparece en el listado.
+7. Confirmar que no se puede crear una cotizacion sin items.
+8. Abrir `/cotizaciones` y usar `Confirmar venta`.
+9. Confirmar que la cotizacion convertida muestra `Ver venta`.
+
+En el MVP no se guardan cotizaciones vacias. La proforma puede prepararse en el
+popup, pero el registro real se crea solo al presionar `Crear cotizacion` con al
+menos un item valido.
 
 ## Proximos Pasos
 
 - PDF
 - envio por correo
-- aprobacion del cliente
-- ventas
+- estados avanzados de aprobacion del cliente
 - facturacion
 - inventario y productos

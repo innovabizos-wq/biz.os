@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { getCurrentTenantContext } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
   changeFollowupStatusSchema,
@@ -11,10 +12,35 @@ import {
   createInteractionSchema,
   updateCustomerSchema,
 } from "@/modules/crm/schemas";
+import { createUserNotificationServerOnly } from "@/modules/notifications/actions";
 
 type CreatedCustomerRow = {
   cliente_id?: string;
 };
+
+type CreatedFollowupRow = {
+  seguimiento_id?: string;
+};
+
+function costaRicaDateTimeLocalToIso(value: string) {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/,
+  );
+
+  if (!match) return value;
+
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  const utcTime = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour) + 6,
+    Number(minute),
+    Number(second),
+  );
+
+  return new Date(utcTime).toISOString();
+}
 
 function getFormData(formData: FormData) {
   return Object.fromEntries(formData.entries());
@@ -51,9 +77,12 @@ function logCrmActionError(
 
 function safeErrorMessage(error: { code?: string; message?: string }) {
   const message = error.message?.replace(/\s+/g, " ").trim();
-  const code = error.code?.trim();
 
-  return message && code ? `${message} (${code})` : (message ?? "Error RPC.");
+  if (message?.toLowerCase().includes("permission")) {
+    return "No tienes permiso para completar esta accion.";
+  }
+
+  return "No se pudo actualizar el CRM. Intenta de nuevo o solicita ayuda al administrador.";
 }
 
 export async function createCustomerAction(formData: FormData) {
@@ -67,6 +96,7 @@ export async function createCustomerAction(formData: FormData) {
   const { data, error } = await supabase.rpc("crear_crm_cliente", {
     p_asignado_a: parsed.data.asignadoA ?? null,
     p_correo: parsed.data.correo ?? null,
+    p_genero: parsed.data.genero,
     p_identificacion: parsed.data.identificacion ?? null,
     p_nombre: parsed.data.nombre,
     p_notas: parsed.data.notas ?? null,
@@ -105,6 +135,7 @@ export async function updateCustomerAction(formData: FormData) {
     p_cliente_id: parsed.data.clienteId,
     p_correo: parsed.data.correo ?? null,
     p_estado: parsed.data.estado,
+    p_genero: parsed.data.genero,
     p_identificacion: parsed.data.identificacion ?? null,
     p_nombre: parsed.data.nombre,
     p_notas: parsed.data.notas ?? null,
@@ -166,12 +197,13 @@ export async function createFollowupAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("crear_crm_seguimiento", {
+  const scheduledAt = costaRicaDateTimeLocalToIso(parsed.data.fechaProgramada);
+  const { data, error } = await supabase.rpc("crear_crm_seguimiento", {
     p_asignado_a: parsed.data.asignadoA ?? null,
     p_asunto: parsed.data.asunto,
     p_cliente_id: parsed.data.clienteId,
     p_descripcion: parsed.data.descripcion ?? null,
-    p_fecha_programada: parsed.data.fechaProgramada,
+    p_fecha_programada: scheduledAt,
   });
 
   if (error) {
@@ -182,6 +214,44 @@ export async function createFollowupAction(formData: FormData) {
       `/crm/clientes/${parsed.data.clienteId}`,
       `No se pudo crear el seguimiento: ${safeErrorMessage(error)}`,
     );
+  }
+
+  const seguimientoId = (data as CreatedFollowupRow[] | null)?.[0]?.seguimiento_id;
+
+  if (parsed.data.asignadoA && seguimientoId) {
+    const tenant = await getCurrentTenantContext();
+    const { data: customer } = tenant.ok && tenant.data
+      ? await supabase
+          .from("crm_clientes")
+          .select("nombre")
+          .eq("empresa_id", tenant.data.empresaId)
+          .eq("id", parsed.data.clienteId)
+          .maybeSingle<{ nombre: string }>()
+      : { data: null };
+
+    const notification = await createUserNotificationServerOnly({
+      entityId: seguimientoId,
+      entityType: "crm_followup",
+      href: "/agenda/seguimientos",
+      message: `Tienes un seguimiento pendiente para ${customer?.nombre ?? "un cliente"}.`,
+      metadata: {
+        assignedTo: parsed.data.asignadoA,
+        clienteId: parsed.data.clienteId,
+        scheduledAt,
+        source: "crm_followup",
+      },
+      recipientProfileId: parsed.data.asignadoA,
+      title: "Nuevo seguimiento asignado",
+      type: "task",
+    });
+
+    if (!notification.ok && process.env.NODE_ENV !== "production") {
+      console.warn("[createFollowupAction] notification failed", {
+        assignedTo: parsed.data.asignadoA,
+        clienteId: parsed.data.clienteId,
+        seguimientoId,
+      });
+    }
   }
 
   revalidateCrmPaths(parsed.data.clienteId);

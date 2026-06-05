@@ -16,6 +16,10 @@ const optionalFormUuidSchema = uuidSchema
   .optional()
   .or(z.literal("").transform(() => undefined));
 
+const optionalProductUuidSchema = optionalFormUuidSchema
+  .nullable()
+  .transform((value) => value ?? undefined);
+
 const optionalDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -24,6 +28,7 @@ const optionalDateSchema = z
 
 const numericFormSchema = z.coerce.number();
 const nonNegativeMoneySchema = numericFormSchema.min(0);
+const positiveMoneySchema = numericFormSchema.positive();
 
 export const quoteStatusSchema = z.enum(QUOTE_STATUSES);
 export const quoteStatusFilterSchema = z.enum(QUOTE_STATUS_FILTERS);
@@ -37,6 +42,17 @@ export const createQuoteSchema = z.object({
   notas: optionalTextSchema,
 });
 
+export const quoteModalItemSchema = z.object({
+  cantidad: numericFormSchema.positive(),
+  descripcion: nonEmptyTextSchema,
+  descuento: nonNegativeMoneySchema.default(0),
+  impuestoPorcentaje: nonNegativeMoneySchema.default(0),
+  precioUnitario: positiveMoneySchema,
+  productoId: optionalProductUuidSchema,
+});
+
+export const quoteModalItemsSchema = z.array(quoteModalItemSchema).min(1);
+
 export const updateQuoteSchema = createQuoteSchema.extend({
   cotizacionId: uuidSchema,
 });
@@ -47,8 +63,8 @@ export const addQuoteItemSchema = z.object({
   descripcion: nonEmptyTextSchema,
   descuento: nonNegativeMoneySchema.default(0),
   impuestoPorcentaje: nonNegativeMoneySchema.default(0),
-  precioUnitario: nonNegativeMoneySchema,
-  productoId: optionalFormUuidSchema,
+  precioUnitario: positiveMoneySchema,
+  productoId: optionalProductUuidSchema,
 });
 
 export const updateQuoteItemSchema = addQuoteItemSchema
@@ -67,7 +83,12 @@ export const changeQuoteStatusSchema = z.object({
   estado: quoteStatusSchema,
 });
 
+export const quoteIdActionSchema = z.object({
+  cotizacionId: uuidSchema,
+});
+
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
+export type QuoteModalItemInput = z.infer<typeof quoteModalItemSchema>;
 export type UpdateQuoteInput = z.infer<typeof updateQuoteSchema>;
 export type AddQuoteItemInput = z.infer<typeof addQuoteItemSchema>;
 export type UpdateQuoteItemInput = z.infer<typeof updateQuoteItemSchema>;

@@ -28,9 +28,14 @@ function redirectWithError(path: string, message: string): never {
 
 function safeErrorMessage(error: RpcError) {
   const message = error.message?.replace(/\s+/g, " ").trim();
-  const code = error.code?.trim();
 
-  return message && code ? `${message} (${code})` : (message ?? "Error RPC.");
+  if (!message) return "No se pudo completar la operacion.";
+  if (message.includes("Permiso") || message.toLowerCase().includes("permission")) {
+    return "No tienes permiso para ajustar inventario.";
+  }
+  if (message.toLowerCase().includes("stock")) return message;
+
+  return message;
 }
 
 function logSaleInventoryActionError(

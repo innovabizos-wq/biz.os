@@ -15,9 +15,11 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
   const pendingInvitationToken = await getPendingInvitationToken();
   const invitationToken = params?.invitation_token ?? pendingInvitationToken;
+  const publicSignupEnabled = process.env.PUBLIC_SIGNUP_ENABLED !== "false";
   const loginHref = invitationToken
     ? `/login?invitation_token=${encodeURIComponent(invitationToken)}`
     : "/login";
+  const signupBlocked = !publicSignupEnabled && !invitationToken;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted px-6">
@@ -29,8 +31,9 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <p className="text-sm font-medium text-muted-foreground">biz.os</p>
           <h1 className="text-2xl font-semibold tracking-tight">Crear cuenta</h1>
           <p className="text-sm text-muted-foreground">
-            Crea tu usuario operativo. Si estas aceptando una invitacion, usa el
-            mismo correo invitado.
+            {signupBlocked
+              ? "El registro publico no esta disponible. Solicita una invitacion."
+              : "Crea tu usuario operativo. Si estas aceptando una invitacion, usa el mismo correo invitado."}
           </p>
         </div>
 
@@ -47,46 +50,60 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           </p>
         ) : null}
 
-        <div className="space-y-3">
-          <label className="block text-sm font-medium" htmlFor="email">
-            Correo
-          </label>
-          <input
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-            id="email"
-            name="email"
-            placeholder="usuario@empresa.com"
-            type="email"
-          />
-        </div>
+        {signupBlocked ? (
+          <Link
+            className={buttonVariants({ className: "w-full", variant: "outline" })}
+            href="/login"
+          >
+            Ir a login
+          </Link>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium" htmlFor="email">
+                Correo
+              </label>
+              <input
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                id="email"
+                name="email"
+                placeholder="usuario@empresa.com"
+                type="email"
+              />
+            </div>
 
-        <div className="space-y-3">
-          <label className="block text-sm font-medium" htmlFor="password">
-            Contrasena
-          </label>
-          <input
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-            id="password"
-            name="password"
-            placeholder="Minimo 8 caracteres"
-            type="password"
-          />
-        </div>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium" htmlFor="password">
+                Contrasena
+              </label>
+              <input
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                id="password"
+                name="password"
+                placeholder="Minimo 8 caracteres"
+                type="password"
+              />
+            </div>
 
-        {invitationToken ? (
-          <input name="invitation_token" type="hidden" value={invitationToken} />
-        ) : null}
+            {invitationToken ? (
+              <input name="invitation_token" type="hidden" value={invitationToken} />
+            ) : null}
 
-        <Button className="w-full" type="submit">
-          Crear cuenta
-        </Button>
+            <Button className="w-full" type="submit">
+              Crear cuenta
+            </Button>
 
-        <Link
-          className={buttonVariants({ className: "w-full", variant: "outline" })}
-          href={loginHref}
-        >
-          Ya tengo cuenta
-        </Link>
+            <Link
+              className={buttonVariants({
+                className: "w-full",
+                variant: "outline",
+              })}
+              href={loginHref}
+            >
+              Ya tengo cuenta
+            </Link>
+          </>
+        )}
       </form>
     </main>
   );

@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { ConsultationManagementForm } from "@/modules/consultations/components/consultation-management-form";
@@ -41,6 +42,7 @@ export default async function NewConsultationPage({
     access.tenant.permissions,
     "crm.interactions.create",
   );
+  const canCreateQuote = hasPermission(access.tenant.permissions, "quotes.create");
 
   if (!canViewCustomers) {
     return (
@@ -100,9 +102,10 @@ export default async function NewConsultationPage({
         titleClassName="text-2xl font-semibold normal-case tracking-normal"
       />
 
-      {params?.error || searchMessage ? (
+      {params?.error ? <EphemeralPageAlert error={params.error} /> : null}
+      {searchMessage ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {params?.error ?? searchMessage}
+          {searchMessage}
         </p>
       ) : null}
 
@@ -110,6 +113,7 @@ export default async function NewConsultationPage({
       <ConsultationResultCard result={result} />
       <ConsultationManagementForm
         canCreateCustomer={canCreateCustomer}
+        canCreateQuote={canCreateQuote}
         canSaveInteraction={canSaveInteraction}
         result={result}
         returnTo="/consultas/nueva"

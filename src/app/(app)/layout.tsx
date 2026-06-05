@@ -86,39 +86,58 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   const showAgenda =
     isModuleActive(tenant.activeModules, "crm") &&
     hasPermission(tenant.permissions, "crm.followups.view");
-  const showQuotes = hasAnyPermission(tenant.permissions, [
-    "quotes.view",
-    "quotes.create",
-    "quotes.edit",
-  ]);
-  const showCatalog = hasAnyPermission(tenant.permissions, [
-    "catalog.products.view",
-    "catalog.products.create",
-    "catalog.products.edit",
-    "catalog.categories.view",
-  ]);
-  const showSales = hasAnyPermission(tenant.permissions, [
-    "sales.orders.view",
-    "sales.orders.create",
-    "sales.orders.edit",
-  ]);
-  const showInventory = hasAnyPermission(tenant.permissions, [
-    "inventory.stock.view",
-    "inventory.stock.adjust",
-    "inventory.movements.view",
-    "inventory.warehouses.view",
-    "inventory.warehouses.manage",
-  ]);
-  const showDispatch = hasAnyPermission(tenant.permissions, [
-    "dispatch.orders.view",
-    "dispatch.orders.create",
-    "dispatch.orders.edit",
-  ]);
-  const showInbox = hasAnyPermission(tenant.permissions, [
-    "inbox.conversations.view",
-    "inbox.conversations.reply",
-    "inbox.channels.view",
-  ]);
+  const showQuotes =
+    isModuleActive(tenant.activeModules, "quotes") &&
+    hasAnyPermission(tenant.permissions, [
+      "quotes.view",
+      "quotes.create",
+      "quotes.edit",
+    ]);
+  const canCreateQuote = hasPermission(tenant.permissions, "quotes.create");
+  const showCatalog =
+    isModuleActive(tenant.activeModules, "catalog") &&
+    hasAnyPermission(tenant.permissions, [
+      "catalog.products.view",
+      "catalog.products.create",
+      "catalog.products.edit",
+      "catalog.categories.view",
+    ]);
+  const showSales =
+    isModuleActive(tenant.activeModules, "sales") &&
+    hasAnyPermission(tenant.permissions, [
+      "sales.orders.view",
+      "sales.orders.create",
+      "sales.orders.edit",
+    ]);
+  const showInventory =
+    isModuleActive(tenant.activeModules, "inventory") &&
+    hasAnyPermission(tenant.permissions, [
+      "inventory.stock.view",
+      "inventory.stock.adjust",
+      "inventory.movements.view",
+      "inventory.warehouses.view",
+      "inventory.warehouses.manage",
+    ]);
+  const showDispatch =
+    isModuleActive(tenant.activeModules, "dispatch") &&
+    hasAnyPermission(tenant.permissions, [
+      "dispatch.orders.view",
+      "dispatch.orders.create",
+      "dispatch.orders.edit",
+    ]);
+  const showInbox =
+    isModuleActive(tenant.activeModules, "whapp") &&
+    hasAnyPermission(tenant.permissions, [
+      "inbox.conversations.view",
+      "inbox.conversations.reply",
+      "inbox.channels.view",
+    ]);
+  const showAutoblog =
+    isModuleActive(tenant.activeModules, "autoblog") &&
+    hasAnyPermission(tenant.permissions, [
+      "autoblog.view",
+      "autoblog.manage",
+    ]);
   const showHr =
     isModuleActive(tenant.activeModules, "hr") &&
     hasAnyPermission(tenant.permissions, [
@@ -173,13 +192,14 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   ]);
 
   return (
-    <div className="grid min-h-screen bg-muted lg:grid-cols-[280px_1fr]">
+    <div className="grid min-h-screen max-w-screen overflow-hidden bg-muted lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="app-sidebar-shell hidden border-r p-6 lg:block">
         <div className="flex min-h-[calc(100vh-3rem)] flex-col gap-6">
           <SidebarBrandLogo />
           <AppSidebarNav
             showAdmin={Boolean(showAdmin)}
             showAgenda={Boolean(showAgenda)}
+            showAutoblog={Boolean(showAutoblog)}
             showCatalog={Boolean(showCatalog)}
             showCrm={Boolean(showCrm)}
             showDispatch={Boolean(showDispatch)}
@@ -191,30 +211,28 @@ async function AppShell({ children }: { children: React.ReactNode }) {
             showQuotes={Boolean(showQuotes)}
             showSales={Boolean(showSales)}
           />
-          <div className="mt-auto">
-            {showHr ? (
-              <TimesheetSidebarWidget
-                canRegister={Boolean(showHrRegister)}
-                canViewDashboard={Boolean(showHrDashboard)}
-                currentStatus={
-                  currentTimesheetStatus.ok ? currentTimesheetStatus.data : null
-                }
-                states={activeTimesheetStates.ok ? activeTimesheetStates.data : []}
-                userEmail={tenant.profileEmail ?? userResult.data.email}
-                userName={tenant.profileName}
-              />
-            ) : null}
-          </div>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-col">
+      <div className="flex min-w-0 max-w-full flex-col overflow-hidden">
         <main className="flex-1 p-6">{children}</main>
       </div>
       <NotificationBell
+        className="app-notification-topbar"
         initialCount={unreadNotificationsResult.ok ? unreadNotificationsResult.data : 0}
         notifications={notificationsResult.ok ? notificationsResult.data : []}
+        recipientProfileId={tenant.profileId}
       />
+      <div className="app-session-topbar">
+        <TimesheetSidebarWidget
+          canRegister={Boolean(showHrRegister)}
+          canViewDashboard={Boolean(showHrDashboard)}
+          currentStatus={currentTimesheetStatus.ok ? currentTimesheetStatus.data : null}
+          states={activeTimesheetStates.ok ? activeTimesheetStates.data : []}
+          userEmail={tenant.profileEmail ?? userResult.data.email}
+          userName={tenant.profileName}
+        />
+      </div>
       {showInbox ? (
         <FloatingInboxButton
           conversations={
@@ -228,6 +246,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
         showNewConsultation ? (
           <FloatingConsultationButton
             canCreateCustomer={canCreateConsultationCustomer}
+            canCreateQuote={canCreateQuote}
             canSaveInteraction={canSaveConsultationInteraction}
           />
         ) : null

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronDown, LayoutDashboard, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
 
 import { signOutAction } from "@/modules/auth/actions";
 import { registerTimesheetStatusAction } from "@/modules/hr-timesheets/actions";
@@ -58,6 +58,7 @@ export function TimesheetSidebarWidget({
   userName,
 }: TimesheetSidebarWidgetProps) {
   const displayName = userName?.trim() || userEmail || "Usuario";
+  const displayInitial = displayName.slice(0, 1).toUpperCase();
   const statusLabel = currentStatus?.stateName ?? "Sin estado";
   const menuStates = sortStatesForMenu(states);
 
@@ -65,7 +66,7 @@ export function TimesheetSidebarWidget({
     <section className="app-time-clock" aria-label="Estado laboral diario">
       <div className="flex items-center gap-2">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600">
-          <UserRound size={17} />
+          <span className="app-time-clock-initial">{displayInitial}</span>
         </div>
         <div className="min-w-0 flex-1">
           <span className="inline-flex max-w-full rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase leading-4 text-slate-700">
@@ -125,7 +126,7 @@ export function TimesheetSidebarWidget({
             type="submit"
           >
             <LogOut size={13} />
-            Salir
+            Sesion
           </button>
         </form>
       </div>

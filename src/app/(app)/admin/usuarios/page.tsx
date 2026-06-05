@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
@@ -29,8 +30,8 @@ export default async function AdminUsuariosPage({
     return (
       <section className="space-y-6">
         <SectionHeader
-          description="No tienes permiso para ver esta sección."
-          eyebrow="Administración"
+          description="No tienes permiso para ver esta seccion."
+          eyebrow="Administracion"
           title="Usuarios"
         />
         <EmptyState
@@ -47,34 +48,30 @@ export default async function AdminUsuariosPage({
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeader
-          description="Usuarios de la empresa actual. Se agregan por invitacion, no por creacion manual."
-          eyebrow="Administración"
-          title="Usuarios"
+          description="Usuarios activos de la empresa actual. El personal nuevo se agrega por invitacion."
+          eyebrow="Administracion"
+          title="Usuarios activos"
         />
         {canManage ? (
           <Link className={buttonVariants()} href="/admin/invitaciones">
-            Invitar usuario
+            Agregar personal
           </Link>
         ) : null}
       </div>
 
       <div className="rounded-lg border bg-muted p-4 text-sm text-muted-foreground">
-        No se crean usuarios ni contrasenas temporales desde este panel. Primero
-        se invita al usuario y luego se administra su profile operativo.
+        No se crean usuarios ni contrasenas temporales desde este panel. El
+        colaborador crea su propia contrasena al aceptar la invitacion.
       </div>
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       {users.ok && users.data.length > 0 ? (
         <UsersTable canManage={canManage} users={users.data} />
       ) : (
         <EmptyState
           description="No hay usuarios visibles con las politicas actuales."
-          title="Usuarios"
+          title="Usuarios activos"
         />
       )}
     </section>

@@ -1,20 +1,35 @@
 "use client";
 
 import {
-  CalendarClock,
   Check,
+  Copy,
+  Edit3,
+  Filter,
+  Handshake,
+  MapPin,
   MessageCircle,
   Mic,
   Minus,
+  MoreVertical,
+  Package,
+  Paperclip,
+  Plus,
   Search,
   Send,
-  Sparkles,
+  ShieldCheck,
+  Smile,
+  Tag,
+  UserRound,
   X,
+  Zap,
 } from "lucide-react";
-import type { FormEvent } from "react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { getInboxWidgetMessagesAction } from "@/modules/inbox-widget/actions";
+import {
+  addInboxWidgetMessageAction,
+  getInboxWidgetMessagesAction,
+} from "@/modules/inbox-widget/actions";
 import { MessageBubble } from "@/modules/inbox-widget/components/message-bubble";
 import type {
   InboxWidgetConversation,
@@ -33,58 +48,129 @@ type FloatingInboxWidgetProps = {
   onMinimize: () => void;
 };
 
-const quickReplies = [
-  "Hola, con gusto te atiendo. Dame un momento para revisar tu consulta.",
-  "Gracias por escribirnos. Puedes confirmarme el numero de orden o referencia?",
-  "Perfecto, queda registrado. Te confirmo apenas tenga la informacion.",
-  "Podemos ayudarte con una cotizacion. Indicanos el producto o servicio requerido.",
-  "Recibido. Vamos a dar seguimiento y te avisamos por este medio.",
-];
+type ConversationFilter = "todas" | "abierta" | "pendiente" | "cerrada";
+type QuickReplyAccent = keyof typeof quickReplyTone;
 
-const postItColors = [
-  { background: "#fef3c7", border: "#f59e0b" },
-  { background: "#dcfce7", border: "#22c55e" },
-  { background: "#e0f2fe", border: "#0ea5e9" },
-  { background: "#fce7f3", border: "#ec4899" },
-  { background: "#ede9fe", border: "#8b5cf6" },
-  { background: "#ffedd5", border: "#f97316" },
+type QuickReply = {
+  accent: QuickReplyAccent;
+  id: string;
+  text: string;
+  title: string;
+};
+
+const quickReplyTone = {
+  amber:
+    "border-slate-200 bg-white text-slate-800",
+  blue:
+    "border-slate-200 bg-white text-slate-800",
+  green:
+    "border-slate-200 bg-white text-slate-800",
+  orange:
+    "border-slate-200 bg-white text-slate-800",
+  violet:
+    "border-slate-200 bg-white text-slate-800",
+} as const;
+
+const defaultQuickReplies: QuickReply[] = [
+  {
+    accent: "green",
+    id: "bienvenida",
+    text: "Hola! Gracias por contactarnos. Como podemos ayudarte hoy?",
+    title: "Bienvenida",
+  },
+  {
+    accent: "blue",
+    id: "producto",
+    text: "Te comparto la informacion de nuestro producto o servicio.",
+    title: "Informacion producto",
+  },
+  {
+    accent: "violet",
+    id: "datos",
+    text: "Para enviarte la cotizacion, podrias confirmarme tu nombre y correo?",
+    title: "Confirmar datos",
+  },
+  {
+    accent: "orange",
+    id: "pagos",
+    text: "Enviamos a todo Mexico. Aceptamos tarjeta, transferencia y PayPal.",
+    title: "Envio y pagos",
+  },
+  {
+    accent: "amber",
+    id: "cierre",
+    text: "Hay algo mas en lo que podamos ayudarte?",
+    title: "Cierre cordial",
+  },
 ];
 
 const chatWallpaperStyle = {
-  backgroundColor: "#eef7f2",
-  backgroundImage: "url('/images/whatsapp-doodle-wallpaper.svg')",
-  backgroundRepeat: "repeat",
-  backgroundSize: "420px 650px",
+  backgroundColor: "#f4f1ec",
+  backgroundImage:
+    "linear-gradient(180deg, rgba(248,247,244,0.98) 0%, rgba(242,239,234,0.98) 100%)",
+  backgroundRepeat: "no-repeat",
+  backgroundSize: "cover",
+  opacity: 1,
 };
 
-function getPostItColor(value: string, index: number) {
-  const hash = value.split("").reduce((accumulator, character) => {
-    return accumulator + character.charCodeAt(0);
-  }, index * 17);
+const quickReplyStorageKey = "bizos.whatsapp.quickReplies";
 
-  return postItColors[hash % postItColors.length];
+function getQuickReplyIcon(accent: QuickReplyAccent) {
+  const icons = {
+    amber: Handshake,
+    blue: Package,
+    green: MessageCircle,
+    orange: MapPin,
+    violet: ShieldCheck,
+  };
+
+  return icons[accent];
 }
 
-function createLocalMessage(
-  conversationId: string,
-  contenido: string,
-): InboxWidgetMessage {
-  const now = new Date().toISOString();
+function getConversationStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    abierta: "Abierta",
+    cerrada: "Cerrada",
+    pendiente: "Pendiente",
+  };
 
+  return labels[status] ?? status;
+}
+
+function getConversationStatusTone(status: string) {
+  if (status === "cerrada") {
+    return "border border-slate-200 bg-white text-slate-600 shadow-[0_6px_14px_rgba(15,23,42,0.06)]";
+  }
+  if (status === "pendiente") {
+    return "border border-amber-200 bg-white text-amber-700 shadow-[0_6px_14px_rgba(217,119,6,0.08)]";
+  }
+  return "border border-emerald-200 bg-white text-emerald-700 shadow-[0_6px_14px_rgba(5,150,105,0.08)]";
+}
+
+function getConversationStatusDot(status: string) {
+  if (status === "cerrada") return "bg-slate-400";
+  if (status === "pendiente") return "bg-amber-400";
+  return "bg-emerald-500";
+}
+
+function getQuickReplyAccentClass(accent: QuickReplyAccent) {
+  const accents = {
+    amber: "text-amber-600 bg-amber-50 ring-amber-100",
+    blue: "text-blue-600 bg-blue-50 ring-blue-100",
+    green: "text-emerald-600 bg-emerald-50 ring-emerald-100",
+    orange: "text-orange-600 bg-orange-50 ring-orange-100",
+    violet: "text-violet-600 bg-violet-50 ring-violet-100",
+  };
+
+  return accents[accent];
+}
+
+function createQuickReplyDraft(): QuickReply {
   return {
-    canalMessageId: null,
-    contenido,
-    conversacionId: conversationId,
-    createdAt: now,
-    direccion: "saliente",
-    enviadoPor: null,
-    enviadoPorNombre: "biz.os",
-    esNotaInterna: false,
-    estado: "registrado",
-    id: `local-${conversationId}-${Date.now()}`,
-    receivedAt: null,
-    sentAt: now,
-    tipo: "texto",
+    accent: "green",
+    id: `reply-${Date.now()}`,
+    text: "",
+    title: "",
   };
 }
 
@@ -100,10 +186,30 @@ export function FloatingInboxWidget({
     Record<string, InboxWidgetMessage[]>
   >({});
   const [search, setSearch] = useState("");
+  const [conversationFilter, setConversationFilter] =
+    useState<ConversationFilter>("todas");
   const [draft, setDraft] = useState("");
+  const [widgetError, setWidgetError] = useState<string | null>(null);
   const [lastQuickReply, setLastQuickReply] = useState<string | null>(null);
-  const [reminderSaved, setReminderSaved] = useState(false);
+  const [quickReplySearch, setQuickReplySearch] = useState("");
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>(() => {
+    if (typeof window === "undefined") return defaultQuickReplies;
+
+    try {
+      const saved = window.localStorage.getItem(quickReplyStorageKey);
+      if (!saved) return defaultQuickReplies;
+
+      const parsed = JSON.parse(saved) as QuickReply[];
+      return Array.isArray(parsed) && parsed.length > 0
+        ? parsed
+        : defaultQuickReplies;
+    } catch {
+      return defaultQuickReplies;
+    }
+  });
+  const [quickReplyDraft, setQuickReplyDraft] = useState<QuickReply | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isSending, startSendingTransition] = useTransition();
   const widgetRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -111,28 +217,72 @@ export function FloatingInboxWidget({
     ? (messagesByConversation[activeConversation.id] ?? [])
     : [];
 
+  const conversationCounts = useMemo(
+    () => ({
+      abierta: conversations.filter((conversation) => conversation.estado === "abierta")
+        .length,
+      cerrada: conversations.filter((conversation) => conversation.estado === "cerrada")
+        .length,
+      pendiente: conversations.filter(
+        (conversation) => conversation.estado === "pendiente",
+      ).length,
+      todas: conversations.length,
+    }),
+    [conversations],
+  );
+
   const filteredConversations = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
-    if (!normalizedSearch) return conversations;
+    return conversations.filter((conversation) => {
+      const matchesFilter =
+        conversationFilter === "todas" || conversation.estado === conversationFilter;
 
-    return conversations.filter((conversation) =>
-      [
+      if (!matchesFilter) return false;
+      if (!normalizedSearch) return true;
+
+      return [
         getWidgetContactName(conversation),
         conversation.ultimoMensaje ?? "",
         conversation.canal,
         conversation.estado,
         conversation.asignadoNombre ?? "",
+        conversation.contactoTelefono ?? "",
+        conversation.contactoIdentificador ?? "",
       ]
         .join(" ")
         .toLowerCase()
-        .includes(normalizedSearch),
+        .includes(normalizedSearch);
+    });
+  }, [conversationFilter, conversations, search]);
+
+  const activeName = activeConversation
+    ? getWidgetContactName(activeConversation)
+    : "Sin conversacion";
+  const activeInitials = getWidgetInitials(activeName);
+  const activeContact =
+    activeConversation?.contactoTelefono ??
+    activeConversation?.contactoIdentificador ??
+    activeConversation?.contactoUsuario ??
+    "Sin telefono";
+
+  const filteredQuickReplies = useMemo(() => {
+    const normalizedSearch = quickReplySearch.trim().toLowerCase();
+
+    if (!normalizedSearch) return quickReplies;
+
+    return quickReplies.filter((reply) =>
+      [reply.title, reply.text].join(" ").toLowerCase().includes(normalizedSearch),
     );
-  }, [conversations, search]);
+  }, [quickReplies, quickReplySearch]);
 
   useEffect(() => {
     window.setTimeout(() => widgetRef.current?.focus(), 0);
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(quickReplyStorageKey, JSON.stringify(quickReplies));
+  }, [quickReplies]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({
@@ -141,240 +291,541 @@ export function FloatingInboxWidget({
     });
   }, [activeMessages.length, activeConversation?.id]);
 
-  function loadMessages(conversation: InboxWidgetConversation) {
-    if (messagesByConversation[conversation.id]) return;
+  useEffect(() => {
+    if (!activeConversation || messagesByConversation[activeConversation.id]) return;
 
     startTransition(async () => {
-      const messages = await getInboxWidgetMessagesAction(conversation.id);
+      const messages = await getInboxWidgetMessagesAction(activeConversation.id);
       setMessagesByConversation((current) => ({
         ...current,
-        [conversation.id]: messages,
+        [activeConversation.id]: messages,
       }));
+    });
+  }, [activeConversation, messagesByConversation]);
+
+  function handleSelectConversation(conversation: InboxWidgetConversation) {
+    setWidgetError(null);
+    setActiveConversation(conversation);
+  }
+
+  function sendMessage(contenido: string) {
+    if (!activeConversation || !contenido.trim() || isSending) return;
+
+    const trimmed = contenido.trim();
+    setWidgetError(null);
+
+    startSendingTransition(async () => {
+      const result = await addInboxWidgetMessageAction({
+        contenido: trimmed,
+        conversacionId: activeConversation.id,
+      });
+
+      if (!result.ok) {
+        setWidgetError(result.error);
+        return;
+      }
+
+      setMessagesByConversation((current) => ({
+        ...current,
+        [activeConversation.id]: result.messages,
+      }));
+      setDraft("");
     });
   }
 
-  function handleSelectConversation(conversation: InboxWidgetConversation) {
-    setActiveConversation(conversation);
-    loadMessages(conversation);
-  }
-
-  function appendLocalMessage(contenido: string) {
-    if (!activeConversation || !contenido.trim()) return;
-
-    const message = createLocalMessage(activeConversation.id, contenido.trim());
-    setMessagesByConversation((current) => ({
-      ...current,
-      [activeConversation.id]: [...(current[activeConversation.id] ?? []), message],
-    }));
-    setDraft("");
-  }
-
-  function handleQuickReply(reply: string) {
-    appendLocalMessage(reply);
-    setLastQuickReply(reply);
+  function handleQuickReply(reply: QuickReply) {
+    sendMessage(reply.text);
+    setLastQuickReply(reply.title);
     window.setTimeout(() => setLastQuickReply(null), 1300);
   }
 
-  function handleReminderSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setReminderSaved(true);
-    window.setTimeout(() => setReminderSaved(false), 1600);
-  }
+  function saveQuickReply() {
+    if (!quickReplyDraft?.title.trim() || !quickReplyDraft.text.trim()) return;
 
-  function handleClose() {
-    onClose();
-  }
+    setQuickReplies((current) => {
+      const exists = current.some((reply) => reply.id === quickReplyDraft.id);
+      if (exists) {
+        return current.map((reply) =>
+          reply.id === quickReplyDraft.id ? quickReplyDraft : reply,
+        );
+      }
 
-  function handleMinimize() {
-    onMinimize();
+      return [...current, quickReplyDraft];
+    });
+    setQuickReplyDraft(null);
   }
 
   if (!isOpen) return null;
 
   return (
-    <section className="fixed inset-0 z-[9999] bg-black/60">
-      <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-center px-4 lg:left-[280px]">
+    <section className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-md">
+      <div className="absolute inset-0 flex items-center justify-center px-2 py-4">
         <div
           aria-label="Widget de mensajeria WhatsApp"
-          className="flex h-[min(720px,calc(100vh-4rem))] w-[min(1220px,calc(100vw-2rem))] gap-3 rounded-[1.6rem] border border-white/15 bg-[#dfe5e7] p-3 shadow-[0_28px_80px_rgba(0,0,0,0.38)] outline-none"
+          className="grid h-[calc(100vh-2rem)] w-[min(1500px,calc(100vw-1rem))] grid-cols-[390px_minmax(760px,1fr)] gap-5 rounded-[24px] border border-white/45 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,246,255,0.94))] p-3 shadow-[0_36px_110px_rgba(2,6,23,0.46),0_0_0_1px_rgba(255,255,255,0.5)_inset] outline-none max-[1280px]:grid-cols-[340px_minmax(420px,1fr)] max-[1280px]:[&_.whapp-tools]:hidden"
           ref={widgetRef}
           tabIndex={0}
         >
-          <aside className="flex min-w-0 basis-[30%] flex-col overflow-hidden rounded-2xl bg-[#f7f8fa] shadow-sm ring-1 ring-black/5">
-            <div className="flex h-16 shrink-0 items-center justify-between bg-[#075e54] px-5 text-white">
-              <div>
-                <p className="text-lg font-black">WhatsApp</p>
-                <p className="text-xs font-semibold text-emerald-100">
-                  Bandeja rapida
-                </p>
+          <aside className="flex min-w-0 flex-col gap-3 overflow-hidden">
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-slate-200/80 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.12)]">
+              <div className="flex shrink-0 items-center justify-between bg-white px-5 pb-3 pt-4">
+                <p className="text-lg font-black text-slate-950">Conversaciones</p>
+                <div className="flex items-center gap-5 text-slate-500">
+                  <Filter aria-hidden="true" size={17} />
+                  <MoreVertical aria-hidden="true" size={17} />
+                </div>
               </div>
-              <MessageCircle aria-hidden="true" size={24} />
-            </div>
-
-            <label className="relative m-4 block">
-              <Search
-                aria-hidden="true"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                size={17}
-              />
-              <input
-                className="h-11 w-full rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar o iniciar chat"
-                value={search}
-              />
-            </label>
-
-            <div className="flex gap-2 px-4 pb-3 text-xs font-bold">
-              {["Todas", "No leidas", "Asignadas", "WhatsApp"].map((filter, index) => (
-                <span
-                  className={`rounded-full px-3 py-1.5 ${
-                    index === 0
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-white text-slate-600"
-                  }`}
-                  key={filter}
-                >
-                  {filter}
-                </span>
-              ))}
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {filteredConversations.length > 0 ? (
-                filteredConversations.map((conversation) => {
-                  const name = getWidgetContactName(conversation);
-                  const isActive = activeConversation?.id === conversation.id;
-
-                  return (
-                    <button
-                      className={`flex w-full gap-3 border-b border-slate-200 px-4 py-3 text-left transition ${
-                        isActive ? "bg-white" : "hover:bg-white/80"
-                      }`}
-                      key={conversation.id}
-                      onClick={() => handleSelectConversation(conversation)}
-                      type="button"
-                    >
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-700 text-sm font-black text-white">
-                        {getWidgetInitials(name) || "?"}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-start justify-between gap-2">
-                          <span className="truncate text-sm font-black text-slate-900">
-                            {name}
-                          </span>
-                          <span className="shrink-0 text-[10px] font-semibold text-emerald-700">
-                            {formatWidgetTime(
-                              conversation.ultimoMensajeAt ?? conversation.createdAt,
-                            )}
-                          </span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-slate-500">
-                          {conversation.ultimoMensaje ?? "Sin mensajes todavia"}
-                        </span>
-                        <span className="mt-2 flex items-center gap-1.5">
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
-                            {conversation.canal}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
-                            {conversation.estado}
-                          </span>
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center p-8 text-center text-sm text-slate-500">
-                  <MessageCircle className="mb-3 text-emerald-500" size={34} />
-                  No hay conversaciones para mostrar.
-                </div>
-              )}
-            </div>
-          </aside>
-
-          <main className="flex min-w-0 basis-[44%] flex-col overflow-hidden rounded-2xl bg-[#efe7dc] shadow-sm ring-1 ring-black/5">
-            {activeConversation ? (
-              <>
-                <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-5">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-black text-white">
-                    {getWidgetInitials(getWidgetContactName(activeConversation)) || "?"}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-black text-slate-900">
-                      {getWidgetContactName(activeConversation)}
-                    </p>
-                    <p className="text-[11px] font-semibold text-emerald-700">
-                      {activeConversation.canal} / {activeConversation.estado}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 rounded-full bg-slate-100 p-1">
-                    <button
-                      aria-label="Minimizar widget"
-                      className="flex size-8 items-center justify-center rounded-full text-slate-600 hover:bg-white"
-                      onClick={handleMinimize}
-                      type="button"
-                    >
-                      <Minus aria-hidden="true" size={17} />
-                    </button>
-                    <button
-                      aria-label="Cerrar widget"
-                      className="flex size-8 items-center justify-center rounded-full text-slate-600 hover:bg-white"
-                      onClick={handleClose}
-                      type="button"
-                    >
-                      <X aria-hidden="true" size={17} />
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4"
-                  ref={threadRef}
-                  style={chatWallpaperStyle}
-                >
-                  {isPending && activeMessages.length === 0 ? (
-                    <p className="rounded-full bg-white/80 px-3 py-2 text-center text-xs text-slate-500">
-                      Cargando mensajes...
-                    </p>
-                  ) : activeMessages.length > 0 ? (
-                    activeMessages.map((message) => (
-                      <MessageBubble key={message.id} message={message} />
-                    ))
-                  ) : (
-                    <p className="rounded-full bg-white/80 px-3 py-2 text-center text-xs text-slate-500">
-                      No hay mensajes registrados en esta conversacion.
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-4">
-                  <textarea
-                    className="max-h-28 min-h-11 flex-1 resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-300"
-                    onChange={(event) => setDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        appendLocalMessage(draft);
-                      }
-                    }}
-                    placeholder="Respuesta simulada..."
-                    rows={1}
-                    value={draft}
-                  />
+              <div className="mx-4 grid shrink-0 grid-cols-4 rounded-2xl border border-slate-200 bg-slate-50 p-1 text-center text-[11px] font-black text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+                {[
+                  ["todas", "Todas", conversationCounts.todas],
+                  ["abierta", "Abiertas", conversationCounts.abierta],
+                  ["pendiente", "Pendientes", conversationCounts.pendiente],
+                  ["cerrada", "Cerradas", conversationCounts.cerrada],
+                ].map(([value, label, count]) => (
                   <button
-                    aria-label="Enviar respuesta simulada"
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md disabled:opacity-50"
-                    disabled={!draft.trim()}
-                    onClick={() => appendLocalMessage(draft)}
+                    className={`rounded-xl px-1 py-2 transition ${
+                      conversationFilter === value
+                        ? "bg-white text-slate-950 shadow-[0_8px_20px_rgba(15,23,42,0.10)] ring-1 ring-slate-200"
+                        : "text-slate-500 hover:text-slate-900"
+                    }`}
+                    key={value}
+                    onClick={() => setConversationFilter(value as ConversationFilter)}
                     type="button"
                   >
-                    {draft.trim() ? (
-                      <Send aria-hidden="true" size={18} />
-                    ) : (
-                      <Mic aria-hidden="true" size={18} />
-                    )}
+                    {label}{" "}
+                    <span
+                      className={`rounded-full px-1.5 text-[10px] ${
+                        conversationFilter === value
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-white text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
                   </button>
+                ))}
+              </div>
+              <label className="relative mx-4 my-3 block rounded-2xl shadow-[0_8px_22px_rgba(15,23,42,0.06)]">
+                <Search
+                  aria-hidden="true"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={16}
+                />
+                <input
+                  className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-10 text-xs outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar conversaciones..."
+                  value={search}
+                />
+                <Filter
+                  aria-hidden="true"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={15}
+                />
+              </label>
+              <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {filteredConversations.length > 0 ? (
+                  filteredConversations.map((conversation) => {
+                    const name = getWidgetContactName(conversation);
+                    const isActive = activeConversation?.id === conversation.id;
+                    const statusLabel = getConversationStatusLabel(conversation.estado);
+
+                    return (
+                      <button
+                        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
+                          isActive
+                            ? "bg-white shadow-[0_14px_30px_rgba(15,118,110,0.12)] ring-1 ring-emerald-200"
+                            : "hover:bg-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+                        }`}
+                        key={conversation.id}
+                        onClick={() => handleSelectConversation(conversation)}
+                        type="button"
+                      >
+                        <span className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 via-slate-700 to-slate-500 text-sm font-black text-white shadow-[0_10px_20px_rgba(15,23,42,0.18)] ring-2 ring-white">
+                          {getWidgetInitials(name)}
+                          <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-white shadow-sm">
+                            <span
+                              className={`size-2 rounded-full ${getConversationStatusDot(conversation.estado)}`}
+                            />
+                          </span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-start justify-between gap-2">
+                            <span className="truncate text-sm font-black text-slate-900">
+                              {name}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-slate-500">
+                              {formatWidgetTime(
+                                conversation.ultimoMensajeAt ?? conversation.updatedAt,
+                              )}
+                            </span>
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-slate-500">
+                            {conversation.ultimoMensaje ?? "Sin mensajes recientes"}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5 rounded-full px-1.5 py-1 text-[10px] font-black text-slate-500">
+                          <span
+                            className={`size-1.5 rounded-full ${getConversationStatusDot(conversation.estado)}`}
+                          />
+                          <span className="sr-only">{statusLabel}</span>
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center p-8 text-center text-sm text-slate-500">
+                    <MessageCircle className="mb-3 text-emerald-500" size={34} />
+                    No hay conversaciones para mostrar.
+                  </div>
+                )}
+              </div>
+              <Link
+                className="mx-4 mb-3 shrink-0 rounded-xl bg-gradient-to-r from-emerald-50 to-sky-50 py-3 text-center text-xs font-black text-emerald-700 shadow-[0_10px_24px_rgba(59,130,246,0.10)] ring-1 ring-emerald-100 transition hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(16,185,129,0.16)]"
+                href="/whapp/conversaciones"
+              >
+                Ver todas las conversaciones <span aria-hidden="true">-&gt;</span>
+              </Link>
+            </section>
+          </aside>
+
+          <section className="grid min-w-0 grid-rows-[92px_minmax(0,1fr)] overflow-hidden rounded-[20px] border border-slate-200/80 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.12)]">
+            {activeConversation ? (
+              <>
+                <div className="flex min-w-0 items-center gap-4 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-sky-50 px-5 shadow-[0_12px_28px_rgba(16,185,129,0.08)]">
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 via-slate-700 to-slate-500 text-sm font-black text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)] ring-2 ring-white">
+                    {activeInitials}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      {activeConversation.clienteId ? (
+                        <Link
+                          className="truncate text-lg font-black text-slate-950 transition hover:text-emerald-700"
+                          href={`/crm/clientes/${activeConversation.clienteId}`}
+                        >
+                          {activeName}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-lg font-black text-slate-950">
+                          {activeName}
+                        </p>
+                      )}
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black ${getConversationStatusTone(activeConversation.estado)}`}
+                      >
+                        <span
+                          className={`size-1.5 rounded-full ${getConversationStatusDot(activeConversation.estado)}`}
+                        />
+                        {getConversationStatusLabel(activeConversation.estado)}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                      <span className="flex items-center gap-1 text-slate-500">
+                        <MessageCircle
+                          aria-hidden="true"
+                          className="text-slate-500"
+                          size={15}
+                        />
+                        {activeContact}
+                      </span>
+                      <span className="flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 ring-1 ring-slate-200">
+                        <MessageCircle
+                          aria-hidden="true"
+                          className="text-slate-500"
+                          size={13}
+                        />
+                        {activeConversation.canal}
+                      </span>
+                      <span className="rounded-full bg-slate-50 px-2.5 py-1 ring-1 ring-slate-200">
+                        Prioridad {activeConversation.prioridad}
+                      </span>
+                      {activeConversation.asignadoNombre ? (
+                        <span className="rounded-full bg-slate-50 px-2.5 py-1 ring-1 ring-slate-200">
+                          {activeConversation.asignadoNombre}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  {activeConversation.clienteId ? (
+                    <Link
+                      className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2 text-xs font-black text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition hover:border-emerald-200 hover:text-emerald-700"
+                      href={`/crm/clientes/${activeConversation.clienteId}`}
+                    >
+                      <UserRound aria-hidden="true" size={15} />
+                      Perfil CRM
+                    </Link>
+                  ) : (
+                    <span className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+                      <UserRound aria-hidden="true" size={14} />
+                      Sin cliente
+                    </span>
+                  )}
+                  <button
+                    aria-label="Etiqueta"
+                    className="flex size-9 items-center justify-center border-l border-slate-100 text-slate-500 transition hover:text-slate-900"
+                    type="button"
+                  >
+                    <Tag aria-hidden="true" size={17} />
+                  </button>
+                  <button
+                    aria-label="Minimizar widget"
+                    className="flex size-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                    onClick={onMinimize}
+                    type="button"
+                  >
+                    <Minus aria-hidden="true" size={17} />
+                  </button>
+                  <button
+                    aria-label="Cerrar widget"
+                    className="flex size-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                    onClick={onClose}
+                    type="button"
+                  >
+                    <X aria-hidden="true" size={17} />
+                  </button>
+                </div>
+
+                <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_390px] max-[1880px]:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="flex min-w-0 flex-col overflow-hidden border-r border-slate-100/80">
+                    <div
+                      className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      ref={threadRef}
+                      style={chatWallpaperStyle}
+                    >
+                      <div className="mx-auto w-fit rounded-full border border-white/80 bg-white/92 px-12 py-2 text-xs font-bold text-slate-500 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur">
+                        Hoy
+                      </div>
+                      {isPending && activeMessages.length === 0 ? (
+                        <p className="rounded-2xl bg-white/90 px-4 py-3 text-center text-sm text-slate-500 shadow-[0_14px_30px_rgba(15,23,42,0.12)] backdrop-blur">
+                          Cargando mensajes...
+                        </p>
+                      ) : activeMessages.length > 0 ? (
+                        activeMessages.map((message) => (
+                          <MessageBubble key={message.id} message={message} />
+                        ))
+                      ) : (
+                        <p className="rounded-2xl bg-white/90 px-4 py-3 text-center text-sm text-slate-500 shadow-[0_14px_30px_rgba(15,23,42,0.12)] backdrop-blur">
+                          Esta conversacion no tiene mensajes registrados todavia.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 border-t border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-sky-50 p-4 shadow-[0_-12px_28px_rgba(16,185,129,0.08)]">
+                      {widgetError ? (
+                        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                          {widgetError}
+                        </p>
+                      ) : null}
+                      <div className="flex items-center gap-3">
+                        <button
+                          aria-label="Emoji"
+                          className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          type="button"
+                        >
+                          <Smile aria-hidden="true" size={20} />
+                        </button>
+                        <button
+                          aria-label="Adjuntar"
+                          className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          type="button"
+                        >
+                          <Paperclip aria-hidden="true" size={20} />
+                        </button>
+                        <button
+                          aria-label="Accion rapida"
+                          className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          type="button"
+                        >
+                          <Zap aria-hidden="true" size={18} />
+                        </button>
+                        <button
+                          aria-label="Atajos"
+                          className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          type="button"
+                        >
+                          /
+                        </button>
+                        <textarea
+                          className="max-h-28 min-h-11 flex-1 resize-none rounded-2xl border border-blue-100 bg-white/95 px-4 py-3 text-sm shadow-[0_10px_26px_rgba(59,130,246,0.10)] outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100/80"
+                          onChange={(event) => setDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault();
+                              sendMessage(draft);
+                            }
+                          }}
+                          placeholder="Escribe un mensaje o usa / para atajos"
+                          rows={1}
+                          value={draft}
+                        />
+                        <button
+                          aria-label="Enviar respuesta"
+                          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-[0_14px_30px_rgba(5,150,105,0.34)] ring-2 ring-white transition hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(5,150,105,0.42)] disabled:opacity-60"
+                          disabled={!draft.trim() || isSending}
+                          onClick={() => sendMessage(draft)}
+                          type="button"
+                        >
+                          {draft.trim() ? (
+                            <Send aria-hidden="true" size={19} />
+                          ) : (
+                            <Mic aria-hidden="true" size={19} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <aside className="whapp-tools flex min-w-0 flex-col overflow-hidden bg-white">
+                    <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-sky-50 px-4 shadow-[0_12px_28px_rgba(16,185,129,0.08)]">
+                      <label className="relative block min-w-0 flex-1 rounded-2xl shadow-[0_8px_22px_rgba(15,23,42,0.06)]">
+                        <Search
+                          aria-hidden="true"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          size={16}
+                        />
+                        <input
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-xs outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                          onChange={(event) => setQuickReplySearch(event.target.value)}
+                          placeholder="Buscar respuesta rapida..."
+                          value={quickReplySearch}
+                        />
+                      </label>
+                      <button
+                        aria-label="Nueva respuesta rapida"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-200 bg-white text-emerald-700 shadow-[0_10px_24px_rgba(16,185,129,0.14)] transition hover:-translate-y-0.5 hover:bg-emerald-50 hover:shadow-[0_16px_30px_rgba(16,185,129,0.18)]"
+                        onClick={() => setQuickReplyDraft(createQuickReplyDraft())}
+                        type="button"
+                      >
+                        <Plus aria-hidden="true" size={19} />
+                      </button>
+                    </div>
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {filteredQuickReplies.map((reply) => {
+                        const ReplyIcon = getQuickReplyIcon(reply.accent);
+
+                        return (
+                          <div
+                            className={`rounded-2xl border p-4 shadow-[0_8px_20px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,23,42,0.08)] ${quickReplyTone[reply.accent]}`}
+                            key={reply.id}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ${getQuickReplyAccentClass(reply.accent)}`}
+                              >
+                                <ReplyIcon aria-hidden="true" size={17} />
+                              </span>
+                              <button
+                                className="min-w-0 flex-1 text-left"
+                                disabled={!activeConversation || isSending}
+                                onClick={() => handleQuickReply(reply)}
+                                type="button"
+                              >
+                                <span className="block text-sm font-black">
+                                  {reply.title}
+                                </span>
+                                <span className="mt-1 block text-xs leading-5 text-slate-600">
+                                  {reply.text}
+                                </span>
+                              </button>
+                              <button
+                                aria-label="Editar respuesta rapida"
+                                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+                                onClick={() => setQuickReplyDraft(reply)}
+                                type="button"
+                              >
+                                <Edit3 aria-hidden="true" size={15} />
+                              </button>
+                              <button
+                                aria-label="Copiar y enviar respuesta rapida"
+                                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+                                disabled={!activeConversation || isSending}
+                                onClick={() => handleQuickReply(reply)}
+                                type="button"
+                              >
+                                <Copy aria-hidden="true" size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="shrink-0 px-8 pb-6">
+                      {quickReplyDraft ? (
+                        <div className="mb-3 rounded-2xl border border-emerald-200 bg-white p-3 shadow-[0_12px_28px_rgba(16,185,129,0.10)]">
+                          <input
+                            className="mb-2 h-9 w-full rounded-xl border border-emerald-200 bg-white px-3 text-xs font-bold shadow-sm outline-none"
+                            onChange={(event) =>
+                              setQuickReplyDraft((current) =>
+                                current
+                                  ? { ...current, title: event.target.value }
+                                  : current,
+                              )
+                            }
+                            placeholder="Titulo"
+                            value={quickReplyDraft.title}
+                          />
+                          <textarea
+                            className="mb-2 min-h-20 w-full resize-none rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs shadow-sm outline-none"
+                            onChange={(event) =>
+                              setQuickReplyDraft((current) =>
+                                current
+                                  ? { ...current, text: event.target.value }
+                                  : current,
+                              )
+                            }
+                            placeholder="Texto de la respuesta"
+                            value={quickReplyDraft.text}
+                          />
+                          <select
+                            className="mb-3 h-9 w-full rounded-xl border border-emerald-200 bg-white px-3 text-xs shadow-sm outline-none"
+                            onChange={(event) =>
+                              setQuickReplyDraft((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      accent: event.target.value as QuickReplyAccent,
+                                    }
+                                  : current,
+                              )
+                            }
+                            value={quickReplyDraft.accent}
+                          >
+                            <option value="green">Verde</option>
+                            <option value="blue">Azul</option>
+                            <option value="violet">Violeta</option>
+                            <option value="orange">Naranja</option>
+                            <option value="amber">Ambar</option>
+                          </select>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              className="h-9 rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
+                              onClick={() => setQuickReplyDraft(null)}
+                              type="button"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              className="h-9 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-700 text-xs font-black text-white shadow-[0_12px_24px_rgba(5,150,105,0.24)] disabled:opacity-50"
+                              disabled={
+                                !quickReplyDraft.title.trim() ||
+                                !quickReplyDraft.text.trim()
+                              }
+                              onClick={saveQuickReply}
+                              type="button"
+                            >
+                              Guardar
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {lastQuickReply ? (
+                        <p className="mt-3 flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm">
+                          <Check aria-hidden="true" size={14} />
+                          {lastQuickReply} enviada.
+                        </p>
+                      ) : null}
+                    </div>
+                  </aside>
                 </div>
               </>
             ) : (
@@ -383,96 +834,7 @@ export function FloatingInboxWidget({
                 Selecciona una conversacion para abrir el chat.
               </div>
             )}
-          </main>
-
-          <aside className="flex min-w-0 basis-[26%] flex-col gap-3">
-            <section className="flex min-h-0 flex-[1.55] flex-col overflow-hidden rounded-2xl bg-slate-50 p-4 shadow-sm ring-1 ring-black/5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Respuestas rapidas
-                  </p>
-                  <p className="text-xs text-slate-500">Doble click para enviar</p>
-                </div>
-                <Sparkles className="text-emerald-600" size={18} />
-              </div>
-
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                {quickReplies.map((reply, index) => (
-                  <button
-                    className="w-full rounded-md border-l-4 p-3 text-left text-xs font-semibold leading-5 text-slate-800 shadow-[0_5px_12px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_9px_18px_rgba(15,23,42,0.16)]"
-                    disabled={!activeConversation}
-                    key={reply}
-                    onDoubleClick={() => handleQuickReply(reply)}
-                    style={{
-                      backgroundColor: getPostItColor(reply, index).background,
-                      borderLeftColor: getPostItColor(reply, index).border,
-                    }}
-                    title="Doble click para enviar"
-                    type="button"
-                  >
-                    {reply}
-                  </button>
-                ))}
-              </div>
-
-              {lastQuickReply ? (
-                <p className="mt-3 flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800">
-                  <Check aria-hidden="true" size={14} />
-                  Respuesta agregada al chat.
-                </p>
-              ) : null}
-            </section>
-
-            <section className="flex shrink-0 flex-col rounded-2xl bg-slate-50 p-4 shadow-sm ring-1 ring-black/5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Recordatorios
-                  </p>
-                  <p className="text-xs text-slate-500">Programador local</p>
-                </div>
-                <CalendarClock className="text-emerald-600" size={18} />
-              </div>
-
-              <form className="space-y-2" onSubmit={handleReminderSubmit}>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-[11px] font-bold text-slate-600">
-                    Fecha
-                    <input
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-emerald-300"
-                      type="date"
-                    />
-                  </label>
-                  <label className="text-[11px] font-bold text-slate-600">
-                    Hora
-                    <input
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-emerald-300"
-                      type="time"
-                    />
-                  </label>
-                </div>
-                <label className="block text-[11px] font-bold text-slate-600">
-                  Comentario
-                  <textarea
-                    className="mt-1 min-h-16 w-full resize-none rounded-lg border border-slate-200 bg-white p-2 text-xs font-normal outline-none focus:border-emerald-300"
-                    placeholder="Ejemplo: llamar para confirmar."
-                  />
-                </label>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] text-slate-500">
-                    {reminderSaved ? "Recordatorio preparado." : "Visual por ahora."}
-                  </p>
-                  <button
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700"
-                    type="submit"
-                  >
-                    OK
-                  </button>
-                </div>
-              </form>
-            </section>
-          </aside>
+          </section>
         </div>
       </div>
     </section>

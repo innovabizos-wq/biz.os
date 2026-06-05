@@ -2,6 +2,8 @@ export type CoreErrorCode =
   | "AUTH_NOT_CONNECTED"
   | "INVALID_TENANT_CONTEXT"
   | "MODULE_INACTIVE"
+  | "MODULE_MISCONFIGURED"
+  | "INTEGRATION_UNHEALTHY"
   | "PLAN_INACTIVE"
   | "PLAN_FEATURE_UNAVAILABLE"
   | "PERMISSION_DENIED"
@@ -59,13 +61,21 @@ export type EmpresaPlanEstado =
 export type ModuleCode =
   | "admin"
   | "crm"
+  | "quotes"
+  | "catalog"
   | "sales"
   | "inventory"
   | "billing"
   | "dispatch"
   | "hr"
+  | "agenda"
+  | "whapp"
   | "reports"
-  | "ai";
+  | "ai"
+  | "autoblog"
+  | "purchases"
+  | "payments"
+  | "mobile";
 
 export type PermissionCode =
   | "admin.users.view"
@@ -98,6 +108,10 @@ export type PermissionCode =
   | "sales.orders.status.change"
   | "sales.quotes.view"
   | "sales.quotes.create"
+  | "billing.fiscal.view"
+  | "billing.fiscal.manage"
+  | "billing.invoices.view"
+  | "billing.invoices.create"
   | "inventory.products.view"
   | "inventory.stock.view"
   | "inventory.stock.adjust"
@@ -125,7 +139,19 @@ export type PermissionCode =
   | "hr.timesheets.states.manage"
   | "hr.timesheets.create"
   | "reports.dashboard.view"
-  | "ai.reports.use";
+  | "ai.reports.use"
+  | "autoblog.view"
+  | "autoblog.create"
+  | "autoblog.edit"
+  | "autoblog.publish"
+  | "autoblog.manage"
+  | "purchases.suppliers.view"
+  | "purchases.suppliers.manage"
+  | "purchases.orders.view"
+  | "purchases.orders.manage"
+  | "payments.accounts.view"
+  | "payments.accounts.manage"
+  | "mobile.access";
 
 export type PlanCode = "starter" | "pro" | "enterprise";
 

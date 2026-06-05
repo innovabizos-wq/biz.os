@@ -13,10 +13,30 @@ export function InboxChannelDetailCard({
   channel,
   metaStatus,
 }: InboxChannelDetailCardProps) {
+  const phoneNumberId = channel.configuracionPublica.phone_number_id;
+  const wabaId = channel.configuracionPublica.waba_id;
+  const appId = channel.configuracionPublica.app_id;
+  const businessId = channel.configuracionPublica.business_id;
+  const pageId = channel.configuracionPublica.page_id;
+  const instagramId = channel.configuracionPublica.instagram_business_account_id;
+  const tokenSuffix = metaStatus?.accessTokenSuffix
+    ? `...${metaStatus.accessTokenSuffix}`
+    : "No disponible";
+  const tokenUpdatedAt = metaStatus?.accessTokenUpdatedAt
+    ? new Intl.DateTimeFormat("es-CR", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(metaStatus.accessTokenUpdatedAt))
+    : "No registrada";
+
   return (
     <div className="rounded-lg border bg-background p-5">
       <p className="font-semibold">Datos generales</p>
       <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">Canal ID interno</dt>
+          <dd className="break-all font-mono text-xs">{channel.id}</dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">Canal</dt>
           <dd>{INBOX_CHANNEL_LABELS[channel.canal]}</dd>
@@ -41,6 +61,54 @@ export function InboxChannelDetailCard({
           <dt className="text-muted-foreground">Webhook</dt>
           <dd>{channel.webhookUrl ?? "/api/webhooks/meta"}</dd>
         </div>
+        {channel.proveedor === "meta" ? (
+          <>
+            <div>
+              <dt className="text-muted-foreground">phone_number_id</dt>
+              <dd className="break-all font-mono text-xs">
+                {typeof phoneNumberId === "string" && phoneNumberId
+                  ? phoneNumberId
+                  : "No registrado"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">waba_id</dt>
+              <dd className="break-all font-mono text-xs">
+                {typeof wabaId === "string" && wabaId ? wabaId : "No registrado"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">app_id</dt>
+              <dd className="break-all font-mono text-xs">
+                {typeof appId === "string" && appId ? appId : "No registrado"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">business_id</dt>
+              <dd className="break-all font-mono text-xs">
+                {typeof businessId === "string" && businessId
+                  ? businessId
+                  : "No registrado"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">page_id</dt>
+              <dd className="break-all font-mono text-xs">
+                {typeof pageId === "string" && pageId ? pageId : "No registrado"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">
+                instagram_business_account_id
+              </dt>
+              <dd className="break-all font-mono text-xs">
+                {typeof instagramId === "string" && instagramId
+                  ? instagramId
+                  : "No registrado"}
+              </dd>
+            </div>
+          </>
+        ) : null}
       </dl>
 
       {channel.proveedor === "meta" ? (
@@ -50,6 +118,14 @@ export function InboxChannelDetailCard({
             <div>
               <dt className="text-muted-foreground">Access token</dt>
               <dd>{metaStatus?.tieneAccessToken ? "Configurado" : "No configurado"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Token actualizado</dt>
+              <dd>{tokenUpdatedAt}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Huella token</dt>
+              <dd className="font-mono text-xs">{tokenSuffix}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">App secret</dt>

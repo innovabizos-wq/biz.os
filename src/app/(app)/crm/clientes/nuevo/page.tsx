@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
@@ -44,11 +45,7 @@ export default async function NewCustomerPage({
         eyebrow="CRM"
         title="Nuevo cliente/prospecto"
       />
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
       <CustomerForm
         assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
         mode="create"

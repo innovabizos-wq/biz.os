@@ -12,6 +12,7 @@ type RolePermissionsManagerProps = {
   catalog: PermissionCatalogItem[];
   canManage: boolean;
   rolId: string;
+  roleName?: string;
 };
 
 function groupCode(code: string): string {
@@ -23,7 +24,9 @@ export function RolePermissionsManager({
   canManage,
   catalog,
   rolId,
+  roleName,
 }: RolePermissionsManagerProps) {
+  const isProtectedSuperAdmin = roleName === "Super Admin";
   const assignedCodes = new Set<PermissionCode>(
     assignedPermissions.map((permission) => permission.codigo),
   );
@@ -45,6 +48,12 @@ export function RolePermissionsManager({
           El catalogo global no se edita aqui. Solo se asignan o quitan permisos
           al rol de esta empresa.
         </p>
+        {isProtectedSuperAdmin ? (
+          <p className="mt-2 rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+            El rol Super Admin protege el acceso total de la empresa y no puede
+            quedar sin permisos.
+          </p>
+        ) : null}
       </div>
 
       {Object.entries(grouped).map(([group, permissions]) => (
@@ -83,6 +92,7 @@ export function RolePermissionsManager({
                         value={permission.codigo}
                       />
                       <Button
+                        disabled={isProtectedSuperAdmin && isAssigned}
                         size="sm"
                         type="submit"
                         variant={isAssigned ? "outline" : "default"}

@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { InboxChannelForm } from "@/modules/inbox/components/inbox-channel-form";
@@ -40,15 +41,12 @@ export default async function NewInboxChannelPage({
         title="Nuevo canal"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       <div className="rounded-lg border border-dashed bg-background p-4 text-sm text-muted-foreground">
         Los access tokens, app secrets y verify tokens se registran despues en el
-        detalle del canal. No se reciben ni envian mensajes reales en esta fase.
+        detalle del canal. El webhook puede recibir mensajes entrantes cuando
+        Meta quede configurado; el envio real sigue pendiente.
       </div>
 
       {type === "manual" ? (

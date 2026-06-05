@@ -236,6 +236,43 @@ export async function getQuoteItems(
   return ok(((data ?? []) as QuoteItemRow[]).map(mapQuoteItem));
 }
 
+export async function getQuoteItemsForQuotes(
+  tenant: TenantContext,
+  cotizacionIds: string[],
+): Promise<CoreResult<Record<string, QuoteItem[]>>> {
+  if (!canReadQuotes(tenant) || cotizacionIds.length === 0) {
+    return ok({});
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cotizacion_items")
+    .select(
+      "id, cotizacion_id, producto_id, descripcion, cantidad, precio_unitario, descuento, impuesto_porcentaje, subtotal, impuesto_monto, total, orden, created_at, updated_at, catalogo_productos!cotizacion_items_producto_empresa_fkey(codigo, nombre)",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .in("cotizacion_id", cotizacionIds)
+    .order("orden", { ascending: true });
+
+  if (error) {
+    return ok({});
+  }
+
+  return ok(
+    ((data ?? []) as QuoteItemRow[]).reduce<Record<string, QuoteItem[]>>(
+      (accumulator, row) => {
+        const item = mapQuoteItem(row);
+        accumulator[item.cotizacionId] = [
+          ...(accumulator[item.cotizacionId] ?? []),
+          item,
+        ];
+        return accumulator;
+      },
+      {},
+    ),
+  );
+}
+
 export async function getActiveCatalogProductsForQuote(
   tenant: TenantContext,
 ): Promise<CoreResult<QuoteCatalogProduct[]>> {

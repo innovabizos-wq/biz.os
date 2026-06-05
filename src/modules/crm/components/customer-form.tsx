@@ -1,5 +1,6 @@
 import {
   CRM_CLIENTE_ESTADOS,
+  CRM_CLIENTE_GENEROS,
   CRM_CLIENTE_TIPOS,
 } from "@/modules/crm/constants";
 import { createCustomerAction, updateCustomerAction } from "@/modules/crm/actions";
@@ -10,6 +11,12 @@ type CustomerFormProps = {
   assignableUsers: CrmAssignableUser[];
   customer?: CrmCustomer;
   mode: "create" | "update";
+};
+
+const generoLabels: Record<(typeof CRM_CLIENTE_GENEROS)[number], string> = {
+  h: "H - Hombre",
+  m: "M - Mujer",
+  o: "Otro",
 };
 
 export function CustomerForm({
@@ -80,6 +87,22 @@ export function CustomerForm({
             {assignableUsers.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm font-medium">
+          Genero
+          <select
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            defaultValue={customer?.genero ?? "o"}
+            name="genero"
+            required
+          >
+            {CRM_CLIENTE_GENEROS.map((genero) => (
+              <option key={genero} value={genero}>
+                {generoLabels[genero]}
               </option>
             ))}
           </select>

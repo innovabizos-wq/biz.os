@@ -16,7 +16,8 @@ export function InboxVerifyTokenCard({
     <div className="rounded-lg border bg-background p-5">
       <p className="font-semibold">Verify token</p>
       <p className="mt-2 text-sm text-muted-foreground">
-        Si pierdes el valor, debes regenerarlo y actualizarlo en Meta.
+        Este valor solo se muestra al regenerarlo. Guardalo en Meta como Token
+        de verificacion. Si lo pierdes, debes regenerarlo y actualizarlo en Meta.
       </p>
       {verifyToken ? (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3">

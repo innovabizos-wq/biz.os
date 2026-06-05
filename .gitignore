@@ -29,10 +29,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.codex-*.log
+*.log
 
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+
+# local snapshots / handoff archives
+biz.os_revision_*.tar.gz
 
 # vercel
 .vercel

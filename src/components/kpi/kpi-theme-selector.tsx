@@ -149,6 +149,12 @@ const themePreviewColors: Record<KpiThemeValue, [string, string, string][]> = {
     ["#ffca20", "#facc15", "#854d0e"],
     ["#ff2a23", "#dc2626", "#7f1d1d"],
   ],
+  "biz-dashboard": [
+    ["#f8fbff", "#eef4fb", "#dbeafe"],
+    ["#143d7c", "#0f2d62", "#082453"],
+    ["#ffffff", "#f8fbff", "#e8eef6"],
+    ["#2563eb", "#16a34a", "#f59e0b"],
+  ],
 };
 
 function getStoredTheme() {

@@ -7,6 +7,7 @@ type RoleStatusFormProps = {
 };
 
 export function RoleStatusForm({ role }: RoleStatusFormProps) {
+  const isProtected = role.nombre === "Super Admin";
   const nextStatus = role.estado === "activo" ? "inactivo" : "activo";
 
   return (
@@ -20,11 +21,17 @@ export function RoleStatusForm({ role }: RoleStatusFormProps) {
         <div>
           <h3 className="text-base font-semibold">Estado del rol</h3>
           <p className="mt-1 text-sm text-muted-foreground">
+            {isProtected
+              ? "El rol Super Admin protege el acceso total de la empresa y no puede eliminarse."
+              : "No se borra fisicamente ningun rol."}{" "}
             Estado actual: <span className="font-medium">{role.estado}</span>.
-            No se borra fisicamente ningun rol.
           </p>
         </div>
-        <Button type="submit" variant={nextStatus === "activo" ? "default" : "outline"}>
+        <Button
+          disabled={isProtected && nextStatus === "inactivo"}
+          type="submit"
+          variant={nextStatus === "activo" ? "default" : "outline"}
+        >
           {nextStatus === "activo" ? "Activar rol" : "Inactivar rol"}
         </Button>
       </div>

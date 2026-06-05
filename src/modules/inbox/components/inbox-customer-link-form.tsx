@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 type InboxCustomerLinkFormProps = {
   canAssign: boolean;
   conversation: InboxConversation;
+  redirectTo?: string;
   customers: InboxCustomer[];
 };
 
 export function InboxCustomerLinkForm({
   canAssign,
   conversation,
+  redirectTo,
   customers,
 }: InboxCustomerLinkFormProps) {
   if (!canAssign) return null;
@@ -18,6 +20,9 @@ export function InboxCustomerLinkForm({
   return (
     <form action={linkInboxConversationCustomerAction} className="space-y-2">
       <input name="conversacionId" type="hidden" value={conversation.id} />
+      {redirectTo ? (
+        <input name="redirectTo" type="hidden" value={redirectTo} />
+      ) : null}
       <label className="space-y-1 text-sm">
         <span className="font-medium">Cliente CRM</span>
         <select

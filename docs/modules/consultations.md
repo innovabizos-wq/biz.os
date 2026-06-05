@@ -52,9 +52,13 @@ Esto evita rafagas de solicitudes y reduce riesgo de 429.
 
 ## Cotizar
 
-El boton Cotizar guarda la gestion igual que Guardar y redirige al detalle del
-cliente con `notice=cotizacion_pendiente`. La conexion con cotizaciones queda
-para una fase posterior.
+El boton Cotizar guarda la gestion igual que Guardar y luego abre
+`/cotizaciones/nueva?clienteId=...`. La gestion queda registrada como
+interaccion del cliente antes de iniciar la cotizacion.
+
+Guardar no redirige al CRM automaticamente. Cotizar debe crear o reutilizar el
+cliente, guardar la gestion, crear la notificacion de gestion guardada y abrir
+la nueva cotizacion con el cliente precargado.
 
 ## Limitaciones
 

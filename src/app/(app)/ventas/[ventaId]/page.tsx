@@ -92,7 +92,7 @@ export default async function SaleDetailPage({
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Orden comercial congelada desde una cotización aceptada."
+        description="Orden comercial congelada desde una cotizacion confirmada."
         eyebrow="Comercial"
         title={sale.data.numero}
       />

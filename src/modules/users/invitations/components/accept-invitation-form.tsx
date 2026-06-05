@@ -15,7 +15,8 @@ export function AcceptInvitationForm({ token }: AcceptInvitationFormProps) {
       <div>
         <h3 className="text-base font-semibold">Aceptar invitacion</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          La empresa se tomara desde la invitacion. No se solicita empresa_id.
+          La empresa, rol y sucursal se toman desde la invitacion. No se solicita
+          empresa_id.
         </p>
       </div>
 

@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { InboxConversationForm } from "@/modules/inbox/components/inbox-conversation-form";
@@ -61,11 +62,7 @@ export default async function InboxConversationsPage({
         title="Conversaciones"
       />
 
-      {params?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {params.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={params?.error} />
 
       <InboxConversationForm
         canCreate={canCreate}

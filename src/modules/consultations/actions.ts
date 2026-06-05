@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { createClient } from "@/lib/supabase/server";
 import {
+  consultationCustomerStepSchema,
   consultationSaveSchema,
   consultationSearchSchema,
 } from "@/modules/consultations/schemas";
@@ -38,6 +39,23 @@ export type ConsultationModalSearchState = {
 export type ConsultationModalSaveState = {
   clienteId: string | null;
   intent: "quote" | "save" | null;
+  message: string | null;
+  status: "idle" | "error" | "success";
+};
+
+export type ConsultationCustomerStepState = {
+  cliente: {
+    clienteId: string;
+    correo?: string;
+    direccion?: string;
+    documento: string;
+    nombre: string;
+    origen: string;
+    source: "hacienda" | "internal" | "manual";
+    telefono?: string;
+    tipo: "cliente" | "prospecto";
+    whatsapp?: string;
+  } | null;
   message: string | null;
   status: "idle" | "error" | "success";
 };
@@ -75,20 +93,28 @@ function buildSearchRedirectPath(
   return query ? `${returnTo}?${query}` : returnTo;
 }
 
-function buildSavedRedirectPath(
-  _returnTo: "/consultas/nueva" | "/dashboard",
-  _documento: string,
-  intent: "quote" | "save",
-) {
-  const status = intent === "quote" ? "quote_pending" : "saved";
-
-  return `/dashboard?consulta_estado=${status}`;
+function buildSavedRedirectPath() {
+  return "/dashboard?consulta_estado=saved";
 }
 
 function safeErrorMessage(error: RpcError) {
   const message = error.message?.replace(/\s+/g, " ").trim();
 
-  return message ?? "No se pudo completar la accion.";
+  if (!message) return "No se pudo completar la accion.";
+
+  if (message.includes("Permiso") || message.includes("permission")) {
+    return "No tienes permiso para completar esta accion.";
+  }
+
+  if (message.includes("duplicate key") || message.includes("already exists")) {
+    return "Ya existe un registro con esos datos.";
+  }
+
+  if (message.includes("current_empresa_id") || message.includes("empresa_id")) {
+    return "No pudimos validar la empresa activa. Vuelve a iniciar sesion.";
+  }
+
+  return message;
 }
 
 function logConsultationActionError(
@@ -148,6 +174,9 @@ function revalidateConsultationPaths(clienteId?: string) {
   if (clienteId) {
     revalidatePath(`/crm/clientes/${clienteId}`);
   }
+
+  revalidatePath("/cotizaciones");
+  revalidatePath("/cotizaciones/nueva");
 }
 
 export async function searchConsultationSubjectAction(formData: FormData) {
@@ -283,6 +312,7 @@ export async function saveConsultationAction(formData: FormData) {
     const { data, error } = await supabase.rpc("crear_crm_cliente", {
       p_asignado_a: null,
       p_correo: parsed.data.correo ?? null,
+      p_genero: "o",
       p_identificacion: parsed.data.documento,
       p_nombre: parsed.data.nombre,
       p_notas: buildCustomerNotes({
@@ -291,7 +321,7 @@ export async function saveConsultationAction(formData: FormData) {
         situacion: parsed.data.situacion,
         tipoIdentificacion: parsed.data.tipoIdentificacion,
       }),
-      p_origen: "nueva_consulta",
+      p_origen: parsed.data.origen ?? "nueva_consulta",
       p_telefono: parsed.data.telefono ?? null,
       p_tipo: parsed.data.tipo,
       p_whatsapp: parsed.data.whatsapp ?? null,
@@ -320,16 +350,17 @@ export async function saveConsultationAction(formData: FormData) {
   const { error: interactionError } = await supabase.rpc("crear_crm_interaccion", {
     p_cliente_id: clienteId,
     p_resultado:
-      parsed.data.intent === "quote"
-        ? "Gestión guardada. Cotización pendiente de conectar."
-        : "Gestión registrada desde nueva consulta.",
+      parsed.data.interaccionResultado ??
+      (parsed.data.intent === "quote"
+        ? "Gestion guardada. Cotizacion iniciada desde registro rapido."
+        : "Gestion registrada desde registro rapido."),
     p_resumen: buildInteractionSummary({
       descripcionGestion: parsed.data.descripcionGestion,
       documento: parsed.data.documento,
       intent: parsed.data.intent,
       source: parsed.data.source,
     }),
-    p_tipo: "nota",
+    p_tipo: parsed.data.interaccionTipo,
   });
 
   if (interactionError) {
@@ -358,11 +389,10 @@ export async function saveConsultationAction(formData: FormData) {
   revalidateConsultationPaths(clienteId);
 
   if (parsed.data.intent === "quote") {
-    // TODO: conectar con flujo de cotizacion desde consulta.
-    redirect(buildSavedRedirectPath(returnTo, parsed.data.documento, "quote"));
+    redirect(`/cotizaciones/nueva?clienteId=${clienteId}`);
   }
 
-  redirect(buildSavedRedirectPath(returnTo, parsed.data.documento, "save"));
+  redirect(buildSavedRedirectPath());
 }
 
 export async function saveConsultationModalAction(
@@ -437,6 +467,7 @@ export async function saveConsultationModalAction(
     const { data, error } = await supabase.rpc("crear_crm_cliente", {
       p_asignado_a: null,
       p_correo: parsed.data.correo ?? null,
+      p_genero: "o",
       p_identificacion: parsed.data.documento,
       p_nombre: parsed.data.nombre,
       p_notas: buildCustomerNotes({
@@ -445,7 +476,7 @@ export async function saveConsultationModalAction(
         situacion: parsed.data.situacion,
         tipoIdentificacion: parsed.data.tipoIdentificacion,
       }),
-      p_origen: "nueva_consulta",
+      p_origen: parsed.data.origen ?? "nueva_consulta",
       p_telefono: parsed.data.telefono ?? null,
       p_tipo: parsed.data.tipo,
       p_whatsapp: parsed.data.whatsapp ?? null,
@@ -483,16 +514,17 @@ export async function saveConsultationModalAction(
   const { error: interactionError } = await supabase.rpc("crear_crm_interaccion", {
     p_cliente_id: clienteId,
     p_resultado:
-      parsed.data.intent === "quote"
-        ? "Gestion guardada. Cotizacion pendiente de conectar."
-        : "Gestion registrada desde nueva consulta.",
+      parsed.data.interaccionResultado ??
+      (parsed.data.intent === "quote"
+        ? "Gestion guardada. Cotizacion iniciada desde registro rapido."
+        : "Gestion registrada desde registro rapido."),
     p_resumen: buildInteractionSummary({
       descripcionGestion: parsed.data.descripcionGestion,
       documento: parsed.data.documento,
       intent: parsed.data.intent,
       source: parsed.data.source,
     }),
-    p_tipo: "nota",
+    p_tipo: parsed.data.interaccionTipo,
   });
 
   if (interactionError) {
@@ -532,8 +564,112 @@ export async function saveConsultationModalAction(
     intent: parsed.data.intent,
     message:
       parsed.data.intent === "quote"
-        ? "Gestion guardada. Cotizacion pendiente de conectar."
+        ? "Gestion guardada. Abriendo nueva cotizacion."
         : "Gestion guardada correctamente.",
+    status: "success",
+  };
+}
+
+export async function createConsultationCustomerModalAction(
+  _previousState: ConsultationCustomerStepState,
+  formData: FormData,
+): Promise<ConsultationCustomerStepState> {
+  const parsed = consultationCustomerStepSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    return {
+      cliente: null,
+      message: "Completa los datos del cliente antes de continuar.",
+      status: "error",
+    };
+  }
+
+  const access = await requireAdminAccess();
+
+  const supabase = await createClient();
+  let clienteId = parsed.data.clienteId;
+  let source: "hacienda" | "internal" | "manual" = parsed.data.source;
+
+  if (!clienteId) {
+    const existing = await findCrmCustomerByDocument(
+      access.tenant,
+      parsed.data.documento,
+    );
+
+    if (existing.ok && existing.data) {
+      clienteId = existing.data.id;
+      source = "internal";
+    }
+  }
+
+  if (!clienteId) {
+    if (!hasPermission(access.tenant.permissions, "crm.customers.create")) {
+      return {
+        cliente: null,
+        message: "No tienes permiso para crear clientes.",
+        status: "error",
+      };
+    }
+
+    const { data, error } = await supabase.rpc("crear_crm_cliente", {
+      p_asignado_a: null,
+      p_correo: parsed.data.correo ?? null,
+      p_genero: "o",
+      p_identificacion: parsed.data.documento,
+      p_nombre: parsed.data.nombre,
+      p_notas: buildCustomerNotes({
+        direccion: parsed.data.direccion,
+        regimen: parsed.data.regimen,
+        situacion: parsed.data.situacion,
+        tipoIdentificacion: parsed.data.tipoIdentificacion,
+      }),
+      p_origen: parsed.data.origen,
+      p_telefono: parsed.data.telefono ?? null,
+      p_tipo: parsed.data.tipo,
+      p_whatsapp: parsed.data.whatsapp ?? null,
+    });
+
+    if (error) {
+      logConsultationActionError(
+        "createConsultationCustomerModalAction.createCustomer",
+        error,
+        { documento: parsed.data.documento },
+      );
+
+      return {
+        cliente: null,
+        message: `No se pudo crear el cliente: ${safeErrorMessage(error)}`,
+        status: "error",
+      };
+    }
+
+    clienteId = (data as CreatedCustomerRow[] | null)?.[0]?.cliente_id;
+  }
+
+  if (!clienteId) {
+    return {
+      cliente: null,
+      message: "No se pudo preparar el cliente.",
+      status: "error",
+    };
+  }
+
+  revalidateConsultationPaths(clienteId);
+
+  return {
+    cliente: {
+      clienteId,
+      correo: parsed.data.correo,
+      direccion: parsed.data.direccion,
+      documento: parsed.data.documento,
+      nombre: parsed.data.nombre,
+      origen: parsed.data.origen,
+      source,
+      telefono: parsed.data.telefono,
+      tipo: parsed.data.tipo,
+      whatsapp: parsed.data.whatsapp,
+    },
+    message: "Cliente guardado. Continua con la descripcion de la gestion.",
     status: "success",
   };
 }

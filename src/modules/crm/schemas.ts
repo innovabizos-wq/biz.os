@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   CRM_CLIENTE_ESTADOS,
+  CRM_CLIENTE_GENEROS,
   CRM_CLIENTE_TIPOS,
   CRM_INTERACCION_TIPOS,
   CRM_SEGUIMIENTO_ESTADOS,
@@ -23,12 +24,14 @@ const optionalEmailSchema = emailSchema
 
 export const crmClienteTipoSchema = z.enum(CRM_CLIENTE_TIPOS);
 export const crmClienteEstadoSchema = z.enum(CRM_CLIENTE_ESTADOS);
+export const crmClienteGeneroSchema = z.enum(CRM_CLIENTE_GENEROS);
 export const crmInteraccionTipoSchema = z.enum(CRM_INTERACCION_TIPOS);
 export const crmSeguimientoEstadoSchema = z.enum(CRM_SEGUIMIENTO_ESTADOS);
 
 export const createCustomerSchema = z.object({
   asignadoA: optionalFormUuidSchema,
   correo: optionalEmailSchema,
+  genero: crmClienteGeneroSchema.default("o"),
   identificacion: optionalTextSchema,
   nombre: nonEmptyTextSchema,
   notas: optionalTextSchema,

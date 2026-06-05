@@ -12,10 +12,11 @@ export function InboxWebhookInstructions({
         {callbackUrl}
       </p>
       <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-        <li>Webhook GET/POST preparado para verificacion y recepcion.</li>
+        <li>Webhook GET preparado para verificar el verify token.</li>
+        <li>Webhook POST preparado para recibir mensajes entrantes.</li>
         <li>Configura esta URL como callback en Meta.</li>
-        <li>La recepcion guarda mensajes entrantes en Inbox.</li>
-        <li>No se reciben ni envian mensajes reales en esta fase.</li>
+        <li>Suscribe el campo messages para WhatsApp, Messenger o Instagram.</li>
+        <li>La recepcion guarda conversaciones y mensajes entrantes en Inbox.</li>
         <li>El envio de mensajes se implementara en la siguiente fase.</li>
       </ul>
     </div>

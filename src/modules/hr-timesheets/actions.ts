@@ -38,9 +38,12 @@ function redirectWithError(path: string, message: string): never {
 
 function safeErrorMessage(error: RpcError) {
   const message = error.message?.replace(/\s+/g, " ").trim();
-  const code = error.code?.trim();
 
-  return message && code ? `${message} (${code})` : (message ?? "Error RPC.");
+  if (message?.toLowerCase().includes("permission")) {
+    return "No tienes permiso para completar esta accion.";
+  }
+
+  return "No se pudo actualizar planillas. Intenta de nuevo o solicita ayuda al administrador.";
 }
 
 function logTimesheetActionError(

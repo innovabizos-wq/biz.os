@@ -16,6 +16,10 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function isTrue(value: unknown) {
+  return value === true;
+}
+
 function stripKnownSecrets(value: JsonRecord): JsonRecord {
   const safe = { ...value };
 
@@ -59,13 +63,18 @@ export function normalizeWhatsAppWebhook(
 
       for (const item of asArray(value.messages)) {
         const message = asRecord(item);
+        const messageExternalId = asString(message.id);
+        const senderExternalId = asString(message.from);
+
+        if (!messageExternalId || !senderExternalId) continue;
+
         const type = asString(message.type) ?? "texto";
         const text = asString(asRecord(message.text).body);
 
         messages.push({
           accountExternalId,
           channel: "whatsapp",
-          messageExternalId: asString(message.id),
+          messageExternalId,
           messageType: type,
           provider: "meta",
           rawSafe: stripKnownSecrets({
@@ -74,7 +83,7 @@ export function normalizeWhatsAppWebhook(
             metadata,
           }),
           recipientExternalId: accountExternalId,
-          senderExternalId: asString(message.from),
+          senderExternalId,
           text,
           timestamp: unixSecondsToIso(asString(message.timestamp)),
         });
@@ -100,18 +109,26 @@ function normalizeMessagingWebhook(
       const message = asRecord(event.message);
       const recipient = asRecord(event.recipient);
       const sender = asRecord(event.sender);
+      const messageExternalId = asString(message.mid);
+      const senderExternalId = asString(sender.id);
       const text = asString(message.text);
+      const attachments = asArray(message.attachments);
+      const attachmentType = asString(asRecord(attachments[0]).type);
+
+      if (!messageExternalId || !senderExternalId || isTrue(message.is_echo)) {
+        continue;
+      }
 
       messages.push({
         accountExternalId: asString(recipient.id) ?? asString(entryRecord.id),
         channel,
-        messageExternalId: asString(message.mid),
-        messageType: text ? "texto" : "sistema",
+        messageExternalId,
+        messageType: text ? "texto" : (attachmentType ?? "sistema"),
         provider: "meta",
         rawSafe: stripKnownSecrets({ event }),
         recipientExternalId: asString(recipient.id),
-        senderExternalId: asString(sender.id),
-        text,
+        senderExternalId,
+        text: text ?? (attachmentType ? `[${attachmentType}]` : null),
         timestamp: unixMsToIso(event.timestamp),
       });
     }

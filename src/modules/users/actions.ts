@@ -53,9 +53,12 @@ function logUserActionError(
 
 function safeErrorMessage(error: { code?: string; message?: string }) {
   const message = error.message?.replace(/\s+/g, " ").trim();
-  const code = error.code?.trim();
 
-  return message && code ? `${message} (${code})` : (message ?? "Error RPC.");
+  if (message?.toLowerCase().includes("permission")) {
+    return "No tienes permiso para completar esta accion.";
+  }
+
+  return "No se pudo completar la accion. Intenta de nuevo o solicita ayuda al administrador.";
 }
 
 export async function updateUserAction(formData: FormData) {

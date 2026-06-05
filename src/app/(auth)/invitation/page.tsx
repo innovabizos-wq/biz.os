@@ -57,7 +57,7 @@ export default async function InvitationPage({ searchParams }: InvitationPagePro
         <div className="w-full max-w-md space-y-4 rounded-lg border bg-background p-6 shadow-sm">
           <p className="text-sm font-medium text-muted-foreground">biz.os</p>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Aceptar invitacion
+            Crear cuenta para aceptar invitacion
           </h1>
           <p className="text-sm text-muted-foreground">
             Inicia sesion o crea una cuenta con el mismo correo de la
@@ -88,9 +88,8 @@ export default async function InvitationPage({ searchParams }: InvitationPagePro
             Esta cuenta ya pertenece a una empresa
           </h1>
           <p className="text-sm text-muted-foreground">
-            Cierra sesion y usa una cuenta nueva con el correo invitado si
-            quieres aceptar esta invitacion. Las cuentas operativas de biz.os no
-            pueden pertenecer a varias empresas.
+            Esta cuenta ya pertenece a una empresa. Para aceptar esta
+            invitacion usa otro correo.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link className={buttonVariants()} href="/dashboard">
@@ -116,7 +115,7 @@ export default async function InvitationPage({ searchParams }: InvitationPagePro
             Aceptar invitacion
           </h1>
           <p className="text-sm text-muted-foreground">
-            La RPC validara el token, el correo autenticado y que esta cuenta no
+            Se validara el token, el correo autenticado y que esta cuenta no
             pertenezca ya a otra empresa.
           </p>
           {params?.error ? (
