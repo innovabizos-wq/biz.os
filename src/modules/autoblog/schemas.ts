@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 import {
   AUTOBLOG_SOURCE_MODES,
@@ -67,3 +67,18 @@ export type ChangeAutoblogArticleStatusInput = z.infer<
 export type GenerateAutoblogDraftInput = z.infer<
   typeof generateAutoblogDraftSchema
 >;
+export const deleteAutoblogArticleSchema = z.object({ articleId: uuidSchema });
+export const deleteAutoblogTopicSchema = z.object({ topicId: uuidSchema });
+
+export type DeleteAutoblogArticleInput = z.infer<typeof deleteAutoblogArticleSchema>;
+export type DeleteAutoblogTopicInput = z.infer<typeof deleteAutoblogTopicSchema>;
+
+export const updateAutoblogTopicSchema = z.object({
+  topicId: uuidSchema,
+  title: z.string().trim().min(1, "Agrega un tema."),
+  description: optionalTextSchema,
+  sourceMode: autoblogSourceModeSchema.default("manual"),
+  sourceUrlsText: optionalTextSchema,
+});
+
+export type UpdateAutoblogTopicInput = z.infer<typeof updateAutoblogTopicSchema>;

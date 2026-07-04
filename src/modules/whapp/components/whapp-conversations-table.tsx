@@ -1,7 +1,11 @@
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
-import { INBOX_CHANNEL_LABELS, INBOX_STATUS_LABELS } from "@/modules/inbox/constants";
+import { InboxChannelBadge } from "@/modules/inbox/components/inbox-channel-badge";
+import {
+  INBOX_SLA_STATUS_LABELS,
+  INBOX_STATUS_LABELS,
+} from "@/modules/inbox/constants";
 import type { InboxConversation } from "@/modules/inbox/types";
 
 type WhappConversationsTableProps = {
@@ -17,11 +21,45 @@ function statusLabel(status: InboxConversation["estado"]) {
   return INBOX_STATUS_LABELS[status];
 }
 
-function UnreadBadge() {
+function UnreadBadge({ count }: { count: number }) {
   return (
-    <span className="inline-flex rounded-full bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
-      0
+    <span
+      className={[
+        "inline-flex rounded-full px-2 py-1 text-xs font-semibold",
+        count > 0
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted text-muted-foreground",
+      ].join(" ")}
+    >
+      {count}
     </span>
+  );
+}
+
+function SlaBadge({ conversation }: { conversation: InboxConversation }) {
+  const classNameByStatus = {
+    ok: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    pausado: "border-slate-200 bg-slate-50 text-slate-700",
+    riesgo: "border-amber-200 bg-amber-50 text-amber-800",
+    vencido: "border-red-200 bg-red-50 text-red-800",
+  } satisfies Record<InboxConversation["slaStatus"], string>;
+
+  return (
+    <div className="space-y-1">
+      <span
+        className={[
+          "inline-flex rounded-full border px-2 py-1 text-xs font-bold",
+          classNameByStatus[conversation.slaStatus],
+        ].join(" ")}
+      >
+        {INBOX_SLA_STATUS_LABELS[conversation.slaStatus]}
+      </span>
+      {conversation.slaDueAt ? (
+        <p className="whitespace-nowrap text-xs text-muted-foreground">
+          {formatDate(conversation.slaDueAt)}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -39,6 +77,7 @@ export function WhappConversationsTable({
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3">Agente</th>
             <th className="px-4 py-3">No leidos</th>
+            <th className="px-4 py-3">SLA</th>
             <th className="px-4 py-3">Ultimo mensaje</th>
             <th className="px-4 py-3">Fecha</th>
             <th className="px-4 py-3">Accion</th>
@@ -48,9 +87,7 @@ export function WhappConversationsTable({
           {conversations.map((conversation) => (
             <tr className="border-t" key={conversation.id}>
               <td className="px-4 py-3">
-                <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">
-                  {INBOX_CHANNEL_LABELS[conversation.canal]}
-                </span>
+                <InboxChannelBadge channel={conversation.canal} />
               </td>
               <td className="px-4 py-3">
                 <div className="font-medium">
@@ -73,7 +110,10 @@ export function WhappConversationsTable({
                 {conversation.asignadoNombre ?? "Sin asignar"}
               </td>
               <td className="px-4 py-3">
-                <UnreadBadge />
+                <UnreadBadge count={conversation.unreadCount} />
+              </td>
+              <td className="px-4 py-3">
+                <SlaBadge conversation={conversation} />
               </td>
               <td className="max-w-sm truncate px-4 py-3">
                 {conversation.ultimoMensaje ?? "Sin mensajes"}

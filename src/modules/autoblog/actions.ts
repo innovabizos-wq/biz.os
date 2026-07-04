@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -6,21 +6,25 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generateAutoblogDraft } from "@/modules/autoblog/ai";
 import {
-  canCreateAutoblog,
-  canEditAutoblog,
-  canManageAutoblog,
-  canPublishAutoblog,
-  isAutoblogEnabled,
-} from "@/modules/autoblog/queries";
-import {
   changeAutoblogArticleStatusSchema,
   createAutoblogArticleSchema,
   createAutoblogTopicSchema,
   generateAutoblogDraftSchema,
   updateAutoblogArticleSchema,
+  updateAutoblogTopicSchema,
+  deleteAutoblogArticleSchema,
+  deleteAutoblogTopicSchema
 } from "@/modules/autoblog/schemas";
 import { getBusinessContext } from "@/modules/business-context/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
+import {
+  canCreateAutoblog,
+  canDeleteAutoblog,
+  canEditAutoblog,
+  canManageAutoblog,
+  canPublishAutoblog,
+  isAutoblogEnabled,
+} from "@/modules/autoblog/queries";
 
 type RpcError = {
   code?: string;
@@ -299,13 +303,131 @@ export async function generateAutoblogDraftAction(formData: FormData) {
     sourceUrls: parseSourceUrls(parsed.data.sourceUrlsText),
     topic: parsed.data.topic,
   });
+  const fallbackCta = context.ok ? context.data?.preferredCta ?? null : null;
 
   if (!draft.ok) {
     redirectWithError("/autoblog/nuevo", draft.message);
   }
 
-  redirectWithError(
-    "/autoblog/nuevo",
-    "La generacion IA todavia no esta conectada a un flujo de guardado.",
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("crear_autoblog_article", {
+    p_content: draft.data.content,
+    p_cta: clean(draft.data.cta ?? fallbackCta ?? undefined),
+    p_keywords: clean(draft.data.keywords ?? undefined),
+    p_seo_description: clean(draft.data.seoDescription ?? undefined),
+    p_seo_title: clean(draft.data.seoTitle ?? undefined),
+    p_social_facebook: clean(draft.data.socialFacebook ?? undefined),
+    p_social_instagram: clean(draft.data.socialInstagram ?? undefined),
+    p_social_linkedin: clean(draft.data.socialLinkedin ?? undefined),
+    p_social_whatsapp: clean(draft.data.socialWhatsapp ?? undefined),
+    p_source_mode: parsed.data.sourceMode,
+    p_source_notes: clean(parsed.data.sourceNotes),
+    p_source_urls: parseSourceUrls(parsed.data.sourceUrlsText),
+    p_summary: clean(draft.data.summary ?? undefined),
+    p_title: draft.data.title,
+    p_topic: clean(parsed.data.topic),
+  });
+
+  if (error) {
+    logAutoblogActionError("generateAutoblogDraftAction", error, {
+      topic: parsed.data.topic,
+    });
+    redirectWithError(
+      "/autoblog/nuevo",
+      `No se pudo guardar el borrador generado: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  const articleId = (data as CreatedArticleRow[] | null)?.[0]?.article_id;
+
+  revalidateAutoblogPaths(articleId);
+  redirectWithSuccess(
+    articleId ? `/autoblog/${articleId}` : "/autoblog",
+    "Borrador generado con IA.",
   );
+}
+export async function deleteAutoblogArticleAction(formData: FormData) {
+  const parsed = deleteAutoblogArticleSchema.safeParse(getFormData(formData));
+  if (!parsed.success) {
+    redirectWithError("/autoblog", "ID de articulo invalido.");
+  }
+  const access = await requireAutoblogEnabled("/autoblog");
+  if (!canDeleteAutoblog(access.tenant)) {
+    redirectWithError("/autoblog", "No tienes permiso para eliminar articulos.");
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("eliminar_autoblog_article", {
+    p_article_id: parsed.data.articleId,
+  });
+  if (error) {
+    logAutoblogActionError("deleteAutoblogArticleAction", error, {
+      articleId: parsed.data.articleId,
+    });
+    redirectWithError(
+      "/autoblog",
+      `No se pudo eliminar el articulo: ${safeErrorMessage(error)}`,
+    );
+  }
+  revalidateAutoblogPaths(parsed.data.articleId);
+  redirectWithSuccess("/autoblog", "Articulo eliminado.");
+}
+
+export async function deleteAutoblogTopicAction(formData: FormData) {
+  const parsed = deleteAutoblogTopicSchema.safeParse(getFormData(formData));
+  if (!parsed.success) {
+    redirectWithError("/autoblog/nuevo", "ID de tema invalido.");
+  }
+  const access = await requireAutoblogEnabled("/autoblog/nuevo");
+  if (!canDeleteAutoblog(access.tenant)) {
+    redirectWithError("/autoblog/nuevo", "No tienes permiso para eliminar temas.");
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("eliminar_autoblog_topic", {
+    p_topic_id: parsed.data.topicId,
+  });
+  if (error) {
+    logAutoblogActionError("deleteAutoblogTopicAction", error, {
+      topicId: parsed.data.topicId,
+    });
+    redirectWithError(
+      "/autoblog/nuevo",
+      `No se pudo eliminar el tema: ${safeErrorMessage(error)}`,
+    );
+  }
+  revalidateAutoblogPaths();
+  redirectWithSuccess("/autoblog/nuevo", "Tema eliminado.");
+}
+
+
+
+
+
+export async function updateAutoblogTopicAction(formData: FormData) {
+  const parsed = updateAutoblogTopicSchema.safeParse(getFormData(formData));
+  if (!parsed.success) {
+    redirectWithError("/autoblog/nuevo", "Datos del tema invalidos.");
+  }
+  const access = await requireAutoblogEnabled("/autoblog/nuevo");
+  if (!canDeleteAutoblog(access.tenant)) { // TODO: should be canManageAutoblog or canEditAutoblog? We'll use manage for now.
+    redirectWithError("/autoblog/nuevo", "No tienes permiso para actualizar temas.");
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("actualizar_autoblog_topic", {
+    p_topic_id: parsed.data.topicId,
+    p_title: parsed.data.title,
+    p_description: parsed.data.description,
+    p_source_mode: parsed.data.sourceMode,
+    p_source_urls: parseSourceUrls(parsed.data.sourceUrlsText),
+  });
+  if (error) {
+    logAutoblogActionError("updateAutoblogTopicAction", error, {
+      topicId: parsed.data.topicId,
+    });
+    redirectWithError(
+      "/autoblog/nuevo",
+      `No se pudo actualizar el tema: ${safeErrorMessage(error)}`,
+    );
+  }
+  revalidateAutoblogPaths();
+  redirectWithSuccess("/autoblog/nuevo", "Tema actualizado.");
 }

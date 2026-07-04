@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
@@ -8,20 +8,21 @@ import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-ch
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { CustomerForm } from "@/modules/crm/components/customer-form";
 import { CustomerSummaryCard } from "@/modules/crm/components/customer-summary-card";
+import { CustomerTimeline } from "@/modules/crm/components/customer-timeline";
 import { FollowupForm } from "@/modules/crm/components/followup-form";
 import { FollowupsList } from "@/modules/crm/components/followups-list";
 import { InteractionForm } from "@/modules/crm/components/interaction-form";
 import { InteractionsList } from "@/modules/crm/components/interactions-list";
-import { CustomerQuotesList } from "@/modules/quotes/components/customer-quotes-list";
-import { getQuotesForCustomer } from "@/modules/quotes/queries";
-import { CustomerSalesList } from "@/modules/sales/components/customer-sales-list";
-import { getSalesForCustomer } from "@/modules/sales/queries";
 import {
   getAssignableUsersForCrm,
   getCrmCustomerDetail,
   getCrmCustomerFollowups,
   getCrmCustomerInteractions,
 } from "@/modules/crm/queries";
+import { getQuotesForCustomer } from "@/modules/quotes/queries";
+import { CustomerQuotesList } from "@/modules/quotes/components/customer-quotes-list";
+import { CustomerSalesList } from "@/modules/sales/components/customer-sales-list";
+import { getSalesForCustomer } from "@/modules/sales/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type CustomerDetailPageProps = {
@@ -64,7 +65,7 @@ export default async function CustomerDetailPage({
     return (
       <section className="space-y-6">
         <SectionHeader
-          description="No tienes permiso para ver esta sección."
+          description="No tienes permiso para ver esta seccion."
           eyebrow="CRM"
           title="Cliente"
         />
@@ -89,10 +90,22 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
+  const interactionRows = interactions.ok ? interactions.data : [];
+  const followupRows = followups.ok ? followups.data : [];
+  const quoteRows = quotes.ok ? quotes.data : [];
+  const saleRows = sales?.ok ? sales.data : [];
+  const lastActivityAt = [
+    customer.data.updatedAt,
+    ...interactionRows.map((interaction) => interaction.createdAt),
+    ...followupRows.map((followup) => followup.completadoAt ?? followup.fechaProgramada),
+  ]
+    .filter(Boolean)
+    .sort((first, second) => second.localeCompare(first))[0];
+
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Detalle comercial, historial manual y seguimientos básicos."
+        description="Ficha comercial, historial y acciones para avanzar la relacion."
         eyebrow="CRM"
         title={customer.data.nombre}
       />
@@ -103,40 +116,57 @@ export default async function CustomerDetailPage({
         </p>
       ) : null}
 
-      <CustomerSummaryCard customer={customer.data} />
+      <CustomerSummaryCard
+        actions={
+          <>
+            {canCreateQuotes ? (
+              <Link
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+                href={`/cotizaciones/nueva?clienteId=${clienteId}`}
+              >
+                Crear cotizacion
+              </Link>
+            ) : null}
+            {canCreateFollowup ? (
+              <a
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+                href="#seguimientos"
+              >
+                Agendar seguimiento
+              </a>
+            ) : null}
+            {canCreateInteraction ? (
+              <a
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+                href="#interacciones"
+              >
+                Registrar interaccion
+              </a>
+            ) : null}
+          </>
+        }
+        customer={customer.data}
+        lastActivityAt={lastActivityAt}
+        stats={{
+          followups: followupRows.length,
+          interactions: interactionRows.length,
+          quotes: quoteRows.length,
+          sales: saleRows.length,
+        }}
+      />
 
-      <div className="rounded-lg border bg-background p-5">
-        <p className="font-semibold">Siguiente paso</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Avanza la relación comercial desde este cliente.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {canCreateQuotes ? (
-            <Link
-              className={buttonVariants({ size: "sm", variant: "outline" })}
-              href={`/cotizaciones/nueva?clienteId=${clienteId}`}
-            >
-              Crear cotización
-            </Link>
-          ) : null}
-          {canCreateFollowup ? (
-            <a
-              className={buttonVariants({ size: "sm", variant: "outline" })}
-              href="#seguimientos"
-            >
-              Agendar seguimiento
-            </a>
-          ) : null}
-          {canCreateInteraction ? (
-            <a
-              className={buttonVariants({ size: "sm", variant: "outline" })}
-              href="#interacciones"
-            >
-              Registrar interacción
-            </a>
-          ) : null}
-        </div>
-      </div>
+      <section className="space-y-4">
+        <SectionHeader
+          description="Linea de tiempo consolidada con gestiones y seguimientos."
+          title="Historial del cliente"
+        />
+        <CustomerTimeline
+          followups={followupRows}
+          interactions={interactionRows}
+          quotes={quoteRows}
+          sales={saleRows}
+        />
+      </section>
 
       {canEdit ? (
         <CustomerForm
@@ -149,13 +179,13 @@ export default async function CustomerDetailPage({
       {canViewQuotes || canCreateQuotes ? (
         <section className="space-y-4">
           <SectionHeader
-            description="Cotizaciones básicas asociadas a este cliente."
+            description="Cotizaciones basicas asociadas a este cliente."
             title="Cotizaciones"
           />
           <CustomerQuotesList
             canCreate={canCreateQuotes}
             clienteId={clienteId}
-            quotes={quotes.ok ? quotes.data : []}
+            quotes={quoteRows}
           />
         </section>
       ) : null}
@@ -166,7 +196,7 @@ export default async function CustomerDetailPage({
             description="Ventas generadas para este cliente con datos comerciales congelados."
             title="Ventas"
           />
-          <CustomerSalesList sales={sales?.ok ? sales.data : []} />
+          <CustomerSalesList sales={saleRows} />
         </section>
       ) : null}
 
@@ -178,7 +208,7 @@ export default async function CustomerDetailPage({
               title="Interacciones"
             />
             {canCreateInteraction ? <InteractionForm clienteId={clienteId} /> : null}
-            <InteractionsList interactions={interactions.ok ? interactions.data : []} />
+            <InteractionsList interactions={interactionRows} />
           </section>
 
           <section className="space-y-4" id="seguimientos">
@@ -195,7 +225,7 @@ export default async function CustomerDetailPage({
             <FollowupsList
               canEdit={canEditFollowup}
               clienteId={clienteId}
-              followups={followups.ok ? followups.data : []}
+              followups={followupRows}
             />
           </section>
         </div>

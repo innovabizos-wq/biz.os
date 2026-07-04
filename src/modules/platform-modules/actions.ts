@@ -90,6 +90,7 @@ export async function toggleCompanyModuleAction(formData: FormData) {
     redirectWithError(`No se pudo cambiar el modulo: ${safeErrorMessage(error)}`);
   }
 
+  await supabase.rpc("recalcular_salud_modulos_empresa_actual");
   revalidatePath("/admin/modulos");
   revalidatePath("/dashboard");
   revalidatePath("/", "layout");

@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 import { changeInboxChannelStatusAction } from "@/modules/inbox/actions";
+import { InboxChannelBadge } from "@/modules/inbox/components/inbox-channel-badge";
 import {
-  INBOX_CHANNEL_LABELS,
   INBOX_CONNECTION_STATUS_LABELS,
 } from "@/modules/inbox/constants";
 import type { InboxChannelConfig } from "@/modules/inbox/types";
@@ -34,7 +34,9 @@ export function InboxChannelsTable({
         <tbody>
           {channels.map((channel) => (
             <tr className="border-t" key={channel.id}>
-              <td className="px-4 py-3">{INBOX_CHANNEL_LABELS[channel.canal]}</td>
+              <td className="px-4 py-3">
+                <InboxChannelBadge channel={channel.canal} />
+              </td>
               <td className="px-4 py-3 font-medium">{channel.nombre}</td>
               <td className="px-4 py-3">{channel.proveedor}</td>
               <td className="px-4 py-3">

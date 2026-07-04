@@ -1,0 +1,341 @@
+[1mdiff --git a/src/modules/autoblog/ai.ts b/src/modules/autoblog/ai.ts[m
+[1mindex 31ca868..d04e575 100644[m
+[1m--- a/src/modules/autoblog/ai.ts[m
+[1m+++ b/src/modules/autoblog/ai.ts[m
+[36m@@ -1,33 +1,326 @@[m
+[31m-import type { BusinessContext } from "@/modules/business-context/types";[m
+[31m-import type { AutoblogDraft } from "@/modules/autoblog/types";[m
+[31m-[m
+[31m-export type GenerateAutoblogDraftInput = {[m
+[31m-  businessContext: BusinessContext | null;[m
+[31m-  sourceNotes?: string | null;[m
+[31m-  sourceUrls?: string[];[m
+[31m-  topic: string;[m
+[31m-};[m
+[31m-[m
+[31m-export type GenerateAutoblogDraftResult =[m
+[31m-  | {[m
+[31m-      data: AutoblogDraft;[m
+[31m-      ok: true;[m
+[31m-    }[m
+[31m-  | {[m
+[31m-      message: string;[m
+[31m-      ok: false;[m
+[31m-    };[m
+[31m-[m
+[31m-export function isAutoblogAiConfigured() {[m
+[31m-  return false;[m
+[31m-}[m
+[31m-[m
+[31m-export async function generateAutoblogDraft([m
+[31m-  _input: GenerateAutoblogDraftInput,[m
+[31m-): Promise<GenerateAutoblogDraftResult> {[m
+[31m-  return {[m
+[31m-    message:[m
+[31m-      "La generacion IA todavia no esta configurada. Puedes crear el articulo manualmente.",[m
+[31m-    ok: false,[m
+[31m-  };[m
+[31m-}[m
+[32m+[m[32m﻿import "server-only";?[m
+[32m+[m[32m?[m
+[32m+[m[32mimport { z } from "zod";?[m
+[32m+[m[32m?[m
+[32m+[m[32mimport { getConversationProviderAdapter } from "@/lib/ai/providers";?[m
+[32m+[m[32mimport { getConversationLayerProviderSettings } from "@/modules/ai/conversation-layer-service";?[m
+[32m+[m[32mimport type { AiProviderGenerateResult } from "@/lib/ai/providers/types";?[m
+[32m+[m[32mimport type { BusinessContext } from "@/modules/business-context/types";?[m
+[32m+[m[32mimport type { AutoblogDraft } from "@/modules/autoblog/types";?[m
+[32m+[m[32mimport type { ConversationLayerSettingsForProvider } from "@/modules/ai/types";?[m
+[32m+[m[32m?[m
+[32m+[m[32mexport type GenerateAutoblogDraftInput = {?[m
+[32m+[m[32m  businessContext: BusinessContext | null;?[m
+[32m+[m[32m  sourceNotes?: string | null;?[m
+[32m+[m[32m  sourceUrls?: string[];?[m
+[32m+[m[32m  topic: string;?[m
+[32m+[m[32m};?[m
+[32m+[m[32m?[m
+[32m+[m[32mexport type GenerateAutoblogDraftResult =?[m
+[32m+[m[32m  | {?[m
+[32m+[m[32m      data: AutoblogDraft;?[m
+[32m+[m[32m      ok: true;?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m  | {?[m
+[32m+[m[32m      message: string;?[m
+[32m+[m[32m      ok: false;?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m?[m
+[32m+[m[32mexport type AutoblogAiStatus = {?[m
+[32m+[m[32m  canGenerate: boolean;?[m
+[32m+[m[32m  detail: string;?[m
+[32m+[m[32m  href?: string;?[m
+[32m+[m[32m  label: string;?[m
+[32m+[m[32m  tone: "ready" | "warning" | "error";?[m
+[32m+[m[32m};?[m
+[32m+[m[32m?[m
+[32m+[m[32mconst autoblogDraftSchema = z.object({?[m
+[32m+[m[32m  content: z.string().trim().min(120),?[m
+[32m+[m[32m  cta: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  keywords: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  seoDescription: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  seoTitle: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  socialFacebook: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  socialInstagram: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  socialLinkedin: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  socialWhatsapp: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  summary: z.string().trim().nullable().optional(),?[m
+[32m+[m[32m  title: z.string().trim().min(8),?[m
+[32m+[m[32m});?[m
+[32m+[m[32m?[m
+[32m+[m[32mfunction asText(value: string | null | undefined) {?[m
+[32m+[m[32m  return value?.trim() || null;?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32mfunction buildBusinessContext(context: BusinessContext | null) {?[m
+[32m+[m[32mfunction buildBusinessContext(context: BusinessContext | null) {?[m
+[32m+[m[32m  if (!context) return "";?[m
+[32m+[m[32m  const parts = [];?[m
+[32m+[m[32m  if (context.businessSummary) parts.push(context.businessSummary.trim());?[m
+[32m+[m[32m  if (context.targetAudience) parts.push(context.targetAudience.trim());?[m
+[32m+[m[32m  const combined = parts.join(" ");?[m
+[32m+[m[32m  const words = combined.split(/\s+/);?[m
+[32m+[m[32m  if (words.length > 30) {?[m
+[32m+[m[32m    return words.slice(0, 30).join(" ");?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m  return combined;?[m
+[32m+[m[32m}?[m
+[32m+[m[32mfunction parseJsonObject(content: string) {?[m
+[32m+[m[32m  try {?[m
+[32m+[m[32m    return JSON.parse(content) as unknown;?[m
+[32m+[m[32m  } catch {?[m
+[32m+[m[32m    const match = content.match(/\{[\s\S]*\}/);?[m
+[32m+[m[32m    if (!match) {?[m
+[32m+[m[32m      throw new Error("JSON_PARSE_FAILED");?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[32m+[m[32m    return JSON.parse(match[0]) as unknown;?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32mfunction plainTextToDraft(input: GenerateAutoblogDraftInput, content: string): AutoblogDraft {?[m
+[32m+[m[32m  const text = content.trim();?[m
+[32m+[m[32m  const title = input.topic.trim();?[m
+[32m+[m[32m  const summary = text?[m
+[32m+[m[32m    .replace(/<[^>]+>/g, " ")?[m
+[32m+[m[32m    .replace(/\s+/g, " ")?[m
+[32m+[m[32m    .slice(0, 180);?[m
+[32m+[m[32m?[m
+[32m+[m[32m  return {?[m
+[32m+[m[32m    content: text.includes("<p") || text.includes("<h2")?[m
+[32m+[m[32m      ? text?[m
+[32m+[m[32m      : text?[m
+[32m+[m[32m          .split(/\n{2,}/)?[m
+[32m+[m[32m          .map((paragraph) => `<p>${paragraph.trim()}</p>`)?[m
+[32m+[m[32m          .join("\n"),?[m
+[32m+[m[32m    cta: input.businessContext?.preferredCta ?? null,?[m
+[32m+[m[32m    keywords: input.businessContext?.keywords ?? null,?[m
+[32m+[m[32m    seoDescription: summary || null,?[m
+[32m+[m[32m    seoTitle: title,?[m
+[32m+[m[32m    socialFacebook: summary || null,?[m
+[32m+[m[32m    socialInstagram: summary || null,?[m
+[32m+[m[32m    socialLinkedin: summary || null,?[m
+[32m+[m[32m    socialWhatsapp: summary || null,?[m
+[32m+[m[32m    summary: summary || null,?[m
+[32m+[m[32m    title,?[m
+[32m+[m[32m  };?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32masync function generateWithFallback(?[m
+[32m+[m[32m  settings: ConversationLayerSettingsForProvider,?[m
+[32m+[m[32m  messages: Parameters<ReturnType<typeof getConversationProviderAdapter>["generateJson"]>[0]["messages"],?[m
+[32m+[m[32m): Promise<AiProviderGenerateResult> {?[m
+[32m+[m[32m  const adapter = getConversationProviderAdapter(settings.provider);?[m
+[32m+[m[32m?[m
+[32m+[m[32m  try {?[m
+[32m+[m[32m    return await adapter.generateJson({ messages, settings });?[m
+[32m+[m[32m  } catch (error) {?[m
+[32m+[m[32m    const relaxedSettings = {?[m
+[32m+[m[32m      ...settings,?[m
+[32m+[m[32m      outputMode: "natural_text" as const,?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m?[m
+[32m+[m[32m    if (settings.provider === "gemini") {?[m
+[32m+[m[32m      const modelFallbacks = [?[m
+[32m+[m[32m        settings.model,?[m
+[32m+[m[32m        "gemini-2.0-flash",?[m
+[32m+[m[32m        "gemini-1.5-flash",?[m
+[32m+[m[32m      ].filter((model, index, models) => models.indexOf(model) === index);?[m
+[32m+[m[32m?[m
+[32m+[m[32m      let lastError = error;?[m
+[32m+[m[32m      for (const model of modelFallbacks) {?[m
+[32m+[m[32m        try {?[m
+[32m+[m[32m          return await adapter.generateJson({?[m
+[32m+[m[32m            messages,?[m
+[32m+[m[32m            settings: { ...relaxedSettings, model },?[m
+[32m+[m[32m          });?[m
+[32m+[m[32m        } catch (nextError) {?[m
+[32m+[m[32m          lastError = nextError;?[m
+[32m+[m[32m        }?[m
+[32m+[m[32m      }?[m
+[32m+[m[32m?[m
+[32m+[m[32m      throw lastError;?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[32m+[m[32m    return adapter.generateJson({ messages, settings: relaxedSettings });?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32mfunction providerErrorMessage(error: unknown) {?[m
+[32m+[m[32m  if (!(error instanceof Error)) {?[m
+[32m+[m[32m    return "No se pudo generar el articulo con IA.";?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (error.message === "API_KEY_MISSING") {?[m
+[32m+[m[32m    return "Falta la API key real de IA. Revisa Administracion / IA.";?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (error.message.startsWith("PROVIDER_CONNECTION_FAILED:")) {?[m
+[32m+[m[32m    const status = error.message.split(":")[1] ?? "";?[m
+[32m+[m[32m?[m
+[32m+[m[32m    if (status === "400" || status === "404") {?[m
+[32m+[m[32m      return "El proveedor de IA rechazo el modelo configurado. Revisa el modelo en Administracion / IA y prueba la conexion.";?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[32m+[m[32m    if (status === "401" || status === "403") {?[m
+[32m+[m[32m      return "La API key de IA fue rechazada. Guarda una key valida en Administracion / IA.";?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[32m+[m[32m    if (status === "429") {?[m
+[32m+[m[32m      return "El proveedor de IA respondio limite de uso. Espera o revisa la cuota de la API key.";?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[32m+[m[32m    return `El proveedor de IA rechazo la solicitud (HTTP ${status}). Revisa Administracion / IA.`;?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (error.message === "INVALID_AI_RESPONSE") {?[m
+[32m+[m[32m    return "El proveedor de IA no devolvio contenido util. Prueba otro modelo en Administracion / IA.";?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (error.message === "JSON_PARSE_FAILED") {?[m
+[32m+[m[32m    return "La IA respondio en un formato no compatible. Prueba de nuevo o cambia el modelo en Administracion / IA.";?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  return "No se pudo generar el articulo con IA.";?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32mexport async function getAutoblogAiStatus(): Promise<AutoblogAiStatus> {?[m
+[32m+[m[32m  const settings = await getConversationLayerProviderSettings();?[m
+[32m+[m[32m  if (!settings.ok) {?[m
+[32m+[m[32m    return {?[m
+[32m+[m[32m      canGenerate: false,?[m
+[32m+[m[32m      detail: settings.error.message,?[m
+[32m+[m[32m      href: "/admin/ia",?[m
+[32m+[m[32m      label: "IA sin configurar",?[m
+[32m+[m[32m      tone: "error",?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (!settings.data.enabled) {?[m
+[32m+[m[32m    return {?[m
+[32m+[m[32m      canGenerate: false,?[m
+[32m+[m[32m      detail: "Activa la Capa de conversacion en Administracion / IA.",?[m
+[32m+[m[32m      href: "/admin/ia",?[m
+[32m+[m[32m      label: "IA inactiva",?[m
+[32m+[m[32m      tone: "error",?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (!settings.data.apiKey && settings.data.provider !== "ollama-compatible") {?[m
+[32m+[m[32m    return {?[m
+[32m+[m[32m      canGenerate: false,?[m
+[32m+[m[32m      detail: "Falta guardar una API key real para el proveedor de IA.",?[m
+[32m+[m[32m      href: "/admin/ia",?[m
+[32m+[m[32m      label: "Falta API key",?[m
+[32m+[m[32m      tone: "error",?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (settings.data.lastTestStatus !== "success") {?[m
+[32m+[m[32m    return {?[m
+[32m+[m[32m      canGenerate: true,?[m
+[32m+[m[32m      detail: "Hay credencial guardada, pero falta probar la conexion en Administracion / IA.",?[m
+[32m+[m[32m      href: "/admin/ia",?[m
+[32m+[m[32m      label: "IA sin probar",?[m
+[32m+[m[32m      tone: "warning",?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  return {?[m
+[32m+[m[32m    canGenerate: true,?[m
+[32m+[m[32m    detail: "Proveedor conectado y listo para generar borradores.",?[m
+[32m+[m[32m    label: "IA conectada",?[m
+[32m+[m[32m    tone: "ready",?[m
+[32m+[m[32m  };?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32mexport async function isAutoblogAiConfigured() {?[m
+[32m+[m[32m  const status = await getAutoblogAiStatus();?[m
+[32m+[m[32m  return status.canGenerate;?[m
+[32m+[m[32m}?[m
+[32m+[m[32m?[m
+[32m+[m[32mexport async function generateAutoblogDraft(?[m
+[32m+[m[32m  input: GenerateAutoblogDraftInput,?[m
+[32m+[m[32m): Promise<GenerateAutoblogDraftResult> {?[m
+[32m+[m[32m  const settings = await getConversationLayerProviderSettings();?[m
+[32m+[m[32m  if (!settings.ok || !settings.data.enabled) {?[m
+[32m+[m[32m    return {?[m
+[32m+[m[32m      message:?[m
+[32m+[m[32m        "La capa de IA no esta activa. Configura IA en Administracion > IA.",?[m
+[32m+[m[32m      ok: false,?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  if (!settings.data.apiKey && settings.data.provider !== "ollama-compatible") {?[m
+[32m+[m[32m    return {?[m
+[32m+[m[32m      message: "Falta la API key real de IA para generar articulos.",?[m
+[32m+[m[32m      ok: false,?[m
+[32m+[m[32m    };?[m
+[32m+[m[32m  }?[m
+[32m+[m[32m?[m
+[32m+[m[32m  try {?[m
+[32m+[m[32m    const messages = [?[m
+[32m+[m[32m        {?[m
+[32m+[m[32m          role: "system",?[m
+[32m+[m[32m          content: [?[m
+[32m+[m[32m            "Eres el generador de contenido de Autoblog para biz.os.",?[m
+[32m+[m[32m            "Devuelve JSON valido si el modelo lo soporta. Si no, devuelve un articulo completo en texto.",?[m
+[32m+[m[32m            "Genera un borrador util, claro y comercialmente responsable.",?[m
+[32m+[m[32m            "No inventes precios, promociones, certificaciones, cobertura, ni datos legales no provistos.",?[m
+[32m+[m[32m            "Claves requeridas: title, summary, content, seoTitle, seoDescription, keywords, cta, socialFacebook, socialInstagram, socialLinkedin, socialWhatsapp.",?[m
+[32m+[m[32m            "El contenido debe venir en HTML simple con parrafos y subtitulos h2 cuando haga sentido.",?[m
+[32m+[m[32m          ].join("\n"),?[m
+[32m+[m[32m        },?[m
+[32m+[m[32m        {?[m
+[32m+[m[32m          role: "user",?[m
+[32m+[m[32m          content: JSON.stringify({?[m
+[32m+[m[32m            businessContext: buildBusinessContext(input.businessContext),?[m
+[32m+[m[32m            sourceNotes: asText(input.sourceNotes),?[m
+[32m+[m[32m            sourceUrls: input.sourceUrls ?? [],?[m
+[32m+[m[32m            topic: input.topic,?[m
+[32m+[m[32m          }),?[m
+[32m+[m[32m        },?[m
+[32m+[m[32m      ] satisfies Parameters<ReturnType<typeof getConversationProviderAdapter>["generateJson"]>[0]["messages"];?[m
+[32m+[m[32m    const result = await generateWithFallback(settings.data, messages);?[m
+[32m+[m[32m?[m
+[32m+[m[32m    let parsed = autoblogDraftSchema.safeParse(null);?[m
+[32m+[m[32m    try {?[m
+[32m+[m[32m      parsed = autoblogDraftSchema.safeParse(parseJsonObject(result.content));?[m
+[32m+[m[32m    } catch {?[m
+[32m+[m[32m      return {?[m
+[32m+[m[32m        data: plainTextToDraft(input, result.content),?[m
+[32m+[m[32m        ok: true,?[m
+[32m+[m[32m      };?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[32m+[m[32m    if (!parsed.success) {?[m
+[32m+[m[32m      return {?[m
+[32m+[m[32m        data: plainTextToDraft(input, result.content),?[m
+[32m+[m[32m        ok: true,?[m
+[32m+[m[32m      };?[m
+[32m+[m[32m    }?[m
+[32m+[m[32m?[m
+[3

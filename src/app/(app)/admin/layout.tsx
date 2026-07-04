@@ -17,6 +17,7 @@ export default async function AdminLayout({
     "admin.settings.manage",
   ]);
   const showBillingModule = isModuleActive(access.tenant.activeModules, "billing");
+  const showAiModule = isModuleActive(access.tenant.activeModules, "ai");
   const showFiscalSettings =
     showBillingModule &&
     hasAnyPermission(access.tenant.permissions, [
@@ -33,6 +34,12 @@ export default async function AdminLayout({
     "admin.roles.view",
     "admin.roles.manage",
   ]);
+  const showAiSettings =
+    showAiModule &&
+    hasAnyPermission(access.tenant.permissions, [
+      "admin.settings.manage",
+      "ai.reports.use",
+    ]);
   const tabs: AdminTabItem[] = [
     { href: "/admin", label: "Resumen" },
     showAdminSettings ? { href: "/admin/empresa", label: "Empresa" } : null,
@@ -43,6 +50,7 @@ export default async function AdminLayout({
     showAdminSettings ? { href: "/admin/plan", label: "Plan" } : null,
     showAdminSettingsManage ? { href: "/admin/modulos", label: "Modulos" } : null,
     showAdminSettings ? { href: "/admin/apariencia", label: "Apariencia" } : null,
+    showAiSettings ? { href: "/admin/ia", label: "IA" } : null,
     showFiscalSettings ? { href: "/admin/fiscal", label: "Fiscal" } : null,
     showAdminSettings ? { href: "/admin/contexto", label: "Contexto del negocio" } : null,
   ].filter(Boolean) as AdminTabItem[];

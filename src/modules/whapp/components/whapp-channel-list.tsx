@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
+import { InboxChannelBadge } from "@/modules/inbox/components/inbox-channel-badge";
 import {
-  INBOX_CHANNEL_LABELS,
   INBOX_CONNECTION_STATUS_LABELS,
 } from "@/modules/inbox/constants";
 import type { InboxChannelConfig } from "@/modules/inbox/types";
@@ -32,8 +32,8 @@ export function WhappChannelList({ channels }: WhappChannelListProps) {
             <th className="px-4 py-3">Nombre</th>
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3">Conexion</th>
-            <th className="px-4 py-3">phone_number_id</th>
-            <th className="px-4 py-3">WABA</th>
+            <th className="px-4 py-3">Identificador</th>
+            <th className="px-4 py-3">Configuracion</th>
             <th className="px-4 py-3">Duplicado</th>
             <th className="px-4 py-3">Accion</th>
           </tr>
@@ -48,20 +48,24 @@ export function WhappChannelList({ channels }: WhappChannelListProps) {
 
             return (
               <tr className="border-t" key={channel.id}>
-                <td className="px-4 py-3">{INBOX_CHANNEL_LABELS[channel.canal]}</td>
+                <td className="px-4 py-3">
+                  <InboxChannelBadge channel={channel.canal} />
+                </td>
                 <td className="px-4 py-3 font-medium">{channel.nombre}</td>
                 <td className="px-4 py-3">{channel.estado}</td>
                 <td className="px-4 py-3">
                   {INBOX_CONNECTION_STATUS_LABELS[channel.conexionEstado]}
                 </td>
                 <td className="break-all px-4 py-3 font-mono text-xs">
-                  {phoneNumberId ?? "No registrado"}
+                  {channel.identificadorExterno ?? phoneNumberId ?? "No registrado"}
                 </td>
                 <td className="break-all px-4 py-3 font-mono text-xs">
-                  {wabaId ?? "No registrado"}
+                  {channel.canal === "whatsapp"
+                    ? (wabaId ?? "WABA no registrado")
+                    : channel.proveedor}
                 </td>
                 <td className="px-4 py-3">
-                  {duplicate ? (
+                  {channel.canal === "whatsapp" && duplicate ? (
                     <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
                       Revisar
                     </span>

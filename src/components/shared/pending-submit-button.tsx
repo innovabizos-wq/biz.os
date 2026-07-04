@@ -9,6 +9,7 @@ type PendingSubmitButtonProps = {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
+  formAction?: (formData: FormData) => void | Promise<void>;
   icon?: ComponentType<{ "aria-hidden"?: boolean; size?: number }>;
   name?: string;
   pendingLabel: string;
@@ -22,6 +23,7 @@ export function PendingSubmitButton({
   children,
   className,
   disabled = false,
+  formAction,
   icon: Icon,
   name,
   pendingLabel,
@@ -36,6 +38,7 @@ export function PendingSubmitButton({
     <Button
       className={className}
       disabled={disabled || pending}
+      formAction={formAction}
       name={name}
       size={size}
       title={title}

@@ -106,8 +106,13 @@ function safeErrorMessage(error: RpcError) {
     return "No tienes permiso para completar esta accion.";
   }
 
-  if (message.includes("duplicate key") || message.includes("already exists")) {
-    return "Ya existe un registro con esos datos.";
+  if (
+    error.code === "23505" ||
+    message.includes("duplicate key") ||
+    message.includes("already exists") ||
+    message.includes("Ya existe un cliente con esa identificacion")
+  ) {
+    return "Ya existe un cliente con esa identificacion en esta empresa.";
   }
 
   if (message.includes("current_empresa_id") || message.includes("empresa_id")) {

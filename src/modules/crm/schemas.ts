@@ -13,6 +13,10 @@ import {
   optionalTextSchema,
   uuidSchema,
 } from "@/lib/validation/shared-schemas";
+import {
+  isValidCrmIdentification,
+  normalizeCrmIdentification,
+} from "@/modules/crm/identification";
 
 const optionalFormUuidSchema = uuidSchema
   .optional()
@@ -21,6 +25,15 @@ const optionalFormUuidSchema = uuidSchema
 const optionalEmailSchema = emailSchema
   .optional()
   .or(z.literal("").transform(() => undefined));
+
+const optionalCrmIdentificationSchema = z
+  .string()
+  .trim()
+  .transform(normalizeCrmIdentification)
+  .refine((value) => value === "" || isValidCrmIdentification(value), {
+    message: "La identificacion debe tener entre 9 y 12 digitos numericos.",
+  })
+  .transform((value) => value || undefined);
 
 export const crmClienteTipoSchema = z.enum(CRM_CLIENTE_TIPOS);
 export const crmClienteEstadoSchema = z.enum(CRM_CLIENTE_ESTADOS);
@@ -32,7 +45,7 @@ export const createCustomerSchema = z.object({
   asignadoA: optionalFormUuidSchema,
   correo: optionalEmailSchema,
   genero: crmClienteGeneroSchema.default("o"),
-  identificacion: optionalTextSchema,
+  identificacion: optionalCrmIdentificationSchema,
   nombre: nonEmptyTextSchema,
   notas: optionalTextSchema,
   origen: optionalTextSchema,

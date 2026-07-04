@@ -50,6 +50,9 @@ export default async function AdminModulosPage({
       <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
         Los modulos activos definen que funciones estan disponibles para esta
         empresa. Los permisos definen que usuarios pueden usar esas funciones.
+        Al activar un modulo opcional, los roles Administrador y Super Admin
+        reciben automaticamente los permisos base para que sea visible y usable
+        sin editar roles manualmente.
       </p>
 
       {modules.ok && modules.data.length > 0 ? (
@@ -66,8 +69,9 @@ export default async function AdminModulosPage({
       )}
 
       <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-        En una fase posterior esta pantalla respetara modulos permitidos por
-        plan, modulos bloqueados y solicitudes de activacion.
+        Mobile se mantiene como modulo API-only. Reports queda disponible como
+        Reportes dentro de la navegacion principal cuando el modulo y permisos
+        estan activos.
       </p>
     </section>
   );

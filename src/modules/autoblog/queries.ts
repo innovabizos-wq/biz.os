@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import type {
@@ -216,3 +216,9 @@ export async function getAutoblogTopics(
 
   return ok(((data ?? []) as AutoblogTopicRow[]).map(mapTopic));
 }
+
+
+export function canDeleteAutoblog(tenant: TenantContext) {
+  return canManageAutoblog(tenant);
+}
+

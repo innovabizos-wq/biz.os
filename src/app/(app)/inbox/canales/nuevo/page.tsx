@@ -46,7 +46,8 @@ export default async function NewInboxChannelPage({
       <div className="rounded-lg border border-dashed bg-background p-4 text-sm text-muted-foreground">
         Los access tokens, app secrets y verify tokens se registran despues en el
         detalle del canal. El webhook puede recibir mensajes entrantes cuando
-        Meta quede configurado; el envio real sigue pendiente.
+        Meta quede configurado; el envio real queda disponible cuando el canal
+        tenga credenciales completas y conversacion compatible.
       </div>
 
       {type === "manual" ? (

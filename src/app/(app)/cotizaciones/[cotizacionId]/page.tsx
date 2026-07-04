@@ -157,8 +157,22 @@ export default async function QuoteDetailPage({
         />
       </section>
 
-      <div className="rounded-lg border border-dashed bg-background p-5 text-sm text-muted-foreground">
-        PDF y envio se implementaran en una fase posterior.
+      <div className="rounded-lg border bg-background p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold">Documento para cliente</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Genera una version imprimible para guardar como PDF o compartir
+              por correo, WhatsApp u otro canal comercial.
+            </p>
+          </div>
+          <Link
+            className={buttonVariants({ variant: "outline" })}
+            href={`/cotizaciones/${quote.data.id}/imprimir`}
+          >
+            Imprimir / guardar PDF
+          </Link>
+        </div>
       </div>
     </section>
   );

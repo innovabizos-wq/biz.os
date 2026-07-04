@@ -340,6 +340,34 @@
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
+.app-time-clock-status {
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  background: #f8fafc;
+  color: #475569;
+}
+
+.app-time-clock[data-status-tone="active"] .app-time-clock-status {
+  border-color: rgba(22, 163, 74, 0.18);
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.app-time-clock[data-status-tone="closed"] .app-time-clock-status {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.app-time-clock[data-status-tone="disconnected"] .app-time-clock-status {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.app-time-clock-initial {
+  display: inline;
+}
+
 .timesheet-dashboard-hero {
   background:
     radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.16), transparent 28%),
@@ -2941,18 +2969,142 @@ body:has(> div.grid.min-h-screen) {
 main.flex-1 {
   min-width: 0;
   max-width: 100%;
-  height: calc(100vh - 24px);
-  max-height: calc(100vh - 24px);
+  height: calc(100vh - 108px);
+  max-height: calc(100vh - 108px);
   overflow: hidden;
+  margin-top: 12px;
   padding: 0 !important;
+}
+
+.dashboard-topbar-shell {
+  position: relative;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(420px, 620px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 76px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 18% 28%, rgba(16, 199, 197, 0.14), transparent 18rem),
+    radial-gradient(circle at 78% 28%, rgba(255, 196, 0, 0.14), transparent 20rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.92));
+  padding: 10px 22px;
+  box-shadow:
+    0 20px 44px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-topbar-greeting {
+  min-width: 0;
+}
+
+.dashboard-topbar-greeting h1 {
+  margin: 0;
+  color: #020617;
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.dashboard-topbar-greeting p {
+  margin: 4px 0 0;
+  color: #71717a;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.dashboard-topbar-search {
+  justify-self: center;
+  width: min(100%, 620px);
+}
+
+.dashboard-topbar-actions {
+  position: relative;
+  z-index: 90;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.dashboard-topbar-actions .notification-bell-root,
+.dashboard-topbar-actions .app-time-clock {
+  position: relative;
+  inset: auto;
+  z-index: 90;
+}
+
+.dashboard-topbar-actions .notification-bell-button {
+  width: 42px;
+  height: 42px;
+  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+}
+
+.dashboard-topbar-actions .notification-bell-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.dashboard-topbar-actions .app-time-clock {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.dashboard-topbar-actions .app-time-clock-summary {
+  height: 42px;
+  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 5px 9px 5px 6px;
+  box-shadow: none;
+}
+
+.dashboard-topbar-actions .app-time-clock-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.dashboard-topbar-actions .app-time-clock-status {
+  min-height: 20px;
+  padding: 3px 8px;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.dashboard-topbar-actions .app-time-clock-menu-icon {
+  margin-left: 0;
+}
+
+.dashboard-topbar-actions .app-time-clock details > div {
+  z-index: 120;
+  right: 0;
+  width: 210px;
+}
+
+.dashboard-topbar-actions .notification-bell-root > .absolute,
+.dashboard-topbar-actions .notification-bell-root [class*="absolute"][class*="top-12"] {
+  z-index: 120;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-topbar-shell {
+    grid-template-columns: minmax(160px, 0.9fr) minmax(260px, 1.2fr) auto;
+    gap: 12px;
+  }
 }
 
 body:not(:has(.dashboard-screen)) main.flex-1 {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 22px;
-  background:
-    radial-gradient(circle at 82% 12%, rgba(219, 234, 254, 0.48), transparent 24rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.92));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.92));
   box-shadow:
     0 20px 44px rgba(15, 23, 42, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -3070,6 +3222,8 @@ body:has(.dashboard-screen) *::-webkit-scrollbar {
 }
 
 body:has(.dashboard-screen) {
+  --dashboard-rail-width: clamp(284px, 15.8vw, 304px);
+  --dashboard-rail-gap: clamp(16px, 1.25vw, 24px);
   overflow: hidden;
 }
 
@@ -3138,13 +3292,15 @@ body:has(.dashboard-screen) {
 }
 
 .dashboard-screen {
+  position: relative;
+  z-index: 1;
+  --dashboard-rail-width: clamp(284px, 15.8vw, 304px);
+  --dashboard-rail-gap: clamp(16px, 1.25vw, 24px);
   height: calc(100vh - 24px);
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 22px;
   background:
-    radial-gradient(circle at 18% 4%, rgba(16, 199, 197, 0.16), transparent 22rem),
-    radial-gradient(circle at 76% 8%, rgba(255, 196, 0, 0.15), transparent 24rem),
     radial-gradient(circle at 50% 94%, rgba(207, 214, 218, 0.48), transparent 28rem),
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 248, 0.94));
   box-shadow:
@@ -3152,28 +3308,40 @@ body:has(.dashboard-screen) {
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
   color: #08153d;
   padding: clamp(14px, 1.35vw, 22px);
+  padding-right: clamp(14px, 1.35vw, 22px);
+}
+
+.dashboard-screen::after {
+  content: none;
 }
 
 .dashboard-topbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(520px, 760px) minmax(300px, 1fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(440px, 700px) minmax(260px, 1fr);
   align-items: center;
-  gap: 18px;
+  gap: clamp(14px, 1.2vw, 20px);
   min-height: 58px;
 }
 
 .dashboard-topbar h1 {
   color: #08153d;
-  font-size: clamp(0.96rem, 1.12vw, 1.16rem) !important;
-  font-weight: 600;
-  line-height: 1.05;
+  font-size: clamp(1.08rem, 1.08vw, 1.24rem) !important;
+  font-weight: 800;
+  line-height: 1.08;
 }
 
 .dashboard-topbar p,
 .dashboard-topbar span {
   color: #53627f;
-  font-size: 0.78rem;
-  line-height: 1.15;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.dashboard-ai-command {
+  position: relative;
+  width: min(100%, 700px);
+  justify-self: center;
 }
 
 .dashboard-ai-search {
@@ -3183,24 +3351,24 @@ body:has(.dashboard-screen) {
   align-items: center;
   gap: 12px;
   justify-self: center;
-  width: min(100%, 760px);
-  min-height: 68px;
+  width: 100%;
+  min-height: 60px;
   overflow: hidden;
-  border: 1px solid rgba(23, 27, 32, 0.58);
-  border-radius: 22px;
+  border: 1px solid rgba(23, 27, 32, 0.5);
+  border-radius: 18px;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 248, 249, 0.96) 100%);
-  padding: 10px 14px 10px 18px;
+  padding: 8px 12px 8px 16px;
   box-shadow:
-    0 18px 34px rgba(15, 23, 42, 0.12),
-    0 6px 12px rgba(15, 23, 42, 0.1),
+    0 14px 26px rgba(15, 23, 42, 0.1),
+    0 5px 10px rgba(15, 23, 42, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     inset 0 0 0 1px rgba(255, 255, 255, 0.42),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.12);
+    inset 0 -1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .dashboard-topbar-reserved {
-  min-height: 68px;
+  min-height: 60px;
 }
 
 .dashboard-ai-search::after {
@@ -3230,13 +3398,13 @@ body:has(.dashboard-screen) {
 .dashboard-ai-search input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 42px;
+  height: 38px;
   border: 0;
   background: transparent;
   color: #171b20;
-  font-size: 0.9rem;
-  font-weight: 800;
-  line-height: 42px;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 38px;
   outline: none;
   text-align: left;
 }
@@ -3274,8 +3442,8 @@ body:has(.dashboard-screen) {
 .dashboard-ai-search button {
   flex: 0 0 auto;
   display: inline-flex;
-  height: 42px;
-  width: 42px;
+  height: 40px;
+  width: 40px;
   align-items: center;
   justify-content: center;
   border-radius: 12px;
@@ -3299,12 +3467,91 @@ body:has(.dashboard-screen) {
   font-size: 0.85rem;
 }
 
+.dashboard-ai-search button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.dashboard-ai-spin {
+  animation: dashboard-ai-spin 0.8s linear infinite;
+}
+
+.dashboard-ai-result {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 12px;
+  z-index: 20;
+  display: inline-flex;
+  max-width: calc(100% - 24px);
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(22, 163, 74, 0.24);
+  border-radius: 10px;
+  background: rgba(240, 253, 244, 0.98);
+  padding: 7px 10px;
+  color: #166534;
+  font-size: 0.78rem;
+  font-weight: 750;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.dashboard-ai-result[data-status="error"] {
+  border-color: rgba(220, 38, 38, 0.2);
+  background: rgba(254, 242, 242, 0.98);
+  color: #991b1b;
+}
+
+.dashboard-ai-command-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 19;
+  display: grid;
+  width: min(100%, 420px);
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 18px 35px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.dashboard-ai-result + .dashboard-ai-command-menu {
+  top: calc(100% + 46px);
+}
+
+.dashboard-ai-command-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: transparent;
+  padding: 10px 12px;
+  color: #171b20;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-align: left;
+}
+
+.dashboard-ai-command-menu button:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-ai-command-menu button:hover,
+.dashboard-ai-command-menu button:focus-visible {
+  background: rgba(16, 199, 197, 0.09);
+  outline: none;
+}
+
 .dashboard-kpi-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(220px, 1fr));
-  gap: clamp(18px, 1.8vw, 32px);
-  margin-top: 18px;
-  padding: clamp(10px, 1.3vw, 18px);
+  gap: clamp(14px, 1.25vw, 22px);
+  margin-top: 14px;
+  padding: clamp(10px, 1vw, 14px);
   border-radius: 18px;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 32%),
@@ -3324,15 +3571,15 @@ body:has(.dashboard-screen) {
 .dashboard-kpi-card {
   position: relative;
   display: flex;
-  height: clamp(142px, 8.6vw, 164px);
-  min-height: 142px;
+  height: clamp(118px, 7.2vw, 136px);
+  min-height: 118px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: 18px;
-  padding: clamp(22px, 1.3vw, 28px) clamp(22px, 1.5vw, 30px) clamp(20px, 1.2vw, 26px);
+  padding: clamp(16px, 1.05vw, 22px);
   text-decoration: none;
   box-shadow:
     0 18px 26px rgba(15, 23, 42, 0.18),
@@ -3428,11 +3675,11 @@ body:has(.dashboard-screen) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-family: var(--font-heading);
-  font-size: clamp(1.22rem, 1.18vw, 1.48rem);
+  font-size: clamp(1rem, 1vw, 1.2rem);
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.12;
-  margin-bottom: clamp(15px, 0.95vw, 20px);
+  margin-bottom: clamp(10px, 0.7vw, 14px);
   text-align: center;
   text-shadow:
     0 1px 0 rgba(255, 255, 255, 0.08),
@@ -3442,7 +3689,7 @@ body:has(.dashboard-screen) {
 .dashboard-kpi-line {
   width: 72%;
   height: 1px;
-  margin-bottom: clamp(17px, 1vw, 22px);
+  margin-bottom: clamp(10px, 0.7vw, 14px);
   background:
     linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
 }
@@ -3456,7 +3703,7 @@ body:has(.dashboard-screen) {
   max-width: 100%;
   overflow: visible;
   font-family: var(--font-heading);
-  font-size: clamp(2.18rem, 2.18vw, 3rem) !important;
+  font-size: clamp(1.82rem, 1.72vw, 2.35rem) !important;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1;
@@ -3468,7 +3715,7 @@ body:has(.dashboard-screen) {
 }
 
 .dashboard-kpi-card[data-accent="dark"] .dashboard-kpi-value {
-  font-size: clamp(1.88rem, 1.86vw, 2.45rem) !important;
+  font-size: clamp(1.62rem, 1.48vw, 2rem) !important;
 }
 
 .dashboard-sparkline {
@@ -3482,8 +3729,8 @@ body:has(.dashboard-screen) {
 .dashboard-grid-main,
 .dashboard-grid-bottom {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .dashboard-grid-main {
@@ -4382,6 +4629,10 @@ body:has(.dashboard-screen) {
 }
 
 @media (max-width: 1500px) {
+  body:has(.dashboard-screen) {
+    --dashboard-rail-width: clamp(268px, 19vw, 292px);
+  }
+
   .dashboard-sparkline {
     display: none;
   }
@@ -4393,6 +4644,25 @@ body:has(.dashboard-screen) {
 }
 
 @media (max-width: 1180px) {
+  .dashboard-screen {
+    height: auto;
+    min-height: calc(100vh - 24px);
+    overflow: visible;
+    padding-right: clamp(14px, 1.35vw, 22px);
+  }
+
+  .dashboard-screen::after {
+    display: none;
+  }
+
+  body:has(.dashboard-screen) .app-notification-topbar {
+    right: 32px;
+  }
+
+  body:has(.dashboard-screen) .app-session-topbar {
+    display: none;
+  }
+
   .dashboard-topbar,
   .dashboard-grid-main {
     grid-template-columns: 1fr;
@@ -4476,7 +4746,7 @@ body:has(.dashboard-screen) {
 
 body:has(.dashboard-screen) .app-notification-topbar {
   top: 40px;
-  right: 312px;
+  right: calc(var(--dashboard-rail-width, 304px) + var(--dashboard-rail-gap, 24px) + 26px);
 }
 
 body:has(.dashboard-screen) .app-notification-topbar button {
@@ -4515,130 +4785,235 @@ body:has(.dashboard-screen) .app-notification-topbar button:hover {
 
 body:has(.dashboard-screen) .app-session-topbar {
   display: block;
+  right: calc(var(--dashboard-rail-gap, 24px) + 10px);
 }
 
 body:has(.dashboard-screen) .app-session-topbar .app-time-clock {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px auto;
-  align-items: center;
-  gap: 12px;
-  width: 286px;
-  min-height: 70px;
-  border: 1px solid rgba(23, 27, 32, 0.18);
-  border-radius: 18px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 251, 0.92) 100%);
-  padding: 10px 12px 10px 18px;
-  box-shadow:
-    0 16px 30px rgba(15, 23, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.06);
+  position: relative;
+  display: block;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
 }
 
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock > .flex {
+body:has(.dashboard-screen) .app-session-topbar summary {
+  width: auto;
+  min-width: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: #08153d !important;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+  padding: 6px 10px 6px 8px;
+}
+
+body:has(.dashboard-screen) .app-session-topbar summary svg {
+  width: 13px;
+  height: 13px;
+  color: #64748b;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-avatar {
+  width: 34px;
+  height: 34px;
+  border-color: rgba(148, 163, 184, 0.32);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-initial {
+  display: inline;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.app-time-clock-initial {
+  display: inline;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-status {
+  padding-inline: 0.4rem;
+  font-size: 0.62rem;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-name {
+  max-width: 140px;
+  margin-top: 1px;
+  color: #0f172a;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock > div {
+  width: 220px;
+  border-radius: 18px;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock > div > .mt-3.grid,
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock > div > .grid {
+  margin-top: 0.5rem;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock > a {
+  display: none;
+}
+
+body:has(.dashboard-screen) .dashboard-topbar {
+  grid-template-columns: minmax(260px, 1fr) minmax(440px, 700px) minmax(260px, 1fr);
+}
+
+body:has(.dashboard-screen) .dashboard-topbar h1 {
+  font-size: clamp(1.08rem, 1.08vw, 1.24rem) !important;
+}
+
+body:has(.dashboard-screen) .dashboard-topbar p,
+body:has(.dashboard-screen) .dashboard-topbar span {
+  font-size: 0.82rem;
+}
+
+body:has(.dashboard-screen) .app-notification-topbar button,
+body:has(.dashboard-screen) .app-notification-topbar button svg {
+  color: #ffc400;
+}
+
+body:has(.dashboard-screen) .app-notification-topbar button svg {
+  filter: drop-shadow(0 5px 10px rgba(217, 143, 0, 0.2));
+}
+
+body:has(.dashboard-screen) .app-notification-topbar button:hover {
+  color: #d98f00;
+}
+
+.app-session-topbar {
+  display: block;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock {
+  grid-template-columns: minmax(0, 1fr) 46px;
+}
+
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-profile {
   display: contents;
 }
 
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock > .flex > div:first-child {
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-avatar {
   grid-column: 2;
   grid-row: 1;
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
   border: 3px solid #ffffff;
   background: linear-gradient(135deg, #1d4ed8, #0f172a);
   color: #ffffff;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
 }
 
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock > .flex > div:first-child svg {
-  display: none;
-}
-
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock-initial {
-  display: inline;
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 900;
-}
-
-.app-time-clock-initial {
-  display: none;
-}
-
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock > .flex > div:nth-child(2) {
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-meta {
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
   text-align: right;
 }
 
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock p {
-  margin: 0;
-  color: #08153d;
-  font-size: 0.86rem;
-  font-weight: 900;
-}
-
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock .inline-flex {
-  margin-top: 2px;
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-status {
+  justify-content: center;
+  min-height: 28px;
   max-width: 100%;
-  background: transparent;
-  padding: 0;
-  color: #53627f;
-  font-size: 0.72rem;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.73rem;
+  font-weight: 900;
+  line-height: 1;
   text-transform: none;
 }
 
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-name {
+  margin-top: 5px;
+  color: #53627f;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
 body:has(.dashboard-screen) .app-session-topbar details {
-  grid-column: 3;
-  grid-row: 1;
+  position: absolute;
+  inset: 0;
+  grid-column: 1 / -1;
   margin: 0;
 }
 
 body:has(.dashboard-screen) .app-session-topbar summary {
-  width: 32px;
-  height: 32px;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
   padding: 0;
-  border-radius: 999px;
-  background: transparent !important;
-  color: #08153d !important;
-  box-shadow: none !important;
+  border-radius: 18px;
+  color: transparent !important;
   font-size: 0;
 }
 
-body:has(.dashboard-screen) .app-session-topbar summary svg {
-  width: 17px;
-  height: 17px;
-}
-
-body:has(.dashboard-screen) .app-session-topbar details > div {
-  top: calc(100% + 8px) !important;
-  bottom: auto !important;
-  left: auto !important;
-  right: 0 !important;
-  width: 210px !important;
-}
-
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock > .mt-3.grid {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  width: 86px;
-  margin: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock:hover > .mt-3.grid,
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock:focus-within > .mt-3.grid {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-body:has(.dashboard-screen) .app-session-topbar .app-time-clock > a {
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-menu-label,
+body:has(.dashboard-screen) .app-session-topbar .app-time-clock-menu-icon {
   display: none;
+}
+
+.dashboard-empty-board {
+  display: grid;
+  min-height: calc(100vh - 3rem);
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 18% 4%, rgba(16, 199, 197, 0.16), transparent 22rem),
+    radial-gradient(circle at 76% 8%, rgba(255, 196, 0, 0.15), transparent 24rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 248, 0.94));
+  padding: 24px;
+  color: #08153d;
+}
+
+.dashboard-empty-board > div {
+  display: contents;
+}
+
+.dashboard-empty-board span {
+  color: #007d82;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-empty-board h1 {
+  margin-top: 8px;
+  color: #08153d;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.dashboard-empty-board p {
+  margin: 0;
+  color: #53627f;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dashboard-empty-board a {
+  display: inline-flex;
+  margin-top: 22px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  padding: 0 18px;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #08153d, #007d82);
+  box-shadow: 0 12px 22px rgba(8, 21, 61, 0.16);
 }
 
 [data-kpi-theme="biz-dashboard"] {
@@ -4816,6 +5191,12 @@ body.theme-biz-dashboard .premium-kpi-sparkbox {
   }
 }
 
+@keyframes dashboard-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .app-filter-shell {
   position: relative;
   overflow: hidden;
@@ -4951,4 +5332,61 @@ th {
 .dashboard-top3-axis span {
   font-family: var(--font-sans) !important;
   font-weight: 400 !important;
+}
+
+.dashboard-topbar-shell {
+  border-radius: 22px !important;
+  background:
+    radial-gradient(circle at 17% 45%, rgba(16, 199, 197, 0.28), transparent 20rem),
+    radial-gradient(circle at 78% 42%, rgba(255, 196, 0, 0.26), transparent 22rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 250, 0.94)) !important;
+}
+
+.dashboard-topbar-shell .dashboard-topbar-greeting h1 {
+  font-family: var(--font-sans) !important;
+  font-size: 1.22rem !important;
+  font-weight: 650 !important;
+  line-height: 1.1 !important;
+}
+
+.dashboard-topbar-shell .dashboard-topbar-greeting p {
+  font-size: 0.72rem !important;
+  line-height: 1.15 !important;
+}
+
+.dashboard-screen {
+  background:
+    radial-gradient(circle at 50% 94%, rgba(207, 214, 218, 0.36), transparent 28rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 248, 249, 0.94)) !important;
+}
+.autoblog-reader-preview {
+  color: hsl(var(--foreground));
+  font-size: 0.98rem;
+  line-height: 1.75;
+}
+
+.autoblog-reader-preview > * + * {
+  margin-top: 1rem;
+}
+
+.autoblog-reader-preview h2,
+.autoblog-reader-preview h3 {
+  color: hsl(var(--foreground));
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-top: 1.6rem;
+}
+
+.autoblog-reader-preview ul,
+.autoblog-reader-preview ol {
+  padding-left: 1.25rem;
+}
+
+.autoblog-reader-preview li + li {
+  margin-top: 0.45rem;
+}
+
+.autoblog-reader-preview strong {
+  font-weight: 700;
 }

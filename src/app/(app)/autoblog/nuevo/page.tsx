@@ -2,10 +2,16 @@ import Link from "next/link";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
+import { PendingSubmitButton } from "@/components/shared/pending-submit-button";
 import { SectionHeader } from "@/components/shared/section-header";
-import { isAutoblogAiConfigured } from "@/modules/autoblog/ai";
+import { generateAutoblogDraftAction } from "@/modules/autoblog/actions";
+import { getAutoblogAiStatus } from "@/modules/autoblog/ai";
 import { AutoblogArticleForm } from "@/modules/autoblog/components/autoblog-article-form";
 import { AutoblogTopicForm } from "@/modules/autoblog/components/autoblog-topic-form";
+import {
+  AUTOBLOG_SOURCE_MODE_LABELS,
+  AUTOBLOG_SOURCE_MODES,
+} from "@/modules/autoblog/constants";
 import {
   canCreateAutoblog,
   isAutoblogEnabled,
@@ -58,7 +64,7 @@ export default async function NewAutoblogArticlePage({
 
   const context = await getBusinessContext(access.tenant);
   const hasContext = context.ok && Boolean(context.data);
-  const aiConfigured = isAutoblogAiConfigured();
+  const aiStatus = await getAutoblogAiStatus();
 
   return (
     <section className="space-y-6">
@@ -84,15 +90,95 @@ export default async function NewAutoblogArticlePage({
         </div>
       ) : null}
 
-      {!aiConfigured ? (
+      {!aiStatus.canGenerate ? (
         <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-          La generacion automatica todavia no esta configurada. Puedes crear el
-          articulo manualmente.
+          La generacion automatica todavia no esta lista. Puedes crear el articulo
+          manualmente.
         </p>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
+          <section className="rounded-lg border bg-background p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold">Generar con IA</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Describe el tema y biz.os crea un borrador editable con SEO y copys.
+                </p>
+              </div>
+              <span className="rounded-full border px-2.5 py-1 text-xs font-medium">
+                {aiStatus.label}
+              </span>
+            </div>
+
+            <form action={generateAutoblogDraftAction} className="mt-4 grid gap-4">
+              <fieldset className="grid gap-4" disabled={!canCreate || !aiStatus.canGenerate}>
+                <label className="space-y-1 text-sm">
+                  <span className="font-medium">Tema del articulo</span>
+                  <input
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    name="topic"
+                    placeholder="Ej. Como elegir el producto correcto para..."
+                    required
+                  />
+                </label>
+                <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Origen</span>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      defaultValue="internal_context"
+                      name="sourceMode"
+                    >
+                      {AUTOBLOG_SOURCE_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {AUTOBLOG_SOURCE_MODE_LABELS[mode]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Notas opcionales</span>
+                    <input
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      name="sourceNotes"
+                      placeholder="Enfoque, producto, promocion o audiencia"
+                    />
+                  </label>
+                </div>
+                <label className="space-y-1 text-sm">
+                  <span className="font-medium">Fuentes opcionales</span>
+                  <textarea
+                    className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    name="sourceUrlsText"
+                    placeholder="Una URL por linea"
+                  />
+                </label>
+              </fieldset>
+
+              {aiStatus.tone !== "ready" ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {aiStatus.detail}
+                  {aiStatus.href ? (
+                    <Link className="ml-1 font-semibold underline" href={aiStatus.href}>
+                      Abrir IA
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end">
+                <PendingSubmitButton
+                  disabled={!canCreate || !aiStatus.canGenerate}
+                  pendingLabel="Generando"
+                >
+                  Generar borrador
+                </PendingSubmitButton>
+              </div>
+            </form>
+          </section>
+
           <section className="space-y-3">
             <div>
               <h2 className="text-base font-semibold">Borrador manual</h2>
@@ -113,23 +199,10 @@ export default async function NewAutoblogArticlePage({
             <h2 className="text-base font-semibold">Herramientas de escritura</h2>
             <div className="mt-4 space-y-3 text-sm text-muted-foreground">
               <p>Revision ortografica del navegador activa en campos de texto.</p>
-              <p>Mejora con IA, tono de marca y copys automaticos quedan listos para conectar.</p>
+              <p>
+                Los borradores generados quedan guardados como articulos editables.
+              </p>
             </div>
-          </section>
-
-          <section className="rounded-lg border bg-background p-5">
-            <h2 className="text-base font-semibold">Generar borrador</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              La generacion IA quedara disponible cuando exista un proveedor seguro
-              configurado en servidor.
-            </p>
-            <button
-              className="mt-4 h-9 rounded-lg border px-3 text-sm font-semibold text-muted-foreground"
-              disabled
-              type="button"
-            >
-              Generar borrador
-            </button>
           </section>
 
           <section className="space-y-3">

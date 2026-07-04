@@ -46,7 +46,7 @@ export default async function InboxPage() {
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeader
-          description="Bandeja unificada para conversaciones simuladas de WhatsApp, Facebook Messenger, Instagram DM y canal manual."
+          description="Bandeja unificada para conversaciones manuales y canales Meta con webhooks, auditoria y envio condicionado por configuracion."
           eyebrow="Comunicacion"
           title="Inbox"
         />
@@ -80,9 +80,9 @@ export default async function InboxPage() {
       </div>
 
       <div className="rounded-lg border border-dashed bg-background p-5 text-sm text-muted-foreground">
-        La conexion oficial con Meta se implementara en la siguiente fase. Esta
-        version registra canales y mensajes simulados sin webhooks, tokens ni
-        envios reales.
+        Los canales manuales sirven para operacion interna y pruebas. Los canales
+        Meta usan webhook oficial, secretos protegidos y envio real cuando el
+        canal esta activo, configurado y con credenciales completas.
       </div>
     </section>
   );

@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
-import { hasPermission } from "@/lib/permissions/permission-checks";
+import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
+import { prepareFiscalDocumentFromSaleAction } from "@/modules/billing/actions";
 import { SaleDispatchPanel } from "@/modules/dispatch/components/sale-dispatch-panel";
 import {
   canAccessDispatchNav,
@@ -52,6 +54,24 @@ export default async function SaleDetailPage({
     access.tenant.permissions,
     "dispatch.orders.create",
   );
+  const canViewPayments =
+    isModuleActive(access.tenant.activeModules, "payments") &&
+    hasPermission(access.tenant.permissions, "payments.accounts.view");
+  const billingActive = isModuleActive(access.tenant.activeModules, "billing");
+  const canViewBilling =
+    billingActive &&
+    hasAnyPermission(access.tenant.permissions, [
+      "billing.view",
+      "billing.config.view",
+      "billing.invoices.view",
+      "billing.fiscal.view",
+    ]);
+  const canPrepareFiscalDocument =
+    billingActive &&
+    hasAnyPermission(access.tenant.permissions, [
+      "billing.issue",
+      "billing.invoices.create",
+    ]);
 
   if (!canView) {
     return (
@@ -143,6 +163,33 @@ export default async function SaleDetailPage({
         </p>
       </div>
 
+      {canPrepareFiscalDocument ? (
+        <div className="rounded-lg border bg-background p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold">Documento fiscal interno</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Prepara factura o tiquete fiscal interno. XML, firma y Hacienda
+                se habilitan despues de completar sus validaciones reales.
+              </p>
+            </div>
+            <form action={prepareFiscalDocumentFromSaleAction} className="flex gap-2">
+              <input name="ventaId" type="hidden" value={sale.data.id} />
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                name="documentTypeCode"
+              >
+                <option value="01">Factura</option>
+                <option value="04">Tiquete</option>
+              </select>
+              <button className={buttonVariants({ size: "sm" })} type="submit">
+                Preparar
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <SaleNotesForm canEdit={canEdit} sale={sale.data} />
 
       {canViewInventory ? (
@@ -173,8 +220,21 @@ export default async function SaleDetailPage({
       </section>
 
       <div className="rounded-lg border border-dashed bg-background p-5 text-sm text-muted-foreground">
-        Facturación, pagos y rutas avanzadas se implementarán en fases posteriores.
-        El inventario solo se descuenta con acción manual del usuario.
+        {canViewPayments ? (
+          <>
+            Pagos esta disponible desde{" "}
+            <Link className="font-medium text-foreground underline" href="/pagos">
+              cuentas por cobrar
+            </Link>
+            .
+          </>
+        ) : (
+          "Pagos se activa desde el modulo opcional cuando la empresa lo necesite."
+        )}{" "}
+        {canViewBilling
+          ? "Facturacion fiscal esta disponible desde el modulo Facturacion."
+          : "Facturacion fiscal real sigue pendiente de firma XAdES-EPES y pruebas Hacienda."}{" "}
+        El inventario solo se descuenta con accion manual del usuario.
       </div>
     </section>
   );

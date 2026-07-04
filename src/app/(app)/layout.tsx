@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import AppTopHeader from "@/components/layout/AppTopHeader";
 
 import { AppSidebarNav } from "@/components/navigation/app-sidebar-nav";
 import { SidebarBrandLogo } from "@/components/navigation/sidebar-brand-logo";
@@ -6,14 +7,12 @@ import { getCurrentTenantContext, getCurrentUser } from "@/lib/auth/session";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { FloatingConsultationButton } from "@/modules/consultations/components/floating-consultation-button";
-import { TimesheetSidebarWidget } from "@/modules/hr-timesheets/components/timesheet-sidebar-widget";
 import {
   getActiveTimesheetStates,
   getCurrentTimesheetStatus,
 } from "@/modules/hr-timesheets/queries";
 import { FloatingInboxButton } from "@/modules/inbox-widget/components/floating-inbox-button";
 import { getInboxWidgetConversations } from "@/modules/inbox-widget/queries";
-import { NotificationBell } from "@/modules/notifications/components/notification-bell";
 import {
   getMyNotifications,
   getMyUnreadNotificationCount,
@@ -94,6 +93,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       "quotes.edit",
     ]);
   const canCreateQuote = hasPermission(tenant.permissions, "quotes.create");
+  const canCreateCustomer = hasPermission(tenant.permissions, "crm.customers.create");
   const showCatalog =
     isModuleActive(tenant.activeModules, "catalog") &&
     hasAnyPermission(tenant.permissions, [
@@ -102,6 +102,10 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       "catalog.products.edit",
       "catalog.categories.view",
     ]);
+  const canCreateProduct = hasPermission(
+    tenant.permissions,
+    "catalog.products.create",
+  );
   const showSales =
     isModuleActive(tenant.activeModules, "sales") &&
     hasAnyPermission(tenant.permissions, [
@@ -117,6 +121,33 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       "inventory.movements.view",
       "inventory.warehouses.view",
       "inventory.warehouses.manage",
+    ]);
+  const showPurchases =
+    isModuleActive(tenant.activeModules, "purchases") &&
+    hasAnyPermission(tenant.permissions, [
+      "purchases.suppliers.view",
+      "purchases.suppliers.manage",
+      "purchases.orders.view",
+      "purchases.orders.manage",
+    ]);
+  const showPayments =
+    isModuleActive(tenant.activeModules, "payments") &&
+    hasAnyPermission(tenant.permissions, [
+      "payments.accounts.view",
+      "payments.accounts.manage",
+    ]);
+  const showBilling =
+    isModuleActive(tenant.activeModules, "billing") &&
+    hasAnyPermission(tenant.permissions, [
+      "billing.view",
+      "billing.manage",
+      "billing.issue",
+      "billing.config.view",
+      "billing.config.manage",
+      "billing.invoices.view",
+      "billing.invoices.create",
+      "billing.fiscal.view",
+      "billing.fiscal.manage",
     ]);
   const showDispatch =
     isModuleActive(tenant.activeModules, "dispatch") &&
@@ -138,6 +169,12 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       "autoblog.view",
       "autoblog.manage",
     ]);
+  const showReports =
+    isModuleActive(tenant.activeModules, "reports") &&
+    hasPermission(tenant.permissions, "reports.dashboard.view");
+  const showBrain =
+    isModuleActive(tenant.activeModules, "brain") &&
+    hasPermission(tenant.permissions, "brain.insights.view");
   const showHr =
     isModuleActive(tenant.activeModules, "hr") &&
     hasAnyPermission(tenant.permissions, [
@@ -200,6 +237,8 @@ async function AppShell({ children }: { children: React.ReactNode }) {
             showAdmin={Boolean(showAdmin)}
             showAgenda={Boolean(showAgenda)}
             showAutoblog={Boolean(showAutoblog)}
+            showBilling={Boolean(showBilling)}
+            showBrain={Boolean(showBrain)}
             showCatalog={Boolean(showCatalog)}
             showCrm={Boolean(showCrm)}
             showDispatch={Boolean(showDispatch)}
@@ -208,30 +247,48 @@ async function AppShell({ children }: { children: React.ReactNode }) {
             showHrStates={Boolean(showHrStates)}
             showInbox={Boolean(showInbox)}
             showInventory={Boolean(showInventory)}
+            showPayments={Boolean(showPayments)}
+            showPurchases={Boolean(showPurchases)}
             showQuotes={Boolean(showQuotes)}
+            showReports={Boolean(showReports)}
             showSales={Boolean(showSales)}
           />
         </div>
       </aside>
 
-      <div className="flex min-w-0 max-w-full flex-col overflow-hidden">
-        <main className="flex-1 p-6">{children}</main>
-      </div>
-      <NotificationBell
-        className="app-notification-topbar"
-        initialCount={unreadNotificationsResult.ok ? unreadNotificationsResult.data : 0}
-        notifications={notificationsResult.ok ? notificationsResult.data : []}
-        recipientProfileId={tenant.profileId}
-      />
-      <div className="app-session-topbar">
-        <TimesheetSidebarWidget
-          canRegister={Boolean(showHrRegister)}
-          canViewDashboard={Boolean(showHrDashboard)}
-          currentStatus={currentTimesheetStatus.ok ? currentTimesheetStatus.data : null}
-          states={activeTimesheetStates.ok ? activeTimesheetStates.data : []}
-          userEmail={tenant.profileEmail ?? userResult.data.email}
-          userName={tenant.profileName}
+      <div className="flex min-w-0 max-w-full flex-col overflow-visible">
+        <AppTopHeader
+          aiSearchCapabilities={{
+            canCreateCustomer: Boolean(showCrm && canCreateCustomer),
+            canCreateProduct: Boolean(showCatalog && canCreateProduct),
+            canCreateQuote: Boolean(showQuotes && canCreateQuote),
+            showAdmin: Boolean(showAdmin),
+            showAgenda: Boolean(showAgenda),
+            showAutoblog: Boolean(showAutoblog),
+            showBilling: Boolean(showBilling),
+            showBrain: Boolean(showBrain),
+            showCatalog: Boolean(showCatalog),
+            showCrm: Boolean(showCrm),
+            showDispatch: Boolean(showDispatch),
+            showHr: Boolean(showHr),
+            showInbox: Boolean(showInbox),
+            showInventory: Boolean(showInventory),
+            showPayments: Boolean(showPayments),
+            showPurchases: Boolean(showPurchases),
+            showQuotes: Boolean(showQuotes),
+            showSales: Boolean(showSales),
+          }}
+          currentTimesheetStatus={currentTimesheetStatus.ok ? currentTimesheetStatus.data : null}
+          hasHrDashboardAccess={Boolean(showHrDashboard)}
+          hasHrRegisterAccess={Boolean(showHrRegister)}
+          notifications={notificationsResult.ok ? notificationsResult.data : []}
+          profileEmail={tenant.profileEmail ?? userResult.data.email}
+          profileId={tenant.profileId}
+          profileName={tenant.profileName}
+          timesheetStates={activeTimesheetStates.ok ? activeTimesheetStates.data : []}
+          unreadNotificationCount={unreadNotificationsResult.ok ? unreadNotificationsResult.data : 0}
         />
+        <main className="flex-1 p-6">{children}</main>
       </div>
       {showInbox ? (
         <FloatingInboxButton

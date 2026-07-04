@@ -75,7 +75,8 @@ export type ModuleCode =
   | "autoblog"
   | "purchases"
   | "payments"
-  | "mobile";
+  | "mobile"
+  | "brain";
 
 export type PermissionCode =
   | "admin.users.view"
@@ -108,6 +109,17 @@ export type PermissionCode =
   | "sales.orders.status.change"
   | "sales.quotes.view"
   | "sales.quotes.create"
+  | "billing.view"
+  | "billing.manage"
+  | "billing.issue"
+  | "billing.cancel"
+  | "billing.credit_note"
+  | "billing.debit_note"
+  | "billing.receive"
+  | "billing.config.view"
+  | "billing.config.manage"
+  | "billing.cabys.manage"
+  | "billing.reports.view"
   | "billing.fiscal.view"
   | "billing.fiscal.manage"
   | "billing.invoices.view"
@@ -151,6 +163,10 @@ export type PermissionCode =
   | "purchases.orders.manage"
   | "payments.accounts.view"
   | "payments.accounts.manage"
+  | "brain.insights.view"
+  | "brain.recommendations.view"
+  | "brain.recommendations.manage"
+  | "brain.settings.manage"
   | "mobile.access";
 
 export type PlanCode = "starter" | "pro" | "enterprise";

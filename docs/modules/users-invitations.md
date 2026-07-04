@@ -30,7 +30,7 @@ Al guardar, el frontend llama la RPC `crear_invitacion_usuario`. La empresa se
 resuelve server-side con `current_empresa_id()`. La invitacion queda pendiente y
 se muestra un link para copiar si no hay proveedor de correo real configurado.
 
-El select de roles prioriza los roles estandar: `Super Admin`, `Administrador`,
+El select de roles prioriza los roles estandar del tenant: `Super Admin`, `Administrador`,
 `Supervisor`, `Vendedor`, `Servicio al cliente`, `Bodeguero`,
 `Chofer / Repartidor`, `Contabilidad / Facturacion`, `RRHH` y luego roles
 personalizados.

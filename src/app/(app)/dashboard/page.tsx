@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 
-import { DashboardAiSearch } from "@/app/(app)/dashboard/dashboard-ai-search";
+import { DashboardBoardNavigation } from "@/app/(app)/dashboard/dashboard-board-navigation";
 import {
   DashboardTop3Chart,
   type DashboardTop3Option,
@@ -22,6 +22,7 @@ import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { getCurrentProfile, getCurrentTenantContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { ConsultationManagementForm } from "@/modules/consultations/components/consultation-management-form";
 import { ConsultationResultCard } from "@/modules/consultations/components/consultation-result-card";
 import { ConsultationSearchForm } from "@/modules/consultations/components/consultation-search-form";
@@ -34,6 +35,8 @@ import { getDispatchOrders } from "@/modules/dispatch/queries";
 import { getQuotes } from "@/modules/quotes/queries";
 import { getSales } from "@/modules/sales/queries";
 import type { Sale } from "@/modules/sales/types";
+import { getPaymentsSummary } from "@/modules/payments/queries";
+import { getPurchasesSummary } from "@/modules/purchases/queries";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -96,10 +99,6 @@ function getBlankConsultationResult(documento = ""): ConsultationSearchResult {
     message: "Completa la informacion para iniciar una gestion.",
     source: "manual",
   };
-}
-
-function getFirstName(name?: string) {
-  return name?.split(" ")[0] || "equipo";
 }
 
 function sumSales(sales: Sale[]) {
@@ -300,23 +299,39 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     hasPermission(permissions, "dispatch.orders.view")
       ? getDispatchOrders(tenant, "todos")
       : Promise.resolve(null),
+    isModuleActive(tenant.activeModules, "payments") &&
+    hasPermission(permissions, "payments.accounts.view")
+      ? getPaymentsSummary(tenant)
+      : Promise.resolve(null),
+    isModuleActive(tenant.activeModules, "purchases") &&
+    hasPermission(permissions, "purchases.orders.view")
+      ? getPurchasesSummary(tenant)
+      : Promise.resolve(null),
   ]);
   const [
     dashboardCustomers,
     dashboardQuotes,
     dashboardSales,
     dashboardDispatches,
+    dashboardPaymentsSummary,
+    dashboardPurchasesSummary,
   ] = [
     getSettledValue(dashboardResults[0], null, "getCrmCustomers"),
     getSettledValue(dashboardResults[1], null, "getQuotes"),
     getSettledValue(dashboardResults[2], null, "getSales"),
     getSettledValue(dashboardResults[3], null, "getDispatchOrders"),
+    getSettledValue(dashboardResults[4], null, "getPaymentsSummary"),
+    getSettledValue(dashboardResults[5], null, "getPurchasesSummary"),
   ];
   const customerRows = dashboardCustomers?.ok === true ? dashboardCustomers.data : [];
   const quoteRows = dashboardQuotes?.ok === true ? dashboardQuotes.data : [];
   const saleRows = dashboardSales?.ok === true ? dashboardSales.data : [];
   const dispatchRows =
     dashboardDispatches?.ok === true ? dashboardDispatches.data : [];
+  const paymentsSummary =
+    dashboardPaymentsSummary?.ok === true ? dashboardPaymentsSummary.data : null;
+  const purchasesSummary =
+    dashboardPurchasesSummary?.ok === true ? dashboardPurchasesSummary.data : null;
   const monthSales = saleRows.filter((sale) => isThisMonth(sale.fechaVenta));
   const monthSalesTotal = sumSales(monthSales);
   const top3Options = buildDashboardTop3Options({
@@ -354,24 +369,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     },
     {
       accent: "silver",
-      href: "/despacho",
-      title: "Despachos",
-      value: activeDispatches.length.toLocaleString("es-CR"),
+      href: paymentsSummary ? "/pagos" : "/despacho",
+      title: paymentsSummary ? "Cartera neta" : "Despachos",
+      value: paymentsSummary
+        ? formatCurrency(paymentsSummary.saldoPorCobrar - paymentsSummary.saldoPorPagar, true)
+        : activeDispatches.length.toLocaleString("es-CR"),
+    },
+  ];
+  const operationalReportRows = [
+    {
+      href: "/pagos",
+      label: "Cartera",
+      value: paymentsSummary
+        ? `${formatCurrency(paymentsSummary.saldoPorCobrar)} CxC / ${formatCurrency(paymentsSummary.saldoPorPagar)} CxP`
+        : "Sin datos",
+    },
+    {
+      href: "/compras",
+      label: "Compras recibidas",
+      value: purchasesSummary
+        ? formatCurrency(purchasesSummary.totalComprado)
+        : "Sin datos",
+    },
+    {
+      href: "/ventas",
+      label: "Ventas del mes",
+      value: formatCurrency(monthSalesTotal),
     },
   ];
 
   return (
     <section className="dashboard-screen">
-      <div className="dashboard-topbar">
-        <div>
-          <h1>Buenos dias, {getFirstName(tenant.profileName)}!</h1>
-          <p>Aqui tienes el resumen de tu negocio.</p>
-        </div>
-
-        <DashboardAiSearch />
-
-        <div className="dashboard-topbar-reserved" aria-hidden="true" />
-      </div>
+      <DashboardBoardNavigation />
 
       <div className="dashboard-kpi-row">
         {kpis.map((kpi) => (
@@ -511,6 +540,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <CheckCircle2 aria-hidden="true" size={18} />
             Basado en permisos actuales
           </p>
+        </DashboardCard>
+
+        <DashboardCard>
+          <PanelHeader href="/dashboard" linkLabel="Actual" title="Reportes operativos" />
+          <div className="grid gap-3">
+            {operationalReportRows.map((row) => (
+              <Link
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm font-semibold"
+                href={row.href}
+                key={row.label}
+              >
+                <span className="text-slate-600">{row.label}</span>
+                <strong>{row.value}</strong>
+              </Link>
+            ))}
+          </div>
         </DashboardCard>
       </div>
 

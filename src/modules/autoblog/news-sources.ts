@@ -7,7 +7,9 @@ export type AutoblogNewsSource = {
 };
 
 export async function findRelevantNewsForBusinessContext(
-  _context: BusinessContext | null,
+  context: BusinessContext | null,
 ): Promise<AutoblogNewsSource[]> {
+  void context;
+
   return [];
 }

@@ -9,6 +9,10 @@ type CustomersTableProps = {
   customers: CrmCustomer[];
 };
 
+function formatActivityDate(value: string | null) {
+  return value ? new Date(value).toLocaleDateString("es") : "Sin actividad";
+}
+
 export function CustomersTable({ className, customers }: CustomersTableProps) {
   return (
     <div className={cn("overflow-auto rounded-lg border bg-background", className)}>
@@ -16,11 +20,14 @@ export function CustomersTable({ className, customers }: CustomersTableProps) {
         <thead className="sticky top-0 z-10 bg-muted text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-4 py-3">Nombre</th>
+            <th className="px-4 py-3">Identificacion</th>
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3">Telefono</th>
             <th className="px-4 py-3">WhatsApp</th>
             <th className="px-4 py-3">Correo</th>
+            <th className="px-4 py-3">Actividad</th>
+            <th className="px-4 py-3">Ultimo movimiento</th>
             <th className="px-4 py-3">Asignado</th>
             <th className="px-4 py-3">Origen</th>
             <th className="px-4 py-3">Accion</th>
@@ -30,11 +37,17 @@ export function CustomersTable({ className, customers }: CustomersTableProps) {
           {customers.map((customer) => (
             <tr className="border-t" key={customer.id}>
               <td className="px-4 py-3 font-medium">{customer.nombre}</td>
+              <td className="px-4 py-3">{customer.identificacion ?? "No disponible"}</td>
               <td className="px-4 py-3">{customer.tipo}</td>
               <td className="px-4 py-3">{customer.estado}</td>
               <td className="px-4 py-3">{customer.telefono ?? "No disponible"}</td>
               <td className="px-4 py-3">{customer.whatsapp ?? "No disponible"}</td>
               <td className="px-4 py-3">{customer.correo ?? "No disponible"}</td>
+              <td className="px-4 py-3">
+                {customer.interactionsCount} int. / {customer.pendingFollowupsCount} seg. /{" "}
+                {customer.quotesCount} cot. / {customer.salesCount} vtas.
+              </td>
+              <td className="px-4 py-3">{formatActivityDate(customer.lastActivityAt)}</td>
               <td className="px-4 py-3">
                 {customer.asignadoNombre ?? "Sin asignar"}
               </td>

@@ -8,6 +8,19 @@ function formatDate(value: string) {
   return new Date(value).toLocaleString("es-CR");
 }
 
+function getMessageLabel(message: InboxMessage) {
+  if (message.esNotaInterna) return "Nota interna";
+  if (message.canalMessageId) {
+    return message.direccion === "saliente"
+      ? "Enviado por WhatsApp"
+      : "Entrante Meta";
+  }
+
+  return message.direccion === "saliente"
+    ? "Respuesta manual"
+    : "Entrante manual";
+}
+
 export function InboxMessageThread({ messages }: InboxMessageThreadProps) {
   return (
     <div className="rounded-lg border bg-background p-4">
@@ -31,11 +44,7 @@ export function InboxMessageThread({ messages }: InboxMessageThreadProps) {
             >
               <div className="mb-1 flex items-center justify-between gap-3 text-xs opacity-75">
                 <span>
-                  {isInternal
-                    ? "Nota interna"
-                    : isOutgoing
-                      ? "Respuesta simulada"
-                      : "Entrante simulado"}
+                  {getMessageLabel(message)}
                 </span>
                 <span>{formatDate(message.createdAt)}</span>
               </div>

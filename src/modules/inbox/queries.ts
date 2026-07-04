@@ -1,8 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { getCurrentTenantContext } from "@/lib/auth/session";
+import {
+  INBOX_SLA_FIRST_RESPONSE_MINUTES,
+  INBOX_SLA_WARNING_MINUTES,
+} from "@/modules/inbox/constants";
 import type {
   InboxAssignableUser,
+  InboxAutomationRule,
+  InboxCampaign,
+  InboxCampaignRecipient,
   InboxChannelConfig,
   InboxConversation,
   InboxConversationMetaSendStatus,
@@ -10,7 +17,9 @@ import type {
   InboxEvent,
   InboxMetaChannelDiagnostic,
   InboxMetaChannelStatus,
+  InboxMetaTemplate,
   InboxMessage,
+  InboxSlaStatus,
   InboxSummary,
   InboxWebhookEvent,
 } from "@/modules/inbox/types";
@@ -91,6 +100,21 @@ type MessageRow = {
   tipo: InboxMessage["tipo"];
 };
 
+type UnreadMessageRow = {
+  conversacion_id: string;
+  created_at: string;
+};
+
+type ConversationReadRow = {
+  conversacion_id: string;
+  read_at: string;
+};
+
+type ConversationSignal = {
+  lastIncomingAt: string | null;
+  unreadCount: number;
+};
+
 type EventRow = {
   created_at: string;
   created_by: string | null;
@@ -113,6 +137,97 @@ type WebhookEventRow = {
   object_type: string | null;
   procesado: boolean;
   received_at: string;
+};
+
+type MetaTemplateRow = {
+  canal_id: string | null;
+  canal_rel: NameRelation | NameRelation[] | null;
+  categoria: InboxMetaTemplate["categoria"];
+  cuerpo: string;
+  estado: InboxMetaTemplate["estado"];
+  id: string;
+  idioma: string;
+  meta_template_id: string | null;
+  nombre: string;
+  rechazo_motivo: string | null;
+  updated_at: string;
+  variables: unknown;
+};
+
+type CampaignTemplateRelation = {
+  categoria: InboxCampaign["plantillaCategoria"];
+  estado: InboxCampaign["plantillaEstado"];
+  idioma: string | null;
+  nombre: string | null;
+};
+
+type CampaignRow = {
+  audiencia: unknown;
+  canal_id: string;
+  canal_rel: NameRelation | NameRelation[] | null;
+  created_at: string;
+  delivered_count: number;
+  estado: InboxCampaign["estado"];
+  failed_count: number;
+  id: string;
+  nombre: string;
+  objetivo: string | null;
+  plantilla_id: string;
+  plantilla_rel: CampaignTemplateRelation | CampaignTemplateRelation[] | null;
+  read_count: number;
+  recipient_count: number;
+  replied_count: number;
+  scheduled_at: string | null;
+  sent_count: number;
+  updated_at: string;
+};
+
+type CampaignRecipientRow = {
+  attempt_count: number;
+  campana_id: string;
+  canal_message_id: string | null;
+  cliente_id: string | null;
+  conversacion_id: string | null;
+  created_at: string;
+  delivered_at: string | null;
+  estado: InboxCampaignRecipient["estado"];
+  external_recipient_id: string | null;
+  id: string;
+  last_attempt_at: string | null;
+  last_error: string | null;
+  nombre: string | null;
+  opt_in: boolean;
+  opt_in_at: string | null;
+  opt_in_source: string | null;
+  read_at: string | null;
+  replied_at: string | null;
+  sent_at: string | null;
+  telefono: string;
+  updated_at: string;
+  variables: unknown;
+};
+
+type AutomationRow = {
+  accion_config: unknown;
+  accion_tipo: InboxAutomationRule["accionTipo"];
+  canal_id: string | null;
+  canal_rel: NameRelation | NameRelation[] | null;
+  condiciones: unknown;
+  created_at: string;
+  descripcion: string | null;
+  estado: InboxAutomationRule["estado"];
+  id: string;
+  modo: InboxAutomationRule["modo"];
+  nombre: string;
+  prioridad: number;
+  trigger_tipo: InboxAutomationRule["triggerTipo"];
+  ultima_ejecucion_at: string | null;
+  updated_at: string;
+};
+
+type AutomationExecutionRow = {
+  automatizacion_id: string;
+  estado: "ejecutada" | "fallida" | "omitida" | "sugerida";
 };
 
 type UserRow = {
@@ -219,7 +334,16 @@ function mapWebhookEvent(row: WebhookEventRow): InboxWebhookEvent {
   };
 }
 
-function mapConversation(row: ConversationRow): InboxConversation {
+function mapConversation(
+  row: ConversationRow,
+  signalsByConversation = new Map<string, ConversationSignal>(),
+): InboxConversation {
+  const signals = signalsByConversation.get(row.id) ?? {
+    lastIncomingAt: null,
+    unreadCount: 0,
+  };
+  const sla = calculateSla(row.estado, signals);
+
   return {
     asignadoA: row.asignado_a,
     asignadoNombre: firstRelation(row.asignado)?.nombre ?? null,
@@ -236,11 +360,98 @@ function mapConversation(row: ConversationRow): InboxConversation {
     createdAt: row.created_at,
     estado: row.estado,
     id: row.id,
+    lastIncomingAt: signals.lastIncomingAt,
     prioridad: row.prioridad,
+    slaDueAt: sla.dueAt,
+    slaStatus: sla.status,
     ultimoMensaje: row.ultimo_mensaje,
     ultimoMensajeAt: row.ultimo_mensaje_at,
+    unreadCount: signals.unreadCount,
     updatedAt: row.updated_at,
   };
+}
+
+function addMinutes(value: string, minutes: number) {
+  return new Date(new Date(value).getTime() + minutes * 60 * 1000).toISOString();
+}
+
+function calculateSla(
+  status: InboxConversation["estado"],
+  signals: ConversationSignal,
+): { dueAt: string | null; status: InboxSlaStatus } {
+  if (status === "cerrada" || status === "spam") {
+    return { dueAt: null, status: "pausado" };
+  }
+
+  if (!signals.lastIncomingAt || signals.unreadCount === 0) {
+    return { dueAt: null, status: "ok" };
+  }
+
+  const dueAt = addMinutes(signals.lastIncomingAt, INBOX_SLA_FIRST_RESPONSE_MINUTES);
+  const now = Date.now();
+  const dueTime = new Date(dueAt).getTime();
+
+  if (now > dueTime) {
+    return { dueAt, status: "vencido" };
+  }
+
+  if (dueTime - now <= INBOX_SLA_WARNING_MINUTES * 60 * 1000) {
+    return { dueAt, status: "riesgo" };
+  }
+
+  return { dueAt, status: "ok" };
+}
+
+async function getConversationSignalsForCurrentProfile(
+  tenant: TenantContext,
+  conversationIds: string[],
+) {
+  if (conversationIds.length === 0) return new Map<string, ConversationSignal>();
+
+  const supabase = await createClient();
+  const [reads, incomingMessages] = await Promise.all([
+    supabase
+      .from("inbox_conversacion_lecturas")
+      .select("conversacion_id, read_at")
+      .eq("empresa_id", tenant.empresaId)
+      .eq("profile_id", tenant.profileId)
+      .in("conversacion_id", conversationIds),
+    supabase
+      .from("inbox_mensajes")
+      .select("conversacion_id, created_at")
+      .eq("empresa_id", tenant.empresaId)
+      .eq("direccion", "entrante")
+      .eq("es_nota_interna", false)
+      .in("conversacion_id", conversationIds),
+  ]);
+
+  if (incomingMessages.error) return new Map<string, ConversationSignal>();
+
+  const readAtByConversation = new Map<string, string>();
+  for (const row of ((reads.data ?? []) as ConversationReadRow[])) {
+    readAtByConversation.set(row.conversacion_id, row.read_at);
+  }
+
+  const signals = new Map<string, ConversationSignal>();
+  for (const row of ((incomingMessages.data ?? []) as UnreadMessageRow[])) {
+    const readAt = readAtByConversation.get(row.conversacion_id);
+    const current = signals.get(row.conversacion_id) ?? {
+      lastIncomingAt: null,
+      unreadCount: 0,
+    };
+
+    if (!current.lastIncomingAt || row.created_at > current.lastIncomingAt) {
+      current.lastIncomingAt = row.created_at;
+    }
+
+    if (!readAt || row.created_at > readAt) {
+      current.unreadCount += 1;
+    }
+
+    signals.set(row.conversacion_id, current);
+  }
+
+  return signals;
 }
 
 function mapMessage(row: MessageRow): InboxMessage {
@@ -270,6 +481,127 @@ function mapEvent(row: EventRow): InboxEvent {
     id: row.id,
     metadata: row.metadata,
     tipo: row.tipo,
+  };
+}
+
+function mapTemplate(row: MetaTemplateRow): InboxMetaTemplate {
+  const variables = Array.isArray(row.variables)
+    ? row.variables.filter((value): value is string => typeof value === "string")
+    : [];
+
+  return {
+    canalId: row.canal_id,
+    canalNombre: firstRelation(row.canal_rel)?.nombre ?? null,
+    categoria: row.categoria,
+    cuerpo: row.cuerpo,
+    estado: row.estado,
+    id: row.id,
+    idioma: row.idioma,
+    metaTemplateId: row.meta_template_id,
+    nombre: row.nombre,
+    rechazoMotivo: row.rechazo_motivo,
+    updatedAt: row.updated_at,
+    variables,
+  };
+}
+
+function mapCampaign(row: CampaignRow): InboxCampaign {
+  const template = firstRelation(row.plantilla_rel);
+  const audiencia =
+    row.audiencia && typeof row.audiencia === "object" && !Array.isArray(row.audiencia)
+      ? (row.audiencia as JsonRecord)
+      : {};
+
+  return {
+    audiencia,
+    canalId: row.canal_id,
+    canalNombre: firstRelation(row.canal_rel)?.nombre ?? null,
+    createdAt: row.created_at,
+    deliveredCount: row.delivered_count,
+    estado: row.estado,
+    failedCount: row.failed_count,
+    id: row.id,
+    nombre: row.nombre,
+    objetivo: row.objetivo,
+    plantillaCategoria: template?.categoria ?? null,
+    plantillaEstado: template?.estado ?? null,
+    plantillaId: row.plantilla_id,
+    plantillaIdioma: template?.idioma ?? null,
+    plantillaNombre: template?.nombre ?? null,
+    readCount: row.read_count,
+    recipientCount: row.recipient_count,
+    repliedCount: row.replied_count,
+    scheduledAt: row.scheduled_at,
+    sentCount: row.sent_count,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapCampaignRecipient(row: CampaignRecipientRow): InboxCampaignRecipient {
+  return {
+    attemptCount: row.attempt_count,
+    campaignId: row.campana_id,
+    canalMessageId: row.canal_message_id,
+    clienteId: row.cliente_id,
+    conversacionId: row.conversacion_id,
+    createdAt: row.created_at,
+    deliveredAt: row.delivered_at,
+    estado: row.estado,
+    externalRecipientId: row.external_recipient_id,
+    id: row.id,
+    lastAttemptAt: row.last_attempt_at,
+    lastError: row.last_error,
+    nombre: row.nombre,
+    optIn: row.opt_in,
+    optInAt: row.opt_in_at,
+    optInSource: row.opt_in_source,
+    readAt: row.read_at,
+    repliedAt: row.replied_at,
+    sentAt: row.sent_at,
+    telefono: row.telefono,
+    updatedAt: row.updated_at,
+    variables: mapJsonRecord(row.variables),
+  };
+}
+
+function mapJsonRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : {};
+}
+
+function mapAutomation(
+  row: AutomationRow,
+  executionStats = new Map<
+    string,
+    { executed: number; failed: number; total: number }
+  >(),
+): InboxAutomationRule {
+  const stats = executionStats.get(row.id) ?? {
+    executed: 0,
+    failed: 0,
+    total: 0,
+  };
+
+  return {
+    accionConfig: mapJsonRecord(row.accion_config),
+    accionTipo: row.accion_tipo,
+    canalId: row.canal_id,
+    canalNombre: firstRelation(row.canal_rel)?.nombre ?? null,
+    condiciones: mapJsonRecord(row.condiciones),
+    createdAt: row.created_at,
+    descripcion: row.descripcion,
+    estado: row.estado,
+    executionCount: stats.total,
+    failedExecutionCount: stats.failed,
+    id: row.id,
+    modo: row.modo,
+    nombre: row.nombre,
+    prioridad: row.prioridad,
+    successfulExecutionCount: stats.executed,
+    triggerTipo: row.trigger_tipo,
+    ultimaEjecucionAt: row.ultima_ejecucion_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -508,6 +840,187 @@ export async function getInboxMetaChannelDiagnostic(
   });
 }
 
+export async function getInboxMetaTemplates(): Promise<
+  CoreResult<InboxMetaTemplate[]>
+> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (
+    !hasAnyPermission(tenant.data.permissions, [
+      "inbox.channels.view",
+      "inbox.channels.manage",
+      "inbox.conversations.reply",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver plantillas.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_meta_plantillas")
+    .select(
+      "id, canal_id, nombre, idioma, categoria, estado, cuerpo, variables, meta_template_id, rechazo_motivo, updated_at, canal_rel:inbox_canales!inbox_meta_plantillas_canal_empresa_fkey(nombre)",
+    )
+    .eq("empresa_id", tenant.data.empresaId)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    return fail("PERMISSION_DENIED", "No se pudieron consultar plantillas.", error);
+  }
+
+  return ok(((data ?? []) as MetaTemplateRow[]).map(mapTemplate));
+}
+
+export async function getApprovedInboxMetaTemplatesForConversation(
+  conversation: InboxConversation,
+): Promise<CoreResult<InboxMetaTemplate[]>> {
+  if (conversation.canal !== "whatsapp" || !conversation.canalId) {
+    return ok([]);
+  }
+
+  const templates = await getInboxMetaTemplates();
+  if (!templates.ok) return templates;
+
+  return ok(
+    templates.data.filter(
+      (template) =>
+        template.estado === "aprobada" &&
+        (!template.canalId || template.canalId === conversation.canalId),
+    ),
+  );
+}
+
+export async function getInboxCampaigns(): Promise<CoreResult<InboxCampaign[]>> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (
+    !hasAnyPermission(tenant.data.permissions, [
+      "inbox.channels.view",
+      "inbox.channels.manage",
+      "inbox.conversations.reply",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver campanas.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_campanas")
+    .select(
+      "id, canal_id, plantilla_id, nombre, objetivo, estado, audiencia, scheduled_at, recipient_count, sent_count, delivered_count, read_count, replied_count, failed_count, created_at, updated_at, canal_rel:inbox_canales!inbox_campanas_canal_empresa_fkey(nombre), plantilla_rel:inbox_meta_plantillas!inbox_campanas_plantilla_empresa_fkey(nombre, idioma, categoria, estado)",
+    )
+    .eq("empresa_id", tenant.data.empresaId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return fail("PERMISSION_DENIED", "No se pudieron consultar campanas.", error);
+  }
+
+  return ok(((data ?? []) as CampaignRow[]).map(mapCampaign));
+}
+
+export async function getInboxCampaignRecipients(): Promise<
+  CoreResult<InboxCampaignRecipient[]>
+> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (
+    !hasAnyPermission(tenant.data.permissions, [
+      "inbox.channels.view",
+      "inbox.channels.manage",
+      "inbox.conversations.reply",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver audiencia.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_campana_destinatarios")
+    .select(
+      "id, campana_id, cliente_id, conversacion_id, nombre, telefono, external_recipient_id, opt_in, opt_in_source, opt_in_at, estado, variables, canal_message_id, attempt_count, last_attempt_at, last_error, sent_at, delivered_at, read_at, replied_at, created_at, updated_at",
+    )
+    .eq("empresa_id", tenant.data.empresaId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return fail("PERMISSION_DENIED", "No se pudo consultar audiencia.", error);
+  }
+
+  return ok(((data ?? []) as CampaignRecipientRow[]).map(mapCampaignRecipient));
+}
+
+export async function getInboxAutomationRules(): Promise<
+  CoreResult<InboxAutomationRule[]>
+> {
+  const tenant = await getTenant();
+  if (!tenant.ok) return tenant;
+
+  if (
+    !hasAnyPermission(tenant.data.permissions, [
+      "inbox.channels.view",
+      "inbox.channels.manage",
+      "inbox.conversations.reply",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver automatizaciones.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_automatizaciones")
+    .select(
+      "id, canal_id, nombre, descripcion, trigger_tipo, accion_tipo, modo, estado, condiciones, accion_config, prioridad, ultima_ejecucion_at, created_at, updated_at, canal_rel:inbox_canales!inbox_automatizaciones_canal_empresa_fkey(nombre)",
+    )
+    .eq("empresa_id", tenant.data.empresaId)
+    .order("prioridad", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return fail(
+      "PERMISSION_DENIED",
+      "No se pudieron consultar automatizaciones.",
+      error,
+    );
+  }
+
+  const rows = (data ?? []) as AutomationRow[];
+  const ids = rows.map((row) => row.id);
+  const executionStats = new Map<
+    string,
+    { executed: number; failed: number; total: number }
+  >();
+
+  if (ids.length > 0) {
+    const executions = await supabase
+      .from("inbox_automatizacion_ejecuciones")
+      .select("automatizacion_id, estado")
+      .eq("empresa_id", tenant.data.empresaId)
+      .in("automatizacion_id", ids);
+
+    if (!executions.error) {
+      for (const execution of ((executions.data ?? []) as AutomationExecutionRow[])) {
+        const current = executionStats.get(execution.automatizacion_id) ?? {
+          executed: 0,
+          failed: 0,
+          total: 0,
+        };
+
+        current.total += 1;
+        if (execution.estado === "ejecutada") current.executed += 1;
+        if (execution.estado === "fallida") current.failed += 1;
+
+        executionStats.set(execution.automatizacion_id, current);
+      }
+    }
+  }
+
+  return ok(rows.map((row) => mapAutomation(row, executionStats)));
+}
+
 export async function getInboxConversations(): Promise<
   CoreResult<InboxConversation[]>
 > {
@@ -532,7 +1045,13 @@ export async function getInboxConversations(): Promise<
     return fail("PERMISSION_DENIED", "No se pudieron consultar conversaciones.", error);
   }
 
-  return ok(((data ?? []) as ConversationRow[]).map(mapConversation));
+  const rows = (data ?? []) as ConversationRow[];
+  const signals = await getConversationSignalsForCurrentProfile(
+    tenant.data,
+    rows.map((row) => row.id),
+  );
+
+  return ok(rows.map((row) => mapConversation(row, signals)));
 }
 
 export async function getInboxConversationDetail(
@@ -559,7 +1078,13 @@ export async function getInboxConversationDetail(
     return fail("PERMISSION_DENIED", "No se pudo consultar la conversacion.", error);
   }
 
-  return ok(data ? mapConversation(data) : null);
+  if (!data) return ok(null);
+
+  const signals = await getConversationSignalsForCurrentProfile(tenant.data, [
+    data.id,
+  ]);
+
+  return ok(mapConversation(data, signals));
 }
 
 export async function getInboxConversationMetaSendStatus(

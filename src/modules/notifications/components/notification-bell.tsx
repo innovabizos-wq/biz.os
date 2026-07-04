@@ -297,7 +297,7 @@ export function NotificationBell({
   }
 
   return (
-    <div className={cn("notification-bell-root fixed right-6 top-5 z-40", className)}>
+    <div className={cn("notification-bell-root relative z-40", className)}>
       <div className="relative">
         <button
           aria-expanded={isOpen}

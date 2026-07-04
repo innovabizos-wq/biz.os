@@ -17,7 +17,10 @@ export function InboxWebhookInstructions({
         <li>Configura esta URL como callback en Meta.</li>
         <li>Suscribe el campo messages para WhatsApp, Messenger o Instagram.</li>
         <li>La recepcion guarda conversaciones y mensajes entrantes en Inbox.</li>
-        <li>El envio de mensajes se implementara en la siguiente fase.</li>
+        <li>
+          El envio WhatsApp queda disponible desde la conversacion cuando el
+          canal esta activo, configurado y con credenciales completas.
+        </li>
       </ul>
     </div>
   );

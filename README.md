@@ -50,23 +50,34 @@ NEXT_PUBLIC_APP_URL=
 PUBLIC_SIGNUP_ENABLED=true
 FISCAL_CONFIG_ENCRYPTION_KEY=
 HACIENDA_ENVIRONMENT=pruebas
+HACIENDA_TEST_AUTH_URL=
+HACIENDA_PROD_AUTH_URL=
+HACIENDA_TEST_API_URL=
+HACIENDA_PROD_API_URL=
+BILLING_XML_VALIDATION_ENABLED=false
+BILLING_XADES_SIGNING_ENABLED=false
+BILLING_HACIENDA_SEND_ENABLED=false
+BILLING_PDF_ENABLED=false
 META_WEBHOOK_SKIP_SIGNATURE=false
 META_WEBHOOK_DEBUG_LOGS=false
 META_GRAPH_API_VERSION=v25.0
-AI_PROVIDER=
-AI_API_KEY=
-AUTOBLOG_PUBLISHING_ENABLED=false
-MOBILE_API_ENABLED=false
-PURCHASES_ENABLED=false
-PAYMENTS_ENABLED=false
+WHAPP_CAMPAIGN_WORKER_SECRET=
+CRON_SECRET=
+WHAPP_EMAIL_INBOUND_SECRET=
 ```
 
 No incluir claves reales en `.env.example`. `SUPABASE_SERVICE_ROLE_KEY` es
-server-only: solo puede usarse en rutas backend aisladas como webhooks externos;
-nunca en helpers de frontend ni server actions de usuario.
+server-only: se lee solo desde `src/lib/supabase/admin.ts`, marcado
+`server-only`. Sus imports deben permanecer allowlistados; cualquier server
+action que lo use debe validar usuario, empresa y permiso antes de llamar una
+RPC reservada a `service_role`.
 
 `NEXT_PUBLIC_APP_URL` se usa para construir enlaces de invitacion. Si queda
 vacia, biz.os genera rutas relativas.
+
+Facturacion electronica no debe considerarse lista para produccion hasta tener
+XML 4.4 validado, firma XAdES-EPES real, envio/consulta Hacienda y respuesta
+oficial persistida.
 
 `PUBLIC_SIGNUP_ENABLED` controla el registro libre. Si no existe o esta en
 `true`, `/signup` permite crear una cuenta para luego crear empresa en
@@ -129,7 +140,8 @@ Modulos en desarrollo o no listos para venta:
 - Whapp/Inbox real extremo a extremo: requiere credenciales Meta y prueba operacional.
 - Autoblog futuro: publicacion automatica, WordPress/sitio web, redes sociales,
   programacion automatica y cron de 3 a 5 articulos diarios.
-- Compras/proveedores, pagos/cuentas por cobrar, IA operativa y app movil.
+- Compras/proveedores, pagos/cuentas por cobrar, IA operativa, Business Brain,
+  Agent Executor, Autopilot y app movil.
 
 Migraciones recientes que pueden requerir aplicacion manual en Supabase dev:
 
@@ -190,6 +202,28 @@ Documento tecnico:
 
 ```text
 docs/modules/business-context.md
+```
+
+## Business Brain
+
+Business Brain es la arquitectura conceptual futura para convertir datos
+operativos y `business_context` en insights, recomendaciones y planes por
+empresa. No esta implementado todavia: no tiene migraciones, rutas, UI,
+permisos, Agent Executor ni Autopilot.
+
+La regla base es: si puede resolverse con logica, no usar IA. El Core Operativo
+mantiene calculos, permisos, RLS, estados, validaciones, inventario, pagos y
+reglas deterministicas. El Brain queda para interpretacion, patrones, riesgos,
+priorizacion y recomendaciones explicables.
+
+Autopilot no debe construirse antes del Brain. Primero se requiere entender el
+negocio, clasificar niveles de riesgo, auditar recomendaciones y separar
+sugerencia, aprobacion y ejecucion futura.
+
+Documento conceptual:
+
+```text
+docs/architecture/business-brain.md
 ```
 
 ## Autoblog
@@ -381,16 +415,46 @@ Contabilidad / Facturacion
 RRHH
 ```
 
+`Super Admin` es un rol interno de la empresa cliente, equivalente conceptual a
+Tenant Owner/Company Admin. No representa Platform Admin de AInovaCR ni concede
+acceso global a otras empresas.
+
 Documento tecnico:
 
 ```text
 docs/modules/roles-defaults.md
+docs/platform-operator-model.md
 ```
 
 ## Administración Base
 
 Despues del onboarding, `/admin` muestra en solo lectura el nucleo multiempresa:
 empresa, usuario, sucursal, rol, permisos, modulos activos y plan.
+
+## Platform Console
+
+`/platform` es una consola interna para AInovaCR/biz.os. No reemplaza `/admin`:
+
+- `/admin` pertenece al cliente y opera dentro de su tenant.
+- `/platform` pertenece al operador SaaS y requiere registro activo en
+  `platform_users`.
+- `Super Admin` sigue siendo rol interno del tenant, no Platform Admin global.
+
+Para habilitar el primer operador SaaS, insertar manualmente el `profile_id`:
+
+```sql
+insert into public.platform_users (profile_id, role, notes)
+values ('PROFILE_ID_AQUI', 'owner', 'Primer Platform Admin');
+```
+
+No se asigna Platform Admin automaticamente. La migracion local de base es:
+
+```text
+database/migrations/0050_platform_console.sql
+```
+
+Whapp sigue el modelo proveedor administrado: el cliente usa su numero asignado;
+AInovaCR/biz.os administra la configuracion tecnica de Meta.
 
 Tambien existen vistas de lectura para `/admin/usuarios`, `/admin/roles` y
 `/admin/permisos`.
@@ -515,9 +579,9 @@ Cotizaciones permite crear propuestas comerciales simples conectadas al CRM:
 
 Incluye items manuales/catalogo, totales calculados y confirmacion de venta. En
 el MVP no se guardan cotizaciones vacias: se crea la cotizacion solo con al
-menos un item valido. No genera PDF,
-no envia correos, no factura y no mueve inventario. Antes de
-usarlo, aplicar manualmente:
+menos un item valido. La confirmacion genera la venta base; PDF, correo,
+facturacion fiscal y salida de inventario se manejan desde sus modulos
+correspondientes. Antes de usarlo, aplicar manualmente:
 
 ```text
 database/migrations/0009_cotizaciones_core.sql
@@ -605,9 +669,8 @@ database/migrations/0017_driver_live_tracking.sql
 
 ## Inbox / Chat Unificado Base
 
-Inbox prepara la bandeja centralizada para conversaciones de WhatsApp, Facebook
-Messenger, Instagram DM y canal manual, sin integrar APIs reales de Meta en esta
-fase:
+Inbox es la bandeja centralizada para conversaciones de WhatsApp, Facebook
+Messenger, Instagram DM y canal manual:
 
 ```text
 /inbox
@@ -616,10 +679,12 @@ fase:
 /inbox/canales
 ```
 
-Incluye canales manuales, conversaciones, mensajes simulados, notas internas,
-asignacion, vinculacion a clientes CRM y estados. No crea webhooks, no envia
-mensajes reales, no guarda tokens de Meta y no implementa IA. Antes de usarlo,
-aplicar manualmente:
+Incluye canales manuales, conversaciones, mensajes entrantes, respuestas
+manuales, notas internas, asignacion, vinculacion a clientes CRM y estados. Con
+canales Meta configurados, los webhooks oficiales reciben mensajes reales y
+WhatsApp permite envio manual real desde conversaciones habilitadas. IA,
+plantillas oficiales y automatizaciones avanzadas quedan fuera del nucleo base.
+Antes de usarlo, aplicar manualmente:
 
 ```text
 database/migrations/0016_inbox_core.sql
@@ -635,8 +700,9 @@ La configuracion oficial de canales Meta agrega rutas de alta/control:
 
 Permite registrar datos publicos de WhatsApp Business Cloud API, Facebook
 Messenger e Instagram Messaging por empresa, guardar secretos en tabla privada
-y preparar el webhook sugerido. No recibe webhooks ni envia mensajes reales.
-Antes de usarlo, aplicar manualmente:
+y preparar el webhook sugerido. El frontend solo muestra estados de
+configuracion; los secretos se leen server-side. Antes de usarlo, aplicar
+manualmente:
 
 ```text
 database/migrations/0018_inbox_meta_channels.sql
@@ -650,8 +716,9 @@ POST /api/webhooks/meta
 ```
 
 Permiten verificar `verify_token`, recibir payloads entrantes, crear o actualizar
-conversaciones y guardar mensajes entrantes en Inbox. No envia respuestas reales
-ni implementa plantillas. Antes de usarlo, aplicar manualmente:
+conversaciones y guardar mensajes entrantes en Inbox. El envio manual real por
+WhatsApp usa la configuracion segura del canal; plantillas y automatizaciones no
+forman parte de este bloque. Antes de usarlo, aplicar manualmente:
 
 ```text
 database/migrations/0019_inbox_meta_webhooks.sql

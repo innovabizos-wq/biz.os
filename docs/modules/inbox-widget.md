@@ -1,8 +1,8 @@
 # Widget Flotante De Inbox
 
 El widget flotante de Inbox es una mini bandeja de mensajeria dentro de biz.os.
-Esta fase construye la caratula visual y la navegacion interna tipo WhatsApp,
-sin enviar mensajes reales ni integrar automatizaciones.
+Permite revisar conversaciones y responder desde el layout autenticado usando
+las mismas acciones seguras del Inbox.
 
 ## Incluye
 
@@ -16,9 +16,8 @@ sin enviar mensajes reales ni integrar automatizaciones.
 - Carga de conversaciones reales del Inbox.
 - Carga bajo demanda de mensajes reales al abrir una conversacion.
 
-## No Incluye Todavia
+## No Incluye
 
-- Envio real a WhatsApp, Facebook o Instagram.
 - Adjuntos reales.
 - Audio.
 - Plantillas oficiales.
@@ -36,11 +35,12 @@ La lista usa las conversaciones existentes del modulo Inbox. Al seleccionar una
 conversacion, el widget llama una server action para consultar sus mensajes y
 los presenta como burbujas.
 
-El textarea de respuesta es visual en esta fase. No envia mensajes reales.
+El textarea registra la respuesta sobre la conversacion activa. Si la
+conversacion pertenece a un canal WhatsApp Meta activo/configurado, usa el envio
+real disponible en Inbox; en canales manuales registra la respuesta interna.
 
-## Pendientes
+## Extensiones
 
-- Conectar respuesta simulada o real segun permisos.
 - Estados de no leido.
 - Tiempo real.
 - Adjuntos.

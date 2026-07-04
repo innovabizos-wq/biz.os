@@ -4,19 +4,20 @@ Fecha de revision: 2026-06-05
 
 ## Estado Actual
 
-La tabla `empresa_modulo_health` ya existe y esta conectada al contrato de modulos, pero todavia no representa salud real. El estado vivo tiene:
+La tabla `empresa_modulo_health` ya existe, esta conectada al contrato de modulos y se recalcula con `recalcular_salud_modulos_empresa`.
 
-- `inactive`: `12`
-- `unknown`: `22`
-- `ok`: `0`
+Estado despues de `0047_meta_secret_writes_server_only`:
 
-La siguiente fase debe convertir estos registros en checks ejecutables.
+- Modulos core activos con configuracion minima completa: `healthy`.
+- Modulos opcionales apagados: `inactive`.
+- Modulos opcionales activos sin configuracion/credenciales completas: `misconfigured`.
+- `whapp` activo con canal Meta configurado y Vault refs presentes: `healthy`.
 
 ## Contrato General
 
 Cada modulo debe reportar:
 
-- `status`: `ok`, `warning`, `error`, `inactive` o `unknown`.
+- `status`: `healthy`, `misconfigured`, `unhealthy`, `inactive` o `unknown`.
 - `configuration_complete`: boolean.
 - `credentials_present`: boolean.
 - `last_success_at`: timestamp del ultimo evento exitoso.
@@ -58,7 +59,8 @@ Cada modulo debe reportar:
 `billing`
 - Configuracion fiscal completa.
 - Llave de cifrado presente.
-- Hacienda environment definido.
+- Hacienda environment definido y flags de envio/consulta controlados por
+  `BILLING_HACIENDA_SEND_ENABLED`/`BILLING_HACIENDA_STATUS_ENABLED`.
 - Facturas preparadas sin exponer secretos.
 - Estado futuro: XML v4.4, firma XAdES-EPES, envio y consulta Hacienda.
 
@@ -102,12 +104,11 @@ Cada modulo debe reportar:
 - Modulos activos expuestos.
 - Casos iniciales: chofer, ventas rapidas y notificaciones.
 
-## Orden De Implementacion
+## Pendientes De Profundizacion
 
-1. Implementar health real para `admin`, `crm`, `quotes`, `catalog`, `sales`, `inventory`, `dispatch`, `hr`.
-2. Implementar health de `billing` y `whapp` porque dependen de credenciales.
-3. Implementar `reports`, `autoblog`, `ai`.
-4. Agregar `purchases`, `payments`, `mobile` cuando sus tablas/API existan.
+1. Convertir checks externos de `billing`, `whapp`, `ai` y `autoblog` en pruebas reales contra proveedores cuando existan credenciales.
+2. Profundizar health de `purchases`, `payments` y `mobile` con indicadores de uso real, no solo presencia de tablas/API.
+3. Registrar `last_success_at` desde eventos reales externos, no solo desde recalc interno.
 
 ## Regla De Seguridad
 

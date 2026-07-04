@@ -1,0 +1,2603 @@
+﻿USA MODO PLANIFICACIÓN + EJECUCIÓN CONTROLADA.
+
+OBJETIVO GENERAL:
+Avanzar el módulo de Facturación Electrónica de biz.os para Costa Rica hasta dejarlo estructuralmente preparado para emisión real ante Hacienda, cubriendo CABYS, configuración fiscal, consecutivos, clave numérica, documentos fiscales internos, XML versión 4.4, impuestos, firma XAdES-EPES, API Hacienda, respuesta oficial, PDF fiscal, archivo documental, recepción de documentos y health desde Platform Console.
+
+IMPORTANTE:
+Este prompt debe abarcar TODO el módulo, pero se debe ejecutar en orden, sin improvisar, sin romper módulos actuales y sin prometer emisión real si todavía falta firma/API Hacienda.
+
+CONTEXTO DEL PROYECTO:
+biz.os es un SaaS multiempresa.
+AInovaCR/biz.os es Platform Admin / Operador SaaS.
+El cliente que compra el sistema es Tenant Owner / Propietario de empresa.
+Los usuarios internos del cliente son Company Admin / colaboradores.
+La ruta /admin pertenece al cliente/tenant.
+La ruta /platform pertenece a AInovaCR/biz.os.
+El módulo billing/facturación es opcional.
+La facturación debe respetar:
+- empresa actual
+- módulo activo
+- permisos del usuario
+- RLS
+- secretos protegidos
+- no exponer PIN/certificado
+- no usar service_role en frontend
+
+REGLA PRINCIPAL:
+Una factura electrónica real NO es un PDF.
+La factura real es el XML válido, firmado y aceptado por Hacienda.
+El PDF es representación gráfica.
+
+NO HACER:
+1. SÍ ejecutar migraciones remotas cuando estén creadas, revisadas y verificadas.
+2. NO usar SUPABASE_SERVICE_ROLE_KEY en frontend.
+3. NO exponer certificado, PIN, claves ni secretos.
+4. NO crear facturas falsas como si fueran aceptadas por Hacienda.
+5. NO marcar documentos como aceptados si no hay respuesta real.
+6. NO improvisar XML sin estructura oficial.
+7. NO implementar firma XAdES incompleta fingiendo que funciona.
+8. NO eliminar datos existentes.
+9. NO romper ventas, inventario, pagos ni cotizaciones.
+10. NO mezclar facturación del cliente con facturación SaaS de AInovaCR.
+11. NO permitir que Platform Console vea PIN o certificado en claro.
+12. NO aceptar empresa_id desde frontend en Tenant App.
+13. NO permitir acceso a billing si el módulo está inactivo.
+14. NO permitir emitir si faltan datos fiscales obligatorios.
+15. NO permitir emitir si productos/servicios no tienen CABYS cuando corresponda.
+16. NO permitir consecutivos duplicados.
+17. NO reutilizar consecutivos fiscales luego de firmar/enviar.
+18. NO implementar todo en un solo archivo gigante.
+19. NO ocultar errores de Hacienda.
+20. NO mostrar errores SQL crudos al usuario.
+
+SÍ HACER:
+1. Crear base fiscal profesional.
+2. Preparar CABYS.
+3. Conectar productos/servicios con CABYS.
+4. Crear documentos fiscales internos.
+5. Preparar XML 4.4.
+6. Preparar firma XAdES-EPES.
+7. Preparar API Hacienda.
+8. Preparar estados fiscales.
+9. Preparar PDF fiscal.
+10. Preparar recepción de documentos.
+11. Preparar health por empresa.
+12. Preparar Platform Console para diagnóstico.
+13. Documentar qué está listo y qué falta.
+14. Agregar tests contractuales.
+15. Mantener todo multiempresa.
+
+==================================================
+FASE 0 — AUDITORÍA INICIAL DEL ESTADO ACTUAL
+==================================================
+
+TAREA 0.1
+Revisar el módulo actual de billing/facturación:
+- rutas existentes
+- server actions
+- componentes
+- migraciones
+- tipos
+- helpers
+- docs
+- health checks
+- relación con ventas
+- relación con clientes
+- relación con pagos
+- relación con platform console
+
+TAREA 0.2
+Identificar archivos existentes relacionados con:
+- billing
+- fiscal
+- hacienda
+- invoice
+- factura
+- comprobantes
+- certificate
+- xml
+- taxes
+- cabys
+- catalog fiscal fields
+
+TAREA 0.3
+Crear un reporte interno en la respuesta final:
+- qué existe
+- qué se reutilizó
+- qué se reemplazó
+- qué queda pendiente
+
+TAREA 0.4
+No empezar a crear código nuevo sin revisar si ya existe una base.
+
+==================================================
+FASE 1 — CONTRATO DEL MÓDULO BILLING
+==================================================
+
+TAREA 1.1
+Confirmar que billing está registrado como módulo opcional en el catálogo central de módulos.
+
+TAREA 1.2
+Confirmar que billing tiene:
+- code: billing
+- kind: optional
+- nombre visible
+- descripción
+- rutas
+- permisos requeridos
+- health keys
+- requiredConfigKeys
+- dependencias blandas si aplica
+
+TAREA 1.3
+Billing debe bloquearse si:
+- módulo inactivo
+- usuario sin permiso
+- empresa actual inválida
+- tenant no válido
+
+TAREA 1.4
+Aplicar requireActiveModule("billing") o helper equivalente en:
+- /facturacion
+- /facturacion/configuracion
+- /facturacion/documentos
+- /facturacion/cabys
+- /facturacion/consecutivos
+- /facturacion/recepcion
+- /facturacion/[documentoId]
+- server actions de billing
+- cualquier API interna de billing
+
+TAREA 1.5
+Definir permisos mínimos:
+- billing.view
+- billing.manage
+- billing.issue
+- billing.cancel
+- billing.credit_note
+- billing.debit_note
+- billing.receive
+- billing.config.view
+- billing.config.manage
+- billing.cabys.manage
+- billing.reports.view
+
+TAREA 1.6
+Si no existen estos permisos:
+- agregarlos en migración controlada
+- asignarlos a roles admin/owner del tenant según patrón actual
+- no asignarlos masivamente a roles no administrativos sin revisar
+
+TAREA 1.7
+Documentar que billing es opcional y sensible.
+
+==================================================
+FASE 2 — CONFIGURACIÓN FISCAL DE EMPRESA
+==================================================
+
+OBJETIVO:
+Cada empresa cliente debe tener su propia configuración fiscal para emitir comprobantes.
+
+TAREA 2.1
+Revisar si ya existe tabla de configuración fiscal.
+Si existe, ampliarla sin duplicar.
+Si no existe, crear tabla:
+
+company_fiscal_settings
+
+Campos recomendados:
+- id uuid primary key
+- empresa_id uuid not null references empresas(id)
+- legal_name text not null
+- trade_name text
+- identification_type text not null
+- identification_number text not null
+- identification_normalized text
+- email text not null
+- phone_country_code text
+- phone_number text
+- province_code text not null
+- canton_code text not null
+- district_code text not null
+- neighborhood text
+- address_line text not null
+- main_activity_code text
+- secondary_activity_codes jsonb default '[]'
+- branch_code text not null default '001'
+- terminal_code text not null default '00001'
+- environment text not null default 'testing'
+- default_currency text not null default 'CRC'
+- default_sale_condition_code text
+- default_payment_method_code text
+- default_credit_term_days integer
+- hacienda_username_secret_ref text
+- hacienda_password_secret_ref text
+- certificate_secret_ref text
+- certificate_pin_secret_ref text
+- certificate_uploaded_at timestamptz
+- certificate_expires_at timestamptz
+- certificate_last4 text
+- is_complete boolean default false
+- last_validated_at timestamptz
+- last_error text
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 2.2
+Constraints:
+- unique(empresa_id)
+- environment in ('testing', 'production')
+- identification_type validado por catálogo local
+- branch_code formato 3 dígitos
+- terminal_code formato 5 dígitos
+- default_currency no vacío
+- email válido a nivel zod/server
+
+TAREA 2.3
+No guardar certificado, PIN, usuario ni contraseña en claro.
+
+TAREA 2.4
+Si el proyecto ya usa Vault o cifrado:
+- reutilizar patrón existente.
+Si no:
+- crear interfaz server-side para secret refs.
+- documentar que los secretos deben cifrarse con FISCAL_CONFIG_ENCRYPTION_KEY.
+- no implementar almacenamiento inseguro.
+
+TAREA 2.5
+Crear validación:
+validateFiscalSettingsCompleteness(empresaId)
+
+Debe revisar:
+- razón social
+- identificación
+- correo
+- dirección
+- actividad económica
+- sucursal
+- terminal
+- ambiente
+- certificado configurado
+- PIN configurado
+- credenciales Hacienda configuradas si aplican
+
+TAREA 2.6
+Crear health:
+billing_config_status:
+- missing
+- incomplete
+- ready_for_xml
+- ready_for_signing
+- ready_for_hacienda
+- error
+
+TAREA 2.7
+Crear o actualizar UI:
+/facturacion/configuracion
+
+Debe permitir al cliente configurar:
+- datos fiscales
+- dirección
+- actividad económica
+- sucursal/terminal
+- ambiente pruebas/producción
+- moneda
+- condición venta por defecto
+- medio pago por defecto
+- certificado/PIN mediante carga segura
+- credenciales Hacienda si aplica
+
+TAREA 2.8
+La UI nunca debe mostrar:
+- PIN
+- certificado completo
+- usuario/contraseña en claro
+- secret refs completos
+
+TAREA 2.9
+La UI sí puede mostrar:
+- certificado cargado: sí/no
+- fecha carga
+- fecha vencimiento si se puede leer
+- últimos 4 caracteres si aplica
+- ambiente actual
+- estado de configuración
+
+TAREA 2.10
+Agregar zod schemas para configuración fiscal.
+
+TAREA 2.11
+Agregar server actions:
+- getFiscalSettings()
+- saveFiscalSettings()
+- uploadFiscalCertificate()
+- clearFiscalCertificate()
+- validateFiscalSettings()
+- getBillingHealth()
+
+TAREA 2.12
+Todas las actions deben validar:
+- requireActiveModule("billing")
+- permisos billing.config.view/manage
+- empresa actual
+- no service_role frontend
+- no empresa_id frontend
+
+==================================================
+FASE 3 — CATÁLOGOS FISCALES BASE
+==================================================
+
+OBJETIVO:
+Crear tablas de catálogos internos para códigos usados por Hacienda.
+
+TAREA 3.1
+Crear migración para catálogos fiscales si no existen.
+
+Tablas recomendadas:
+
+fiscal_identification_types:
+- code
+- label
+- description
+- is_active
+
+fiscal_document_types:
+- code
+- name
+- xml_root
+- is_issuer_document
+- is_receiver_document
+- is_active
+
+fiscal_sale_conditions:
+- code
+- label
+- is_active
+
+fiscal_payment_methods:
+- code
+- label
+- supports_amount
+- is_active
+
+fiscal_currencies:
+- code
+- name
+- symbol
+- is_active
+
+fiscal_units:
+- code
+- label
+- is_active
+
+fiscal_tax_types:
+- code
+- label
+- is_active
+
+fiscal_tax_rates:
+- code
+- tax_code
+- label
+- rate
+- is_active
+
+fiscal_reference_codes:
+- code
+- label
+- applies_to
+- is_active
+
+fiscal_exoneration_types:
+- code
+- label
+- is_active
+
+TAREA 3.2
+Seed inicial con los códigos que ya estén en docs internas o placeholders seguros.
+IMPORTANTE:
+Si no se tiene certeza de códigos oficiales, no inventar.
+Crear estructura y dejar TODO documentado para completar con catálogo oficial.
+
+TAREA 3.3
+Crear docs:
+docs/modules/billing-fiscal-catalogs.md
+
+Debe explicar:
+- qué catálogos existen
+- cuáles requieren datos oficiales
+- cómo actualizarlos
+- qué no está completo todavía
+
+TAREA 3.4
+Crear helpers:
+- getFiscalCatalogOptions()
+- getPaymentMethods()
+- getSaleConditions()
+- getTaxRates()
+- getFiscalUnits()
+- getDocumentTypes()
+
+==================================================
+FASE 4 — CABYS
+==================================================
+
+OBJETIVO:
+Crear motor CABYS local para asociar bienes/servicios a productos del catálogo.
+
+TAREA 4.1
+Crear tabla:
+
+cabys_catalog
+
+Campos:
+- id uuid primary key
+- code text not null unique
+- description text not null
+- normalized_description text
+- category_level_1 text
+- category_level_2 text
+- category_level_3 text
+- category_level_4 text
+- category_level_5 text
+- category_level_6 text
+- category_level_7 text
+- is_good boolean
+- is_service boolean
+- suggested_tax_rate numeric
+- tax_rate_code text
+- is_active boolean default true
+- valid_from date
+- valid_to date
+- source_version text
+- source_hash text
+- metadata jsonb default '{}'
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 4.2
+Crear índices:
+- code
+- normalized_description
+- is_active
+- suggested_tax_rate
+- full text search si el proyecto tiene patrón
+
+TAREA 4.3
+Crear tabla:
+
+cabys_import_batches
+
+Campos:
+- id uuid primary key
+- source_name text
+- source_version text
+- source_url text
+- file_name text
+- file_hash text
+- total_rows integer
+- inserted_rows integer
+- updated_rows integer
+- skipped_rows integer
+- status text
+- error_message text
+- imported_by uuid references profiles(id)
+- created_at timestamptz default now()
+
+TAREA 4.4
+Crear tabla puente:
+
+catalog_product_fiscal_profile
+
+o ampliar la tabla de productos actual si conviene.
+
+Campos:
+- id uuid primary key
+- empresa_id uuid not null
+- product_id uuid not null
+- cabys_code text references cabys_catalog(code)
+- fiscal_unit_code text
+- default_tax_code text
+- default_tax_rate_code text
+- default_tax_rate numeric
+- is_tax_exempt boolean default false
+- is_non_subject boolean default false
+- requires_exoneration boolean default false
+- requires_lot_or_serial boolean default false
+- requires_vin boolean default false
+- requires_sanitary_registration boolean default false
+- requires_tariff_heading boolean default false
+- fiscal_notes text
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 4.5
+Constraints:
+- unique(empresa_id, product_id)
+- cabys_code obligatorio para facturar productos/servicios
+- no borrar perfil fiscal si existen documentos emitidos
+
+TAREA 4.6
+Crear buscador CABYS:
+/facturacion/cabys
+
+Debe permitir:
+- buscar por código
+- buscar por descripción
+- filtrar bienes
+- filtrar servicios
+- filtrar activos
+- ver tarifa sugerida si existe
+- seleccionar y asociar a producto/servicio
+
+TAREA 4.7
+Crear integración con Catálogo:
+En ficha de producto/servicio mostrar sección fiscal:
+- CABYS
+- unidad fiscal
+- impuesto por defecto
+- tarifa
+- exento/no sujeto
+- campos especiales
+
+TAREA 4.8
+Crear validación:
+validateProductFiscalProfile(productId)
+
+Debe revisar:
+- tiene CABYS
+- tiene unidad
+- tiene impuesto/tarifa si aplica
+- si es producto especial, tiene campos especiales
+
+TAREA 4.9
+Crear importador CABYS local:
+- aceptar CSV/XLSX si ya existe infraestructura de importación
+- no depender de internet en runtime
+- validar columnas
+- normalizar código
+- normalizar descripción
+- calcular hash
+- registrar batch
+- permitir dry-run
+- permitir rollback lógico si batch falló
+
+TAREA 4.10
+Si no se implementa importador completo:
+- crear estructura y documentación
+- crear script placeholder seguro
+- NO poblar datos falsos
+
+TAREA 4.11
+Documentar:
+docs/modules/billing-cabys.md
+
+Debe explicar:
+- CABYS obligatorio
+- cómo se importa
+- cómo se asocia al catálogo
+- qué pasa si falta CABYS
+- cómo afecta factura
+
+==================================================
+FASE 5 — DOCUMENTOS FISCALES INTERNOS
+==================================================
+
+OBJETIVO:
+Crear modelo interno de documentos fiscales antes del XML.
+
+TAREA 5.1
+Crear tabla:
+
+fiscal_documents
+
+Campos mínimos:
+- id uuid primary key
+- empresa_id uuid not null
+- source_type text
+- source_id uuid
+- sale_id uuid null
+- customer_id uuid null
+- document_type_code text not null
+- status text not null default 'draft'
+- hacienda_status text
+- environment text not null
+- clave text
+- consecutivo text
+- activity_code text
+- branch_code text
+- terminal_code text
+- issue_datetime timestamptz
+- signed_at timestamptz
+- sent_at timestamptz
+- accepted_at timestamptz
+- rejected_at timestamptz
+- currency_code text not null default 'CRC'
+- exchange_rate numeric
+- sale_condition_code text
+- credit_term_days integer
+- receiver_name text
+- receiver_identification_type text
+- receiver_identification_number text
+- receiver_email text
+- receiver_phone text
+- receiver_address jsonb default '{}'
+- issuer_snapshot jsonb not null default '{}'
+- receiver_snapshot jsonb default '{}'
+- totals jsonb not null default '{}'
+- validation_errors jsonb default '[]'
+- last_error text
+- xml_unsigned_storage_path text
+- xml_signed_storage_path text
+- hacienda_response_storage_path text
+- pdf_storage_path text
+- metadata jsonb default '{}'
+- created_by uuid references profiles(id)
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 5.2
+Estados internos:
+- draft
+- validated
+- xml_generated
+- signed
+- sent
+- processing
+- accepted
+- rejected
+- error_validation
+- error_xml
+- error_signing
+- error_sending
+- cancelled_internal
+- credit_noted
+- replaced
+
+TAREA 5.3
+Hacienda status:
+- no_enviado
+- recibido
+- procesando
+- aceptado
+- rechazado
+- error
+- desconocido
+
+TAREA 5.4
+Crear constraints:
+- unique(empresa_id, clave) where clave is not null
+- unique(empresa_id, consecutivo, document_type_code, environment) where consecutivo is not null
+- document_type_code válido
+- status válido
+
+TAREA 5.5
+Crear tabla:
+
+fiscal_document_lines
+
+Campos:
+- id uuid primary key
+- fiscal_document_id uuid not null references fiscal_documents(id) on delete cascade
+- empresa_id uuid not null
+- line_number integer not null
+- source_item_id uuid
+- product_id uuid
+- cabys_code text
+- commercial_code text
+- quantity numeric not null
+- unit_code text not null
+- commercial_unit text
+- detail text not null
+- unit_price numeric not null
+- gross_amount numeric not null
+- discount_amount numeric default 0
+- discount_reason text
+- subtotal numeric not null
+- taxable_base numeric
+- tax_amount numeric default 0
+- total_line_amount numeric not null
+- is_good boolean
+- is_service boolean
+- is_exempt boolean default false
+- is_non_subject boolean default false
+- metadata jsonb default '{}'
+- created_at timestamptz default now()
+
+TAREA 5.6
+Crear tabla:
+
+fiscal_document_line_taxes
+
+Campos:
+- id uuid primary key
+- fiscal_document_line_id uuid not null references fiscal_document_lines(id) on delete cascade
+- empresa_id uuid not null
+- tax_code text not null
+- tax_rate_code text
+- rate numeric
+- amount numeric not null
+- taxable_base numeric
+- exoneration_id uuid
+- metadata jsonb default '{}'
+
+TAREA 5.7
+Crear tabla:
+
+fiscal_document_line_exonerations
+
+Campos:
+- id uuid primary key
+- fiscal_document_line_id uuid not null
+- empresa_id uuid not null
+- exoneration_type_code text
+- document_number text
+- institution_name text
+- issue_date date
+- exemption_percentage numeric
+- exemption_amount numeric
+- metadata jsonb default '{}'
+
+TAREA 5.8
+Crear tabla:
+
+fiscal_document_payments
+
+Campos:
+- id uuid primary key
+- fiscal_document_id uuid not null references fiscal_documents(id) on delete cascade
+- empresa_id uuid not null
+- payment_method_code text not null
+- amount numeric not null
+- metadata jsonb default '{}'
+
+TAREA 5.9
+Crear tabla:
+
+fiscal_document_references
+
+Campos:
+- id uuid primary key
+- fiscal_document_id uuid not null references fiscal_documents(id) on delete cascade
+- empresa_id uuid not null
+- reference_document_type_code text
+- reference_clave text
+- reference_consecutivo text
+- reference_issue_date timestamptz
+- reference_code text
+- reason text
+- metadata jsonb default '{}'
+
+TAREA 5.10
+Crear tabla:
+
+fiscal_document_events
+
+Campos:
+- id uuid primary key
+- fiscal_document_id uuid not null references fiscal_documents(id) on delete cascade
+- empresa_id uuid not null
+- event_type text not null
+- from_status text
+- to_status text
+- message text
+- details jsonb default '{}'
+- created_by uuid references profiles(id)
+- created_at timestamptz default now()
+
+TAREA 5.11
+Crear RLS para todas:
+- filtrar por empresa_id
+- usuarios solo ven documentos de su empresa
+- platform puede ver health/resumen sin secretos si existe patrón platform
+- inserts/updates solo con permisos billing
+
+TAREA 5.12
+Crear indexes:
+- empresa_id
+- document_type_code
+- status
+- hacienda_status
+- clave
+- consecutivo
+- customer_id
+- sale_id
+- issue_datetime
+- created_at
+
+==================================================
+FASE 6 — CONSECUTIVOS Y CLAVE NUMÉRICA
+==================================================
+
+OBJETIVO:
+Control fiscal serio de consecutivos.
+
+TAREA 6.1
+Crear tabla:
+
+fiscal_sequence_counters
+
+Campos:
+- id uuid primary key
+- empresa_id uuid not null
+- environment text not null
+- branch_code text not null
+- terminal_code text not null
+- document_type_code text not null
+- current_number bigint not null default 0
+- next_number bigint not null default 1
+- last_reserved_at timestamptz
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 6.2
+Constraint:
+unique(empresa_id, environment, branch_code, terminal_code, document_type_code)
+
+TAREA 6.3
+Crear tabla:
+
+fiscal_sequence_reservations
+
+Campos:
+- id uuid primary key
+- empresa_id uuid not null
+- fiscal_document_id uuid
+- environment text not null
+- branch_code text not null
+- terminal_code text not null
+- document_type_code text not null
+- sequence_number bigint not null
+- consecutivo text not null
+- clave text
+- status text not null default 'reserved'
+- reserved_at timestamptz default now()
+- used_at timestamptz
+- voided_at timestamptz
+- reason text
+
+TAREA 6.4
+Estados reservation:
+- reserved
+- used
+- voided
+- failed_before_signing
+- failed_after_signing
+
+TAREA 6.5
+Crear función RPC segura:
+reserve_fiscal_sequence_for_current_company(document_type_code)
+
+Debe:
+- validar auth
+- validar empresa actual
+- validar billing activo
+- validar permiso billing.issue
+- tomar lock transaccional
+- incrementar contador
+- generar consecutivo
+- crear reservation
+- devolver consecutivo y reservation_id
+
+TAREA 6.6
+Crear helper:
+generateFiscalConsecutivo({
+  branchCode,
+  terminalCode,
+  documentTypeCode,
+  sequenceNumber
+})
+
+TAREA 6.7
+Crear helper:
+generateFiscalClave({
+  countryCode,
+  date,
+  issuerIdentification,
+  consecutivo,
+  securityCode,
+  situationCode
+})
+
+IMPORTANTE:
+No improvisar formato si no está confirmado.
+Si falta confirmación oficial, crear helper con TODO explícito y tests placeholders.
+Documentar que debe validarse contra documento oficial antes de producción.
+
+TAREA 6.8
+Crear campo security_code:
+- aleatorio
+- longitud según formato oficial
+- no reutilizable
+
+TAREA 6.9
+No permitir reutilizar consecutivo después de:
+- XML generado
+- firmado
+- enviado
+
+TAREA 6.10
+Crear UI:
+/facturacion/consecutivos
+
+Debe mostrar:
+- ambiente
+- sucursal
+- terminal
+- tipo documento
+- próximo consecutivo
+- último usado
+- estado
+- advertencia fuerte antes de editar
+
+TAREA 6.11
+Permitir configuración inicial de consecutivos solo a billing.config.manage.
+
+TAREA 6.12
+Auditar cambios de consecutivos.
+
+==================================================
+FASE 7 — PREPARAR FACTURA DESDE VENTA
+==================================================
+
+OBJETIVO:
+Venta confirmada → documento fiscal interno validado.
+
+TAREA 7.1
+En detalle de venta agregar acción:
+"Preparar factura"
+
+Solo si:
+- billing activo
+- usuario tiene billing.issue
+- venta confirmada
+- venta no tiene documento fiscal aceptado
+- empresa tiene configuración fiscal mínima
+- cliente tiene datos mínimos
+- items cumplen reglas fiscales
+
+TAREA 7.2
+Crear action:
+prepareFiscalDocumentFromSale(saleId, options)
+
+Debe:
+- validar tenant
+- validar venta pertenece a empresa
+- validar estado de venta
+- tomar snapshot de emisor
+- tomar snapshot de receptor
+- tomar snapshot de líneas
+- asociar CABYS desde productos
+- calcular impuestos preliminares
+- calcular totales
+- crear fiscal_document en draft o validated
+- crear líneas
+- crear taxes
+- crear payments si aplica
+- registrar event
+
+TAREA 7.3
+Opciones:
+- document_type_code: factura o tiquete
+- sale_condition_code
+- payment_methods
+- credit_term_days
+- receiver_email_override
+- notes
+
+TAREA 7.4
+Validaciones:
+- producto/servicio sin CABYS bloquea
+- cliente sin identificación bloquea factura electrónica si aplica
+- cliente consumidor final puede generar tiquete si aplica
+- cantidad > 0
+- precio >= 0
+- impuestos válidos
+- descuento no mayor a subtotal
+- moneda válida
+- tipo cambio si moneda no CRC
+- medio de pago obligatorio si corresponde
+
+TAREA 7.5
+Si hay errores, guardar validation_errors y mostrar UI clara:
+- Producto X no tiene CABYS
+- Cliente sin correo
+- Falta actividad económica
+- Falta certificado
+- Falta consecutivo
+- Falta unidad fiscal
+
+TAREA 7.6
+Crear pantalla:
+/facturacion/documentos/[documentoId]
+
+Debe mostrar:
+- estado
+- venta origen
+- cliente
+- líneas
+- CABYS
+- impuestos
+- totales
+- errores
+- eventos
+- acciones disponibles
+
+TAREA 7.7
+Acciones disponibles según estado:
+draft:
+- validar
+- editar datos permitidos
+- eliminar si no fue firmado/enviado
+
+validated:
+- generar XML
+
+xml_generated:
+- firmar
+
+signed:
+- enviar Hacienda
+
+sent/processing:
+- consultar estado
+
+accepted:
+- descargar XML firmado
+- descargar respuesta
+- descargar PDF si existe
+- enviar correo si existe
+
+rejected:
+- ver errores
+- crear corrección/nota si aplica
+
+TAREA 7.8
+No permitir editar líneas después de XML firmado.
+
+==================================================
+FASE 8 — MOTOR DE IMPUESTOS FISCAL
+==================================================
+
+OBJETIVO:
+Calcular totales fiscales 4.4 de forma consistente.
+
+TAREA 8.1
+Crear módulo:
+src/modules/billing/tax-engine/
+
+Archivos:
+- types.ts
+- constants.ts
+- calculate-line.ts
+- calculate-document.ts
+- validations.ts
+- summary.ts
+
+TAREA 8.2
+Implementar:
+calculateFiscalLine(lineInput)
+
+Debe calcular:
+- gross_amount
+- discount_amount
+- subtotal
+- taxable_base
+- tax_amount
+- total_line_amount
+
+TAREA 8.3
+Implementar:
+calculateFiscalDocumentTotals(lines, payments, options)
+
+Debe calcular resumen:
+- totalServiciosGravados
+- totalServiciosExentos
+- totalServiciosExonerados
+- totalServiciosNoSujetos
+- totalMercanciasGravadas
+- totalMercanciasExentas
+- totalMercanciasExoneradas
+- totalMercanciasNoSujetas
+- totalGravado
+- totalExento
+- totalExonerado
+- totalNoSujeto
+- totalVenta
+- totalDescuentos
+- totalVentaNeta
+- totalImpuestos
+- totalIVADevuelto si aplica
+- totalOtrosCargos
+- totalComprobante
+
+TAREA 8.4
+Soportar:
+- IVA 13
+- tarifas reducidas
+- tarifa 0
+- exento
+- no sujeto
+- exoneración
+- descuentos
+- otros cargos
+- múltiples medios de pago
+- moneda extranjera con tipo cambio
+
+TAREA 8.5
+Si no se tiene lista oficial completa de códigos:
+- crear estructura flexible
+- no inventar códigos
+- usar catálogos configurables
+
+TAREA 8.6
+Crear tests unitarios:
+- línea gravada 13%
+- línea exenta
+- línea no sujeta
+- línea con descuento
+- línea con exoneración parcial
+- documento mixto bienes/servicios
+- múltiples medios de pago
+- moneda extranjera
+
+TAREA 8.7
+Documentar:
+docs/modules/billing-tax-engine.md
+
+==================================================
+FASE 9 — XML 4.4
+==================================================
+
+OBJETIVO:
+Generar XML fiscal estructurado por tipo de comprobante.
+
+TAREA 9.1
+Crear módulo:
+src/modules/billing/xml/
+
+Archivos:
+- types.ts
+- namespaces.ts
+- builders/
+  - factura-electronica.ts
+  - tiquete-electronico.ts
+  - nota-credito.ts
+  - nota-debito.ts
+  - factura-compra.ts
+  - factura-exportacion.ts
+  - recibo-electronico-pago.ts
+  - mensaje-receptor.ts
+- common/
+  - emisor.ts
+  - receptor.ts
+  - detalle.ts
+  - impuestos.ts
+  - resumen.ts
+  - referencias.ts
+  - otros-cargos.ts
+  - medios-pago.ts
+  - utils.ts
+- validate.ts
+- serialize.ts
+
+TAREA 9.2
+Implementar primero:
+- FacturaElectronica
+- TiqueteElectronico
+- NotaCreditoElectronica
+- NotaDebitoElectronica
+
+TAREA 9.3
+Dejar preparados con TODO:
+- FacturaElectronicaCompra
+- FacturaElectronicaExportacion
+- ReciboElectronicoPago
+- MensajeReceptor
+
+TAREA 9.4
+Builder debe recibir fiscal_document completo con:
+- issuer snapshot
+- receiver snapshot
+- lines
+- taxes
+- payments
+- references
+- totals
+
+TAREA 9.5
+XML debe incluir:
+- clave
+- código actividad
+- número consecutivo
+- fecha emisión
+- emisor
+- receptor si aplica
+- condición venta
+- plazo crédito si aplica
+- medios de pago
+- detalle de servicio/mercancía
+- CABYS por línea
+- unidad
+- cantidad
+- precio
+- descuentos
+- impuestos
+- exoneraciones
+- resumen
+- referencias si aplica
+- otros
+- proveedor del sistema si aplica
+
+TAREA 9.6
+No construir XML concatenando strings inseguros.
+Usar builder XML confiable existente en el proyecto o dependencia liviana.
+Si se agrega dependencia, justificar.
+
+TAREA 9.7
+Escapar correctamente caracteres:
+- &
+- <
+- >
+- comillas
+- tildes
+- saltos
+
+TAREA 9.8
+Crear action:
+generateFiscalDocumentXml(documentId)
+
+Debe:
+- validar billing activo
+- validar permiso billing.issue
+- validar estado validated/draft válido
+- reservar consecutivo si aún no existe
+- generar clave si aún no existe
+- generar XML
+- guardar xml unsigned en storage o tabla segura
+- actualizar estado xml_generated
+- registrar event
+
+TAREA 9.9
+Crear validación XSD:
+validateXmlAgainstXsd(xml, documentType)
+
+Si no se incluye XSD todavía:
+- crear interfaz
+- crear TODO
+- documentar que producción requiere XSD oficial
+- no marcar "validado XSD" si no se hizo
+
+TAREA 9.10
+Crear tests snapshot para XML básico:
+- factura con una línea
+- factura con dos líneas
+- tiquete consumidor final
+- nota crédito con referencia
+
+TAREA 9.11
+Documentar:
+docs/modules/billing-xml-44.md
+
+==================================================
+FASE 10 — FIRMA XADES-EPES
+==================================================
+
+OBJETIVO:
+Preparar e implementar firma real o al menos interfaz segura si falta dependencia.
+
+TAREA 10.1
+Crear módulo:
+src/modules/billing/signing/
+
+Archivos:
+- types.ts
+- signer.ts
+- xades-epes.ts
+- certificate.ts
+- errors.ts
+- validate-signature.ts
+
+TAREA 10.2
+La firma debe ser server-side solamente.
+
+TAREA 10.3
+La firma debe:
+- cargar XML unsigned
+- cargar certificado desde secret ref
+- cargar PIN/contraseña desde secret ref
+- firmar XML con XAdES-EPES
+- firma enveloped
+- incluir ds:Signature
+- usar algoritmos compatibles
+- validar que el XML firmado contiene firma
+- guardar XML firmado
+- actualizar estado signed
+- registrar event
+
+TAREA 10.4
+Si no se puede implementar XAdES-EPES real con seguridad en esta pasada:
+- crear interfaz BillingXmlSigner
+- crear implementación NotConfiguredSigner que falla explícitamente
+- NO fingir firma real
+- NO devolver XML sin firma como firmado
+- documentar dependencia requerida
+- documentar estrategia:
+  A. librería Node compatible
+  B. microservicio firmador aislado
+  C. proveedor externo de firma
+  D. integración propia con xml-crypto/xades si viable
+
+TAREA 10.5
+Crear action:
+signFiscalDocument(documentId)
+
+Debe:
+- validar billing activo
+- validar permiso billing.issue
+- validar estado xml_generated
+- validar certificado/PIN
+- firmar
+- actualizar estado signed o error_signing
+- registrar event
+- nunca retornar PIN/certificado
+
+TAREA 10.6
+Crear manejo de errores:
+- certificado faltante
+- PIN incorrecto
+- certificado vencido
+- XML inválido
+- algoritmo no soportado
+- firma fallida
+
+TAREA 10.7
+Crear docs:
+docs/modules/billing-xades-signing.md
+
+Debe explicar:
+- estado actual
+- si firma real está implementada o pendiente
+- dependencia técnica
+- cómo probar
+- riesgos
+
+==================================================
+FASE 11 — API HACIENDA
+==================================================
+
+OBJETIVO:
+Preparar cliente oficial de envío/consulta ante Hacienda.
+
+TAREA 11.1
+Crear módulo:
+src/modules/billing/hacienda/
+
+Archivos:
+- types.ts
+- client.ts
+- auth.ts
+- endpoints.ts
+- send.ts
+- status.ts
+- errors.ts
+- mapper.ts
+
+TAREA 11.2
+Soportar ambientes:
+- testing
+- production
+
+TAREA 11.3
+Crear configuración de endpoints por ambiente.
+No hardcodear secretos.
+
+TAREA 11.4
+Crear OAuth/OIDC client:
+- obtener token
+- refrescar token si aplica
+- manejar expiración
+- guardar token temporal seguro si corresponde
+- no exponer token al frontend
+
+TAREA 11.5
+Crear función:
+sendSignedXmlToHacienda(documentId)
+
+Debe:
+- validar estado signed
+- cargar XML firmado
+- obtener token
+- construir payload
+- enviar
+- guardar respuesta
+- actualizar estado sent/processing/error_sending
+- registrar event
+
+TAREA 11.6
+Crear función:
+queryHaciendaStatus(documentId)
+
+Debe:
+- usar clave
+- consultar estado
+- mapear respuesta
+- actualizar hacienda_status
+- si aceptado: status accepted
+- si rechazado: status rejected
+- si procesando: status processing
+- registrar event
+
+TAREA 11.7
+Crear manejo de errores:
+- credenciales inválidas
+- token inválido
+- timeout
+- rate limit
+- XML rechazado
+- Hacienda no disponible
+- respuesta desconocida
+- clave no encontrada
+
+TAREA 11.8
+Crear action:
+sendFiscalDocument(documentId)
+
+TAREA 11.9
+Crear action:
+refreshFiscalDocumentStatus(documentId)
+
+TAREA 11.10
+No marcar accepted sin respuesta de Hacienda.
+
+TAREA 11.11
+Guardar:
+- request metadata seguro
+- response metadata
+- XML respuesta si aplica
+- mensaje de rechazo
+- fecha/hora
+
+TAREA 11.12
+Crear docs:
+docs/modules/billing-hacienda-api.md
+
+Debe explicar:
+- ambientes
+- credenciales
+- estados
+- reintentos
+- errores comunes
+
+==================================================
+FASE 12 — PDF FISCAL / REPRESENTACIÓN GRÁFICA
+==================================================
+
+OBJETIVO:
+Generar PDF legible después del documento fiscal.
+
+TAREA 12.1
+Crear módulo:
+src/modules/billing/pdf/
+
+Archivos:
+- types.ts
+- render.ts
+- templates/
+  - factura.ts
+  - tiquete.ts
+  - nota-credito.ts
+  - nota-debito.ts
+- storage.ts
+
+TAREA 12.2
+El PDF debe mostrar:
+- nombre emisor
+- identificación emisor
+- dirección
+- nombre receptor
+- identificación receptor
+- correo receptor
+- clave
+- consecutivo
+- fecha
+- tipo documento
+- estado Hacienda
+- ambiente pruebas/producción
+- líneas
+- CABYS
+- cantidad
+- unidad
+- precio
+- descuentos
+- impuestos
+- totales
+- medios de pago
+- referencia si nota crédito/débito
+- leyenda "Pendiente de aceptación" si no aceptado
+- leyenda "Rechazado" si rechazado
+
+TAREA 12.3
+No mostrar "Aceptado por Hacienda" si no está accepted.
+
+TAREA 12.4
+Crear action:
+generateFiscalPdf(documentId)
+
+Debe:
+- validar permiso billing.view o issue según estado
+- renderizar PDF
+- guardar PDF
+- actualizar pdf_storage_path
+- registrar event
+
+TAREA 12.5
+Si no existe stack PDF:
+- evaluar si ya hay dependencia
+- si se agrega, justificar
+- no usar servicios externos sin decisión explícita
+
+TAREA 12.6
+Crear descarga:
+- XML unsigned si permitido
+- XML signed
+- respuesta Hacienda
+- PDF
+
+TAREA 12.7
+Crear docs:
+docs/modules/billing-pdf.md
+
+==================================================
+FASE 13 — ENTREGA POR CORREO Y ARCHIVO FISCAL
+==================================================
+
+OBJETIVO:
+Enviar y respaldar documentos fiscales.
+
+TAREA 13.1
+Crear tabla:
+
+fiscal_document_deliveries
+
+Campos:
+- id uuid primary key
+- fiscal_document_id uuid not null
+- empresa_id uuid not null
+- recipient_email text not null
+- delivery_type text not null
+- status text not null
+- sent_at timestamptz
+- error_message text
+- metadata jsonb default '{}'
+- created_at timestamptz default now()
+
+TAREA 13.2
+delivery_type:
+- email
+- download
+- manual
+
+TAREA 13.3
+status:
+- pending
+- sent
+- failed
+
+TAREA 13.4
+Crear action:
+sendFiscalDocumentEmail(documentId, recipientEmail)
+
+Debe:
+- validar accepted o permitir envío pendiente con leyenda clara
+- adjuntar PDF
+- adjuntar XML firmado
+- adjuntar respuesta Hacienda si existe
+- registrar delivery
+- manejar errores
+
+TAREA 13.5
+Si no hay proveedor email configurado:
+- mostrar "Proveedor de correo no configurado"
+- no fingir envío
+
+TAREA 13.6
+Crear archivo fiscal:
+/facturacion/documentos
+
+Debe permitir:
+- buscar por cliente
+- buscar por clave
+- buscar por consecutivo
+- filtrar por estado
+- filtrar por fecha
+- descargar PDF/XML/respuesta
+- reenviar
+
+TAREA 13.7
+Crear política de almacenamiento:
+- documentos por empresa
+- rutas separadas por empresa/documento
+- no acceso cruzado
+
+TAREA 13.8
+Documentar retención:
+- preparar para respaldo histórico
+- no prometer cantidad de años si no hay política comercial definida
+
+==================================================
+FASE 14 — NOTAS DE CRÉDITO Y DÉBITO
+==================================================
+
+OBJETIVO:
+Soportar corrección fiscal básica.
+
+TAREA 14.1
+Crear flujo:
+Documento aceptado → Crear nota de crédito
+
+TAREA 14.2
+Crear flujo:
+Documento aceptado → Crear nota de débito
+
+TAREA 14.3
+La nota debe incluir referencia:
+- clave documento original
+- fecha documento original
+- código referencia
+- razón
+
+TAREA 14.4
+Validaciones:
+- solo sobre documentos aceptados o según regla definida
+- no permitir nota duplicada sin advertencia
+- monto no puede superar documento original salvo casos válidos
+- mantener vínculo con documento original
+
+TAREA 14.5
+Crear action:
+createCreditNoteFromFiscalDocument(documentId, options)
+
+TAREA 14.6
+Crear action:
+createDebitNoteFromFiscalDocument(documentId, options)
+
+TAREA 14.7
+Crear UI:
+- botón Crear nota crédito
+- botón Crear nota débito
+- selección de líneas
+- monto parcial/total
+- razón
+- referencia
+
+TAREA 14.8
+Generar XML con builder correspondiente.
+
+TAREA 14.9
+Estados y envío igual que factura.
+
+==================================================
+FASE 15 — TIQUETE ELECTRÓNICO
+==================================================
+
+OBJETIVO:
+Soportar ventas a consumidor final cuando aplique.
+
+TAREA 15.1
+Permitir document_type_code tiquete.
+
+TAREA 15.2
+Validar receptor opcional según reglas del tipo.
+
+TAREA 15.3
+Desde venta permitir:
+- Factura electrónica
+- Tiquete electrónico
+
+TAREA 15.4
+UI debe explicar:
+- factura para receptor identificado
+- tiquete para consumidor final si aplica
+
+TAREA 15.5
+No usar tiquete para evadir datos requeridos si venta necesita factura.
+
+==================================================
+FASE 16 — FACTURA DE COMPRA, EXPORTACIÓN Y RECIBO ELECTRÓNICO DE PAGO
+==================================================
+
+OBJETIVO:
+Dejar preparado para Fase 2, aunque no se complete ahora.
+
+TAREA 16.1
+Crear tipos documentales en catálogos:
+- factura compra
+- factura exportación
+- recibo electrónico pago
+
+TAREA 16.2
+Crear builders placeholder que fallen explícitamente:
+"Tipo documental preparado pero no implementado todavía."
+
+TAREA 16.3
+Documentar campos adicionales:
+Factura exportación:
+- datos exportación
+- partida arancelaria si aplica
+- moneda/tipo cambio
+- receptor extranjero
+
+Factura compra:
+- proveedor
+- compra relacionada
+- CxP
+
+Recibo electrónico pago:
+- documento relacionado
+- pago relacionado
+- medio de pago
+- monto pagado
+
+TAREA 16.4
+No mostrar en UI como disponible si no está implementado.
+
+==================================================
+FASE 17 — RECEPCIÓN DE DOCUMENTOS DE PROVEEDORES
+==================================================
+
+OBJETIVO:
+Preparar recepción fiscal, aunque sea fase posterior.
+
+TAREA 17.1
+Crear tabla:
+
+fiscal_received_documents
+
+Campos:
+- id uuid primary key
+- empresa_id uuid not null
+- supplier_id uuid
+- clave text
+- consecutivo text
+- issuer_name text
+- issuer_identification text
+- issue_datetime timestamptz
+- total_amount numeric
+- currency_code text
+- hacienda_status text
+- receiver_response_status text
+- xml_storage_path text
+- parsed_data jsonb default '{}'
+- validation_errors jsonb default '[]'
+- linked_purchase_id uuid
+- linked_payable_account_id uuid
+- created_by uuid references profiles(id)
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 17.2
+Crear estados receiver_response:
+- pending
+- accepted
+- partially_accepted
+- rejected
+- sent
+- error
+
+TAREA 17.3
+Crear UI:
+/facturacion/recepcion
+
+Debe permitir:
+- cargar XML proveedor
+- leer datos básicos
+- validar estructura
+- vincular proveedor
+- vincular compra
+- aceptar
+- aceptar parcialmente
+- rechazar
+- guardar respuesta
+
+TAREA 17.4
+Crear parser:
+parseReceivedFiscalXml(xml)
+
+Debe extraer:
+- clave
+- emisor
+- receptor
+- fecha
+- líneas
+- impuestos
+- total
+- moneda
+
+TAREA 17.5
+Crear Mensaje Receptor builder placeholder o real si viable.
+
+TAREA 17.6
+No marcar recepción como enviada a Hacienda si no se implementa envío real.
+
+TAREA 17.7
+Documentar:
+docs/modules/billing-received-documents.md
+
+==================================================
+FASE 18 — CASOS ESPECIALES POR CABYS
+==================================================
+
+OBJETIVO:
+Preparar validaciones para productos especiales.
+
+TAREA 18.1
+Crear tabla:
+
+product_fiscal_special_fields
+
+Campos:
+- id uuid primary key
+- empresa_id uuid not null
+- product_id uuid not null
+- field_type text not null
+- value text
+- metadata jsonb default '{}'
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TAREA 18.2
+field_type:
+- vin
+- serial_number
+- sanitary_registration
+- pharmaceutical_form
+- tariff_heading
+- component_detail
+- alcohol_tax_info
+- other
+
+TAREA 18.3
+Crear reglas:
+- si producto requiere VIN, bloquear factura si falta
+- si medicamento requiere registro sanitario, bloquear si falta
+- si exportación de mercancía requiere partida arancelaria, bloquear si falta
+- si combo/surtido requiere componentes, pedir detalle
+
+TAREA 18.4
+No intentar detectar todos los casos automáticamente si no hay catálogo oficial completo.
+Permitir marcar flags manuales en perfil fiscal del producto.
+
+TAREA 18.5
+UI en producto:
+- campos fiscales especiales
+- advertencias antes de facturar
+
+==================================================
+FASE 19 — PLATFORM CONSOLE: HEALTH FISCAL
+==================================================
+
+OBJETIVO:
+AInovaCR puede diagnosticar billing sin ver secretos.
+
+TAREA 19.1
+Actualizar /platform/health y detalle empresa para mostrar:
+- billing activo/inactivo
+- fiscal settings complete/incomplete
+- certificado cargado sí/no
+- certificado vencido sí/no
+- ambiente testing/production
+- últimos documentos
+- último estado Hacienda
+- último error
+- cantidad documentos aceptados/rechazados/pendientes
+- documentos con error de firma
+- documentos con error de envío
+
+TAREA 19.2
+Platform NO debe mostrar:
+- PIN
+- certificado
+- contraseña Hacienda
+- token
+- secret refs completos
+
+TAREA 19.3
+Crear query:
+getPlatformBillingHealth(empresaId)
+
+TAREA 19.4
+Solo platform users pueden acceder.
+
+TAREA 19.5
+Documentar:
+docs/platform-billing-operations.md
+
+==================================================
+FASE 20 — UI DEL MÓDULO FACTURACIÓN
+==================================================
+
+OBJETIVO:
+Crear navegación completa del módulo.
+
+TAREA 20.1
+Crear o actualizar ruta:
+/facturacion
+
+Debe mostrar:
+- resumen fiscal
+- documentos recientes
+- pendientes de envío
+- rechazados
+- aceptados
+- configuración incompleta
+- accesos rápidos
+
+TAREA 20.2
+Subrutas:
+- /facturacion/documentos
+- /facturacion/documentos/[documentoId]
+- /facturacion/configuracion
+- /facturacion/cabys
+- /facturacion/consecutivos
+- /facturacion/recepcion
+- /facturacion/reportes
+
+TAREA 20.3
+Menú debe aparecer solo si:
+- billing activo
+- usuario tiene permiso
+
+TAREA 20.4
+Si billing inactivo:
+- sidebar no muestra
+- URL directa bloqueada
+
+TAREA 20.5
+Estados visuales:
+- Borrador
+- Validado
+- XML generado
+- Firmado
+- Enviado
+- Procesando
+- Aceptado
+- Rechazado
+- Error validación
+- Error firma
+- Error envío
+
+TAREA 20.6
+Empty states útiles:
+- No hay documentos
+- Configuración fiscal incompleta
+- CABYS pendiente
+- Certificado pendiente
+- Hacienda no configurado
+
+TAREA 20.7
+No mostrar botones imposibles.
+Ejemplo:
+- no mostrar Enviar si no está firmado
+- no mostrar Firmar si no hay XML
+- no mostrar PDF aceptado si no está aceptado
+
+==================================================
+FASE 21 — VALIDACIONES PREVIAS A EMITIR
+==================================================
+
+OBJETIVO:
+Evitar errores antes de llegar a Hacienda.
+
+TAREA 21.1
+Crear módulo:
+src/modules/billing/validation/
+
+Archivos:
+- validate-company.ts
+- validate-customer.ts
+- validate-lines.ts
+- validate-taxes.ts
+- validate-document.ts
+- validate-before-xml.ts
+- validate-before-sign.ts
+- validate-before-send.ts
+
+TAREA 21.2
+validateBeforePrepareFromSale:
+- venta válida
+- cliente válido
+- items válidos
+- productos con fiscal profile
+
+TAREA 21.3
+validateBeforeXml:
+- configuración fiscal completa
+- consecutivo disponible
+- clave generable
+- CABYS por línea
+- impuestos calculados
+- totales consistentes
+
+TAREA 21.4
+validateBeforeSign:
+- XML existe
+- certificado existe
+- PIN existe
+- certificado no vencido si se puede validar
+- signer configurado
+
+TAREA 21.5
+validateBeforeSend:
+- XML firmado
+- credenciales Hacienda
+- ambiente definido
+- clave existe
+
+TAREA 21.6
+Mostrar errores agrupados:
+- Empresa
+- Cliente
+- Productos/CABYS
+- Impuestos
+- Certificado
+- Hacienda
+- XML
+
+TAREA 21.7
+Guardar validation_errors en fiscal_documents.
+
+==================================================
+FASE 22 — STORAGE Y SEGURIDAD DE ARCHIVOS
+==================================================
+
+OBJETIVO:
+Guardar XML/PDF/respuestas correctamente.
+
+TAREA 22.1
+Definir buckets o paths:
+- fiscal-documents
+- fiscal-certificates si aplica
+- fiscal-received-documents
+
+TAREA 22.2
+Estructura recomendada:
+empresa_id/
+  fiscal_documents/
+    document_id/
+      unsigned.xml
+      signed.xml
+      hacienda-response.xml/json
+      representation.pdf
+
+TAREA 22.3
+No permitir acceso público directo a XML/PDF si contiene datos sensibles.
+
+TAREA 22.4
+Descargas mediante signed URLs controladas o route server segura.
+
+TAREA 22.5
+Validar:
+- usuario pertenece a empresa
+- permiso billing.view
+- documento pertenece a empresa
+
+TAREA 22.6
+Certificados:
+- nunca bucket público
+- idealmente Vault/cifrado
+- si storage, cifrado server-side y acceso solo backend
+
+==================================================
+FASE 23 — AUDITORÍA
+==================================================
+
+OBJETIVO:
+Todo evento fiscal importante queda trazado.
+
+TAREA 23.1
+Usar fiscal_document_events para:
+- documento creado
+- validado
+- XML generado
+- firmado
+- enviado
+- estado consultado
+- aceptado
+- rechazado
+- PDF generado
+- correo enviado
+- error
+
+TAREA 23.2
+Registrar:
+- usuario
+- fecha
+- estado anterior
+- estado nuevo
+- mensaje
+- detalles seguros
+
+TAREA 23.3
+No registrar secretos.
+
+TAREA 23.4
+Mostrar timeline en detalle del documento.
+
+==================================================
+FASE 24 — REPORTES FISCALES BÁSICOS
+==================================================
+
+OBJETIVO:
+Reportes mínimos para cliente.
+
+TAREA 24.1
+Crear /facturacion/reportes
+
+Reportes:
+- documentos por estado
+- ventas facturadas
+- documentos rechazados
+- documentos pendientes
+- impuestos por período
+- documentos por cliente
+- notas crédito/débito
+- documentos por tipo
+
+TAREA 24.2
+Export CSV si ya existe patrón.
+No crear Excel avanzado si no hay necesidad.
+
+TAREA 24.3
+Filtros:
+- fecha desde/hasta
+- tipo documento
+- estado
+- cliente
+- moneda
+
+TAREA 24.4
+No inventar datos.
+Solo documentos fiscales reales.
+
+==================================================
+FASE 25 — INTEGRACIÓN CON PAGOS, COMPRAS E INVENTARIO
+==================================================
+
+OBJETIVO:
+Conectar sin romper.
+
+TAREA 25.1
+Ventas:
+- venta confirmada puede preparar factura
+- factura aceptada se vincula a venta
+
+TAREA 25.2
+Pagos:
+- si existe CxC, mostrar documento fiscal asociado
+- si factura aceptada, puede reforzar cuenta por cobrar
+- no duplicar CxC si ya existe
+
+TAREA 25.3
+Compras:
+- recepción de XML proveedor futura puede crear/relacionar CxP
+- no activar automático hasta recepción esté validada
+
+TAREA 25.4
+Inventario:
+- facturación no debe descontar inventario por sí sola si ya lo hace venta
+- evitar doble descuento
+
+TAREA 25.5
+CRM:
+- cliente muestra documentos fiscales en timeline
+- documento fiscal enlaza cliente
+
+==================================================
+FASE 26 — DOCUMENTACIÓN COMPLETA
+==================================================
+
+Crear/actualizar:
+
+TAREA 26.1
+docs/modules/billing-overview.md
+Debe explicar:
+- qué hace el módulo
+- qué es factura real
+- estados
+- flujo principal
+
+TAREA 26.2
+docs/modules/billing-roadmap-real-invoicing.md
+Debe separar:
+- listo ahora
+- preparado
+- pendiente firma
+- pendiente Hacienda
+- pendiente PDF
+- pendiente recepción
+
+TAREA 26.3
+docs/modules/billing-cabys.md
+
+TAREA 26.4
+docs/modules/billing-fiscal-settings.md
+
+TAREA 26.5
+docs/modules/billing-xml-44.md
+
+TAREA 26.6
+docs/modules/billing-xades-signing.md
+
+TAREA 26.7
+docs/modules/billing-hacienda-api.md
+
+TAREA 26.8
+docs/modules/billing-received-documents.md
+
+TAREA 26.9
+docs/platform-billing-operations.md
+
+TAREA 26.10
+Actualizar README:
+- variables env billing
+- estado real
+- comandos/test
+- advertencia de no producción hasta firma/API real
+
+==================================================
+FASE 27 — VARIABLES DE ENTORNO
+==================================================
+
+TAREA 27.1
+Actualizar .env.example:
+
+Variables sugeridas:
+- FISCAL_CONFIG_ENCRYPTION_KEY=
+- HACIENDA_ENVIRONMENT=testing
+- HACIENDA_TEST_AUTH_URL=
+- HACIENDA_PROD_AUTH_URL=
+- HACIENDA_TEST_API_URL=
+- HACIENDA_PROD_API_URL=
+- BILLING_XML_VALIDATION_ENABLED=false
+- BILLING_XADES_SIGNING_ENABLED=false
+- BILLING_HACIENDA_SEND_ENABLED=false
+- BILLING_PDF_ENABLED=false
+
+TAREA 27.2
+No poner valores reales.
+
+TAREA 27.3
+Documentar cada variable.
+
+TAREA 27.4
+Si ya existen variables similares, no duplicar.
+Actualizar nombres existentes.
+
+==================================================
+FASE 28 — TESTS
+==================================================
+
+TAREA 28.1
+Crear o actualizar:
+scripts/billing-real-invoicing-contract.test.mjs
+
+Debe validar:
+- rutas billing existen
+- requireActiveModule en rutas billing
+- actions billing validan permisos
+- no service_role frontend
+- no secretos expuestos en UI
+- docs billing existen
+- cabys table/migration existe
+- fiscal_documents table/migration existe
+- sequence table/migration existe
+- XML builder existe
+- signer interface existe
+- Hacienda client interface existe
+- Platform health billing existe
+
+TAREA 28.2
+Tests unitarios si el proyecto los soporta:
+- tax-engine
+- validation
+- consecutive generation
+- document totals
+- XML builder basic
+
+TAREA 28.3
+Tests de no regresión:
+- venta existente sigue funcionando
+- pagos existentes siguen funcionando
+- inventario no se descuenta por facturación
+- billing inactivo bloquea acceso
+
+TAREA 28.4
+Actualizar npm run test si aplica.
+
+==================================================
+FASE 29 — MIGRACIONES
+==================================================
+
+TAREA 29.1
+Crear migraciones separadas y ordenadas:
+- 00XX_billing_fiscal_settings.sql
+- 00XX_billing_fiscal_catalogs.sql
+- 00XX_billing_cabys.sql
+- 00XX_billing_documents.sql
+- 00XX_billing_sequences.sql
+- 00XX_billing_received_documents.sql
+- 00XX_billing_health_platform.sql
+
+TAREA 29.2
+Si prefieres menos migraciones, agrupar por fase lógica.
+No crear una migración inmanejable de miles de líneas sin necesidad.
+
+TAREA 29.3
+Todas las migraciones deben:
+- ser idempotentes donde sea razonable
+- usar check constraints
+- crear índices
+- habilitar RLS
+- crear policies
+- no romper data existente
+- no reescribir migraciones antiguas
+
+TAREA 29.4
+Sí ejecutar las migraciones remotas creadas, después de revisar que sean seguras, ordenadas y no destructivas.
+Aplicarlas de forma controlada y reportar el resultado.
+
+TAREA 29.5
+Si alguna migración requiere limpieza previa:
+- documentar SQL de diagnóstico
+- no borrar automáticamente
+
+==================================================
+FASE 30 — ORDEN DE IMPLEMENTACIÓN OBLIGATORIO
+==================================================
+
+Ejecutar en este orden:
+
+1. Auditoría estado actual.
+2. Contrato billing/module active.
+3. Configuración fiscal empresa.
+4. Catálogos fiscales base.
+5. CABYS.
+6. Perfil fiscal producto/servicio.
+7. Documentos fiscales internos.
+8. Consecutivos/clave.
+9. Preparar factura desde venta.
+10. Motor impuestos.
+11. Validaciones previas.
+12. XML builder.
+13. Signer interface / XAdES.
+14. Hacienda client interface.
+15. PDF fiscal.
+16. Archivo/descarga.
+17. Email delivery.
+18. Notas crédito/débito.
+19. Recepción documentos.
+20. Platform health.
+21. UI completa.
+22. Docs.
+23. Tests.
+24. Validación final.
+
+Si el alcance es demasiado grande para una sola ejecución:
+- completar hasta una fase estable
+- dejar TODOs explícitos
+- no dejar código a medias
+- responder exactamente dónde se detuvo
+
+==================================================
+FASE 31 — CRITERIOS DE ÉXITO POR NIVEL
+==================================================
+
+NIVEL 1 — Base fiscal lista:
+Debe cumplirse:
+- configuración fiscal completa
+- CABYS disponible
+- productos asociados a CABYS
+- documentos fiscales internos
+- consecutivos
+- validaciones
+
+Resultado:
+Venta → Preparar factura fiscal interna.
+
+NIVEL 2 — XML listo:
+Debe cumplirse:
+- XML 4.4 generado
+- validación básica
+- XML guardado
+- estados correctos
+
+Resultado:
+Venta → Documento fiscal → XML.
+
+NIVEL 3 — Firma lista:
+Debe cumplirse:
+- certificado/PIN seguro
+- XML firmado XAdES-EPES real
+- XML firmado guardado
+
+Resultado:
+Venta → XML firmado.
+
+NIVEL 4 — Hacienda lista:
+Debe cumplirse:
+- token Hacienda
+- envío
+- consulta estado
+- respuesta guardada
+- aceptado/rechazado real
+
+Resultado:
+Factura electrónica real.
+
+NIVEL 5 — Producto comercial:
+Debe cumplirse:
+- PDF
+- correo
+- descargas
+- archivo histórico
+- notas
+- recepción
+- reportes
+- Platform health
+
+Resultado:
+Módulo competible contra facturadores.
+
+==================================================
+FASE 32 — VALIDACIÓN FINAL
+==================================================
+
+Ejecutar:
+
+npm run test
+npm run typecheck
+npm run lint
+npm run build
+git diff --check
+
+Si falla algo:
+- corregir
+- si no se puede corregir, explicar exactamente por qué
+- no decir que está listo si no pasa
+
+==================================================
+RESPUESTA FINAL OBLIGATORIA
+==================================================
+
+Responder con esta estructura:
+
+1. RESUMEN EJECUTIVO
+   - qué se implementó
+   - qué nivel se alcanzó:
+     Nivel 1, 2, 3, 4 o 5
+   - qué queda pendiente para factura real
+
+2. ARCHIVOS MODIFICADOS
+   Agrupar por:
+   - migraciones
+   - módulo billing
+   - CABYS
+   - impuestos
+   - XML
+   - firma
+   - Hacienda
+   - PDF
+   - UI
+   - Platform
+   - tests
+   - docs
+
+3. MIGRACIONES CREADAS
+   - nombre
+   - propósito
+   - si requiere datos oficiales
+   - si requiere revisión antes de aplicar
+
+4. FLUJO ACTUAL LOGRADO
+   Mostrar:
+   Venta → Preparar documento → Validar → XML → Firma → Hacienda → PDF
+   Indicando qué pasos son reales y cuáles son placeholder/controlados.
+
+5. TABLAS CREADAS O MODIFICADAS
+   Lista con descripción breve.
+
+6. RUTAS CREADAS O MODIFICADAS
+   Lista con descripción breve.
+
+7. PERMISOS Y SEGURIDAD
+   Confirmar:
+   - billing opcional protegido
+   - RLS aplicado
+   - secretos protegidos
+   - no service_role frontend
+   - no certificado/PIN en claro
+   - no accepted sin Hacienda real
+
+8. CABYS
+   Confirmar:
+   - tabla
+   - importador o estructura
+   - asociación con producto
+   - buscador
+   - validación antes de facturar
+
+9. DOCUMENTOS FISCALES
+   Confirmar:
+   - fiscal_documents
+   - lines
+   - taxes
+   - payments
+   - references
+   - events
+   - statuses
+
+10. CONSECUTIVOS / CLAVE
+   Confirmar:
+   - contador
+   - reserva
+   - no duplicados
+   - no reutilización
+
+11. XML
+   Confirmar:
+   - builders creados
+   - tipos soportados
+   - XSD real o pendiente
+
+12. FIRMA
+   Confirmar:
+   - XAdES real o placeholder explícito
+   - qué falta si no es real
+
+13. HACIENDA
+   Confirmar:
+   - client real o interface
+   - send/query
+   - estados
+
+14. PDF / ENTREGA
+   Confirmar:
+   - PDF real o pendiente
+   - descargas
+   - correo
+
+15. PLATFORM CONSOLE
+   Confirmar:
+   - health fiscal por empresa
+   - sin secretos
+
+16. TESTS
+   Reportar:
+   - npm run test
+   - npm run typecheck
+   - npm run lint
+   - npm run build
+   - git diff --check
+
+17. QUÉ DEBO PROBAR MANUALMENTE
+   Lista:
+   - activar billing
+   - completar configuración fiscal
+   - cargar certificado placeholder/real
+   - importar CABYS
+   - asociar CABYS a producto
+   - crear venta
+   - preparar factura
+   - revisar errores
+   - generar XML
+   - firmar si está disponible
+   - enviar si está disponible
+   - revisar Platform health
+
+18. PENDIENTES PARA FACTURA ELECTRÓNICA REAL
+   Separar:
+   A. obligatorio antes de prueba Hacienda
+   B. obligatorio antes de producción
+   C. recomendable para competir con GTI/facturadores

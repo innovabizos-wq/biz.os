@@ -49,6 +49,47 @@ function StatusButton({
   );
 }
 
+function cleanPreviewHtml(content: string) {
+  return content
+    .replace(/\\n/g, "\n")
+    .replace(/,\s*"seoTitle"[\s\S]*$/i, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .trim();
+}
+
+function AutoblogReaderPreview({ article }: { article: AutoblogArticle }) {
+  const content = cleanPreviewHtml(article.content);
+
+  return (
+    <section className="rounded-lg border bg-background p-5">
+      <div className="mx-auto max-w-3xl">
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          Vista previa
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold leading-tight text-foreground">
+          {article.title}
+        </h2>
+        {article.summary ? (
+          <p className="mt-3 text-base leading-7 text-muted-foreground">
+            {article.summary}
+          </p>
+        ) : null}
+        <div
+          className="autoblog-reader-preview mt-6"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+        {article.cta ? (
+          <p className="mt-6 rounded-md border bg-muted/20 p-4 text-sm font-semibold">
+            {article.cta}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export default async function AutoblogArticlePage({
   params,
   searchParams,
@@ -139,6 +180,8 @@ export default async function AutoblogArticlePage({
         articleContent={article.data.content}
         articleTitle={article.data.title}
       />
+
+      <AutoblogReaderPreview article={article.data} />
 
       <div>
         <h2 className="text-base font-semibold">Editar contenido</h2>

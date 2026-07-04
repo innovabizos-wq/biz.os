@@ -623,9 +623,23 @@ export function QuotesTable({
                           Ver venta
                         </Link>
                         {invoice ? (
-                          <span className="inline-flex h-8 items-center rounded-lg border border-yellow-300 bg-yellow-50 px-2.5 text-[0.8rem] font-bold text-yellow-900">
-                            Factura {statusLabel(invoice.estado)}
-                          </span>
+                          invoice.fiscalDocumentId ? (
+                            <Link
+                              className={buttonVariants({
+                                className: "border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100",
+                                size: "sm",
+                                variant: "outline",
+                              })}
+                              href={`/facturacion/documentos/${invoice.fiscalDocumentId}`}
+                            >
+                              <ReceiptText aria-hidden="true" />
+                              Factura {statusLabel(invoice.estado)}
+                            </Link>
+                          ) : (
+                            <span className="inline-flex h-8 items-center rounded-lg border border-yellow-300 bg-yellow-50 px-2.5 text-[0.8rem] font-bold text-yellow-900">
+                              Factura {statusLabel(invoice.estado)}
+                            </span>
+                          )
                         ) : canIssueInvoice ? (
                           <button
                             className={buttonVariants({

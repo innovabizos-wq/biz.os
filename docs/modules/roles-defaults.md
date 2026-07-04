@@ -3,6 +3,10 @@
 Las empresas nuevas creadas por `bootstrap_empresa_inicial` reciben roles
 estandar. El fundador queda asignado a `Super Admin`.
 
+Nota de arquitectura: `Super Admin` es actualmente un rol interno del tenant
+con acceso total a su empresa. No representa Platform Admin/AInovaCR ni concede
+acceso a otras empresas o configuracion global de la plataforma.
+
 ## Roles
 
 - `Super Admin`: acceso total a todos los permisos activos existentes.
@@ -32,6 +36,13 @@ protege:
 - quitarle permisos
 
 Esto evita dejar a la empresa sin acceso total.
+
+Migracion de nombres futura recomendada:
+
+- `Super Admin` del tenant -> `Tenant Owner` o `Company Admin`.
+- Cualquier superusuario global real -> `Platform Admin`.
+
+No renombrar ahora sin migracion planificada de datos, UI, permisos y docs.
 
 ## Chofer / Repartidor
 

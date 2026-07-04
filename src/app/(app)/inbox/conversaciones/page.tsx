@@ -57,7 +57,7 @@ export default async function InboxConversationsPage({
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Gestiona conversaciones simuladas, clientes vinculados, estados y asignaciones."
+        description="Gestiona conversaciones manuales o Meta, clientes vinculados, estados y asignaciones."
         eyebrow="Inbox"
         title="Conversaciones"
       />
@@ -77,7 +77,7 @@ export default async function InboxConversationsPage({
         <EmptyState
           description={
             conversations.ok
-              ? "Crea una conversacion manual para iniciar pruebas."
+              ? "Crea una conversacion manual o espera eventos de un canal Meta configurado."
               : conversations.error.message
           }
           title="Sin conversaciones"

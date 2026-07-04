@@ -94,6 +94,61 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   { code: "sales.quotes.view", moduleCode: "sales", name: "Ver cotizaciones" },
   { code: "sales.quotes.create", moduleCode: "sales", name: "Crear cotizaciones" },
   {
+    code: "billing.view",
+    moduleCode: "billing",
+    name: "Ver facturacion",
+  },
+  {
+    code: "billing.manage",
+    moduleCode: "billing",
+    name: "Gestionar facturacion",
+  },
+  {
+    code: "billing.issue",
+    moduleCode: "billing",
+    name: "Emitir documentos fiscales",
+  },
+  {
+    code: "billing.cancel",
+    moduleCode: "billing",
+    name: "Anular documentos fiscales",
+  },
+  {
+    code: "billing.credit_note",
+    moduleCode: "billing",
+    name: "Crear notas de credito",
+  },
+  {
+    code: "billing.debit_note",
+    moduleCode: "billing",
+    name: "Crear notas de debito",
+  },
+  {
+    code: "billing.receive",
+    moduleCode: "billing",
+    name: "Recibir documentos fiscales",
+  },
+  {
+    code: "billing.config.view",
+    moduleCode: "billing",
+    name: "Ver configuracion fiscal",
+  },
+  {
+    code: "billing.config.manage",
+    moduleCode: "billing",
+    name: "Gestionar configuracion fiscal",
+  },
+  {
+    code: "billing.cabys.manage",
+    moduleCode: "billing",
+    name: "Gestionar CABYS",
+  },
+  {
+    code: "billing.reports.view",
+    moduleCode: "billing",
+    name: "Ver reportes fiscales",
+  },
+  {
     code: "billing.fiscal.view",
     moduleCode: "billing",
     name: "Ver configuracion fiscal",
@@ -243,6 +298,26 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
     code: "reports.dashboard.view",
     moduleCode: "reports",
     name: "Ver dashboards",
+  },
+  {
+    code: "brain.insights.view",
+    moduleCode: "brain",
+    name: "Ver insights del Brain",
+  },
+  {
+    code: "brain.recommendations.view",
+    moduleCode: "brain",
+    name: "Ver recomendaciones del Brain",
+  },
+  {
+    code: "brain.recommendations.manage",
+    moduleCode: "brain",
+    name: "Gestionar recomendaciones del Brain",
+  },
+  {
+    code: "brain.settings.manage",
+    moduleCode: "brain",
+    name: "Administrar Business Brain",
   },
   { code: "ai.reports.use", moduleCode: "ai", name: "Usar reportes IA" },
   { code: "autoblog.view", moduleCode: "autoblog", name: "Ver Autoblog" },

@@ -32,11 +32,11 @@ export function InboxChannelForm({ canManage }: InboxChannelFormProps) {
           />
         </label>
         <label className="space-y-1 text-sm">
-          <span className="font-medium">Identificador simulado</span>
+          <span className="font-medium">Identificador</span>
           <input
             className="h-9 w-full rounded-md border bg-background px-3"
             name="identificadorExterno"
-            placeholder="+506 8888 0000"
+            placeholder="+506 8888 0000, pagina, usuario o correo"
           />
         </label>
       </div>

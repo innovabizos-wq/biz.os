@@ -50,8 +50,8 @@ export function InboxReplyForm({
       ) : null}
       {realWhatsAppReady ? (
         <p className="mt-2 text-xs text-amber-700">
-          Regla 24h pendiente de control estricto. En futuras fases se bloqueara
-          texto libre fuera de ventana.
+          Cumplimiento Meta: usa texto libre solo dentro de la ventana operativa
+          de 24 horas. Fuera de ventana se requiere plantilla aprobada.
         </p>
       ) : null}
       <Button className="mt-3" type="submit">

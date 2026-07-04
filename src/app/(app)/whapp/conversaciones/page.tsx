@@ -1,14 +1,15 @@
 import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
-import type { InboxConversation } from "@/modules/inbox/types";
+import { INBOX_CHANNELS } from "@/modules/inbox/constants";
+import type { InboxChannel, InboxConversation } from "@/modules/inbox/types";
 import { getInboxConversations } from "@/modules/inbox/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 import { WhappConversationFilters } from "@/modules/whapp/components/whapp-conversation-filters";
 import { WhappConversationsTable } from "@/modules/whapp/components/whapp-conversations-table";
 
 type WhappConversationsPageProps = {
-  searchParams?: Promise<{ q?: string; vista?: string }>;
+  searchParams?: Promise<{ canal?: string; q?: string; vista?: string }>;
 };
 
 const VALID_FILTERS = new Set([
@@ -16,12 +17,20 @@ const VALID_FILTERS = new Set([
   "sin_asignar",
   "todos",
   "no_leidos",
+  "sla_vencido",
+  "sla_riesgo",
   "abiertas",
   "cerradas",
 ]);
 
 function normalizeFilter(value: string | undefined) {
   return value && VALID_FILTERS.has(value) ? value : "todos";
+}
+
+function normalizeChannel(value: string | undefined): InboxChannel | "todos" {
+  return value && (INBOX_CHANNELS as readonly string[]).includes(value)
+    ? (value as InboxChannel)
+    : "todos";
 }
 
 function includesQuery(conversation: InboxConversation, query: string) {
@@ -64,7 +73,15 @@ function applyFilter(
   }
 
   if (filter === "no_leidos") {
-    return [];
+    return conversations.filter((conversation) => conversation.unreadCount > 0);
+  }
+
+  if (filter === "sla_vencido") {
+    return conversations.filter((conversation) => conversation.slaStatus === "vencido");
+  }
+
+  if (filter === "sla_riesgo") {
+    return conversations.filter((conversation) => conversation.slaStatus === "riesgo");
   }
 
   return conversations;
@@ -97,30 +114,30 @@ export default async function WhappConversationsPage({
   }
 
   const filter = normalizeFilter(params?.vista);
+  const channel = normalizeChannel(params?.canal);
   const query = params?.q?.trim() ?? "";
   const conversations = await getInboxConversations();
   const rows = conversations.ok
-    ? applyFilter(conversations.data, filter, access.profile.id).filter((conversation) =>
-        includesQuery(conversation, query),
-      )
+    ? applyFilter(conversations.data, filter, access.profile.id)
+        .filter((conversation) =>
+          channel === "todos" ? true : conversation.canal === channel,
+        )
+        .filter((conversation) => includesQuery(conversation, query))
     : [];
 
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Bandeja operativa WhatsApp con asignacion, estados, cliente vinculado y ultimo mensaje."
+        description="Visor omnicanal para WhatsApp, Facebook Messenger, Instagram DM, correo y conversaciones manuales."
         eyebrow="Whapp"
         title="Conversaciones"
       />
 
-      <WhappConversationFilters activeFilter={filter} query={query} />
-
-      {filter === "no_leidos" ? (
-        <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
-          El contador de no leidos queda preparado visualmente. Se activara cuando
-          el esquema incluya marca de lectura por agente.
-        </div>
-      ) : null}
+      <WhappConversationFilters
+        activeChannel={channel}
+        activeFilter={filter}
+        query={query}
+      />
 
       {conversations.ok && rows.length > 0 ? (
         <WhappConversationsTable conversations={rows} />

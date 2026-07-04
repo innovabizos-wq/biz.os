@@ -18,6 +18,7 @@ biz.os esta listo para demo operativa controlada en estos bloques:
 - Despacho como centro operativo con mapa Leaflet/OpenStreetMap y `driver_live_status`.
 - RRHH/Planillas con widget, estados configurables y dashboard operativo.
 - Notificaciones persistentes por usuario.
+- Modulos opcionales operativos para piloto: Compras, Pagos, Reportes, IA y Mobile API con contratos, permisos y compuertas de modulo activo.
 
 ## Flujos listos
 
@@ -28,35 +29,37 @@ biz.os esta listo para demo operativa controlada en estos bloques:
 - Despacho -> mapa real -> empty state sin choferes -> tabla -> detalle.
 - Inventario -> entrada/importacion -> stock -> traslado entre bodegas -> movimientos.
 - Planillas -> estado del usuario -> dashboard operativo.
+- Administracion -> Modulos -> activar Compras/Pagos/Reportes/IA -> aparecen en navegacion o tabs sin editar roles Administrador/Super Admin del tenant.
+- Ventas -> Pagos -> cuenta por cobrar sincronizada y registro de abonos.
+- Compras -> proveedor -> orden de compra -> recepcion contra inventario.
 
 ## Flujos parcialmente listos
 
 - Facturacion/Fiscal: existe configuracion fiscal y preparacion local de factura, pero la emision real requiere firma XAdES-EPES, XML v4.4 firmado, envio y consulta Hacienda.
-- Inbox/Whapp: existen canales, conversaciones, webhooks y diagnosticos; debe tratarse como modulo en desarrollo hasta probar extremo a extremo con credenciales Meta reales.
-- Dashboard: muestra datos reales disponibles; las metricas financieras avanzadas quedan pendientes hasta tener pagos/costos/cuentas por cobrar.
+- Inbox/Whapp: existen canales, conversaciones, webhooks y diagnosticos; debe tratarse como modulo en desarrollo hasta probar extremo a extremo con numero provisionado por plataforma, credenciales Meta reales y webhook publico.
+- Dashboard/Reportes: muestra datos reales disponibles y se expone como `Reportes` cuando el modulo opcional esta activo. Las metricas financieras avanzadas siguen limitadas a lo que exista en Pagos/Compras.
+- IA: configuracion, limites y auditoria estan listos para piloto; generacion real depende de conectar proveedor y politica de uso.
+- Mobile API: contratos autenticados listos para piloto tecnico; no incluye app nativa de chofer.
 
 ## Modulos no listos para venta
 
 - Facturacion electronica real.
-- Compras/proveedores.
-- Pagos/cuentas por cobrar.
 - WhatsApp comercial completo con operacion real certificada.
-- IA.
-- App movil o app de chofer.
+- App movil nativa o app de chofer.
 - Costos, margenes, lotes, series y reservas avanzadas.
 
 ## Riesgos tecnicos
 
 - Migraciones locales recientes pueden estar pendientes de aplicacion manual en Supabase dev.
 - Facturacion no debe presentarse como lista para Hacienda mientras falte XAdES-EPES.
-- Inbox/Whapp depende de credenciales Meta, webhooks publicos y pruebas reales.
+- Inbox/Whapp depende de provision Platform Admin, numero apto para Meta, credenciales Meta, webhooks publicos y pruebas reales.
 - Busqueda de clientes por documento necesita deuda futura: identificacion normalizada e indice por empresa/documento.
 - Notificaciones no usan Realtime ni push; se actualizan por navegacion/revalidacion.
 
 ## Estado de migraciones Supabase
 
 Revision 2026-06-05: `biz-os-dev` tiene registradas formalmente las migraciones
-`0034` a `0039` aplicadas via MCP/Supabase. Las migraciones `0001` a `0033`
+`0034` a `0047` aplicadas via MCP/Supabase. Las migraciones `0001` a `0033`
 se tratan como baseline manual del estado vivo y no deben reejecutarse sobre
 esa base sin comparar schema o restaurar en una base vacia.
 
@@ -92,7 +95,10 @@ Ver detalle en `docs/supabase-baseline-checkpoint.md`.
 26. Probar empty state sin choferes conectados.
 27. Revisar inventario, movimientos y traslado entre bodegas.
 28. Revisar planillas y widget.
-29. Probar usuario sin permisos y validar mensajes humanos.
+29. Activar Compras, Pagos, Reportes e IA desde `/admin/modulos`.
+30. Confirmar que Compras, Pagos y Reportes aparecen en la barra lateral para Administrador/Super Admin del tenant.
+31. Confirmar que IA aparece dentro de tabs de Administracion.
+32. Probar usuario sin permisos y validar mensajes humanos.
 
 ## Prueba de permisos con usuario limitado
 
@@ -107,6 +113,6 @@ Ver detalle en `docs/supabase-baseline-checkpoint.md`.
 
 ## Proximos pasos recomendados
 
-- Antes de demo: aplicar migraciones pendientes en Supabase dev y ejecutar checklist manual completo.
+- Antes de demo: confirmar que Supabase dev mantiene migraciones `0034` a `0047` aplicadas y ejecutar checklist manual completo.
 - Antes de vender: automatizar pruebas E2E de Nueva consulta -> CRM -> Cotizacion -> Venta -> Inventario -> Despacho.
 - Siguiente modulo grande sugerido: Facturacion electronica real, solo despues de cerrar firma XAdES-EPES y pruebas Hacienda en ambiente de pruebas.

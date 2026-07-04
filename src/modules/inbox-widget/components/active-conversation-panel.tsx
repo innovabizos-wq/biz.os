@@ -87,11 +87,11 @@ export function ActiveConversationPanel({
       <div className="flex shrink-0 items-end gap-2 border-t bg-white p-3">
         <textarea
           className="max-h-24 min-h-10 flex-1 resize-none rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-300"
-          placeholder="Respuesta simulada..."
+          placeholder="Borrador de respuesta..."
           rows={1}
         />
         <button
-          aria-label="Enviar respuesta simulada"
+          aria-label="Preparar respuesta"
           className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md"
           disabled={!isFront}
           type="button"
@@ -101,7 +101,8 @@ export function ActiveConversationPanel({
         </button>
       </div>
       <p className="bg-white px-3 pb-2 text-[10px] text-slate-400">
-        No se envian mensajes reales en esta fase.
+        Widget de consulta rapida. El envio real se realiza desde la bandeja
+        Whapp/Inbox cuando el canal esta listo.
       </p>
     </div>
   );

@@ -1,5 +1,7 @@
 import type { ConsultationSearchResult } from "@/modules/consultations/types";
 
+import Link from "next/link";
+
 type ConsultationResultCardProps = {
   result: ConsultationSearchResult | null;
 };
@@ -14,7 +16,47 @@ export function ConsultationResultCard({ result }: ConsultationResultCardProps) 
   }
 
   if (result.source === "internal") {
-    return null;
+    return (
+      <div className="rounded-lg border bg-background p-5">
+        <p className="font-semibold">Cliente existente en CRM</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Se encontro un registro con esta identificacion. La gestion se asociara a
+          este cliente para evitar duplicados.
+        </p>
+        <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">Nombre</dt>
+            <dd>{result.cliente.nombre}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Documento</dt>
+            <dd>{result.documento}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Tipo</dt>
+            <dd>{result.cliente.tipo}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Estado</dt>
+            <dd>{result.cliente.estado}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Telefono</dt>
+            <dd>{result.cliente.telefono ?? "No disponible"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Correo</dt>
+            <dd>{result.cliente.correo ?? "No disponible"}</dd>
+          </div>
+        </dl>
+        <Link
+          className="mt-4 inline-flex text-sm font-medium text-emerald-700 underline underline-offset-4"
+          href={`/crm/clientes/${result.cliente.id}`}
+        >
+          Abrir ficha del cliente
+        </Link>
+      </div>
+    );
   }
 
   if (result.source === "hacienda") {

@@ -51,7 +51,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <main className="flex min-h-screen items-center justify-center bg-muted px-6">
       <form
         action={loginAction}
-        className="w-full max-w-sm space-y-6 rounded-lg border bg-background p-6 shadow-sm"
+        className="w-full max-w-sm space-y-6 rounded-lg bg-background p-6 shadow-sm"
       >
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">biz.os</p>

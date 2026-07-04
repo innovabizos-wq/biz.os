@@ -29,6 +29,7 @@ export type ElectronicInvoice = {
   clave: string | null;
   clienteId: string | null;
   estado: ElectronicInvoiceStatus;
+  fiscalDocumentId: string | null;
   id: string;
   numero: string;
   totalComprobante: number;

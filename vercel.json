@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/whapp/campanas/despachar",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}

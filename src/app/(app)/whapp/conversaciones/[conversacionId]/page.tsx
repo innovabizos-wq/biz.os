@@ -5,26 +5,43 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
+import { getBusinessContext } from "@/modules/business-context/queries";
+import { markInboxConversationReadAction } from "@/modules/inbox/actions";
+import { InboxChannelBadge } from "@/modules/inbox/components/inbox-channel-badge";
 import { InboxAssignmentForm } from "@/modules/inbox/components/inbox-assignment-form";
 import { InboxCustomerLinkForm } from "@/modules/inbox/components/inbox-customer-link-form";
 import { InboxInternalNoteForm } from "@/modules/inbox/components/inbox-internal-note-form";
 import { InboxReplyForm } from "@/modules/inbox/components/inbox-reply-form";
 import { InboxStatusActions } from "@/modules/inbox/components/inbox-status-actions";
-import { INBOX_CHANNEL_LABELS, INBOX_STATUS_LABELS } from "@/modules/inbox/constants";
+import { InboxWhatsAppTemplateForm } from "@/modules/inbox/components/inbox-whatsapp-template-form";
 import {
+  INBOX_CHANNEL_LABELS,
+  INBOX_SLA_STATUS_LABELS,
+  INBOX_STATUS_LABELS,
+} from "@/modules/inbox/constants";
+import {
+  getApprovedInboxMetaTemplatesForConversation,
   getAssignableUsersForInbox,
   getCustomersForInbox,
+  getInboxAutomationRules,
   getInboxConversationDetail,
   getInboxConversationMetaSendStatus,
   getInboxEvents,
   getInboxMessages,
 } from "@/modules/inbox/queries";
+import { getQuotesForCustomer } from "@/modules/quotes/queries";
+import type { Quote } from "@/modules/quotes/types";
+import { getSalesForCustomer } from "@/modules/sales/queries";
+import type { Sale } from "@/modules/sales/types";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
+import { WhappAutopilotPanel } from "@/modules/whapp/components/whapp-autopilot-panel";
+import { WhappCommercialPanel } from "@/modules/whapp/components/whapp-commercial-panel";
+import { WhappContextualAiPanel } from "@/modules/whapp/components/whapp-contextual-ai-panel";
 import { WhappMessageThread } from "@/modules/whapp/components/whapp-message-thread";
 
 type WhappConversationDetailPageProps = {
   params: Promise<{ conversacionId: string }>;
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; success?: string }>;
 };
 
 export default async function WhappConversationDetailPage({
@@ -70,12 +87,13 @@ export default async function WhappConversationDetailPage({
     );
   }
 
-  const [conversation, messages, events, users, customers] = await Promise.all([
+  const [conversation, messages, events, users, customers, automations] = await Promise.all([
     getInboxConversationDetail(conversacionId),
     getInboxMessages(conversacionId),
     getInboxEvents(conversacionId),
     getAssignableUsersForInbox(),
     getCustomersForInbox(),
+    getInboxAutomationRules(),
   ]);
 
   if (!conversation.ok || !conversation.data) {
@@ -83,9 +101,17 @@ export default async function WhappConversationDetailPage({
   }
 
   const redirectTo = `/whapp/conversaciones/${conversation.data.id}`;
-  const metaSendStatus = await getInboxConversationMetaSendStatus(
-    conversation.data,
-  );
+  const [metaSendStatus, approvedTemplates, quotes, sales, businessContext] = await Promise.all([
+    getInboxConversationMetaSendStatus(conversation.data),
+    getApprovedInboxMetaTemplatesForConversation(conversation.data),
+    conversation.data.clienteId
+      ? getQuotesForCustomer(access.tenant, conversation.data.clienteId)
+      : Promise.resolve({ data: [] as Quote[], ok: true }),
+    conversation.data.clienteId
+      ? getSalesForCustomer(access.tenant, conversation.data.clienteId)
+      : Promise.resolve({ data: [] as Sale[], ok: true }),
+    getBusinessContext(access.tenant),
+  ]);
 
   return (
     <section className="space-y-6">
@@ -103,6 +129,23 @@ export default async function WhappConversationDetailPage({
           }
         />
         <div className="flex flex-wrap gap-2">
+          <InboxChannelBadge channel={conversation.data.canal} />
+          {conversation.data.unreadCount > 0 ? (
+            <form action={markInboxConversationReadAction}>
+              <input
+                name="conversacionId"
+                type="hidden"
+                value={conversation.data.id}
+              />
+              <input name="redirectTo" type="hidden" value={redirectTo} />
+              <button
+                className={buttonVariants({ variant: "outline" })}
+                type="submit"
+              >
+                Marcar leida ({conversation.data.unreadCount})
+              </button>
+            </form>
+          ) : null}
           <Link
             className={buttonVariants({ variant: "outline" })}
             href="/whapp/conversaciones"
@@ -120,6 +163,11 @@ export default async function WhappConversationDetailPage({
       {query?.error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           {query.error}
+        </p>
+      ) : null}
+      {query?.success ? (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {query.success}
         </p>
       ) : null}
 
@@ -149,6 +197,13 @@ export default async function WhappConversationDetailPage({
             realWhatsAppReady={metaSendStatus.ok ? metaSendStatus.data.isReady : false}
             realWhatsAppReason={metaSendStatus.ok ? metaSendStatus.data.reason : null}
             redirectTo={redirectTo}
+          />
+          <InboxWhatsAppTemplateForm
+            canReply={canReply}
+            conversacionId={conversation.data.id}
+            realWhatsAppReady={metaSendStatus.ok ? metaSendStatus.data.isReady : false}
+            redirectTo={redirectTo}
+            templates={approvedTemplates.ok ? approvedTemplates.data : []}
           />
           <InboxInternalNoteForm
             canReply={canReply}
@@ -184,6 +239,17 @@ export default async function WhappConversationDetailPage({
               <div>
                 <dt className="text-muted-foreground">Estado</dt>
                 <dd>{INBOX_STATUS_LABELS[conversation.data.estado]}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">SLA</dt>
+                <dd>
+                  {INBOX_SLA_STATUS_LABELS[conversation.data.slaStatus]}
+                  {conversation.data.slaDueAt
+                    ? ` - vence ${new Date(
+                        conversation.data.slaDueAt,
+                      ).toLocaleString("es-CR")}`
+                    : ""}
+                </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Etiquetas</dt>
@@ -224,6 +290,29 @@ export default async function WhappConversationDetailPage({
               </Link>
             </div>
           </div>
+
+          <WhappCommercialPanel
+            clienteId={conversation.data.clienteId}
+            clienteNombre={conversation.data.clienteNombre}
+            quotes={quotes.ok ? quotes.data : []}
+            sales={sales.ok ? sales.data : []}
+          />
+
+          <WhappContextualAiPanel
+            businessContext={businessContext.ok ? businessContext.data : null}
+            conversation={conversation.data}
+            messages={messages.ok ? messages.data : []}
+            quotes={quotes.ok ? quotes.data : []}
+            sales={sales.ok ? sales.data : []}
+          />
+
+          <WhappAutopilotPanel
+            automations={automations.ok ? automations.data : []}
+            canReply={canReply}
+            conversation={conversation.data}
+            messages={messages.ok ? messages.data : []}
+            redirectTo={redirectTo}
+          />
 
           <div className="rounded-lg border bg-background p-5">
             <p className="font-semibold">Auditoria reciente</p>

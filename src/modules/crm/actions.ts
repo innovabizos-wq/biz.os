@@ -82,6 +82,14 @@ function safeErrorMessage(error: { code?: string; message?: string }) {
     return "No tienes permiso para completar esta accion.";
   }
 
+  if (
+    error.code === "23505" ||
+    message?.toLowerCase().includes("ya existe un cliente con esa identificacion") ||
+    message?.toLowerCase().includes("duplicate key")
+  ) {
+    return "Ya existe un cliente con esa identificacion en esta empresa.";
+  }
+
   return "No se pudo actualizar el CRM. Intenta de nuevo o solicita ayuda al administrador.";
 }
 

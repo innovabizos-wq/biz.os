@@ -2,6 +2,8 @@ import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 import { createTenantContext } from "@/lib/tenant/tenant-context";
+import { MODULE_CODES } from "@/modules/platform-modules/constants";
+import { PERMISSION_CODES } from "@/modules/permissions/constants";
 import type { AuthSession, AuthUser } from "@/modules/auth/types";
 import type {
   AuthenticatedProfile,
@@ -84,6 +86,19 @@ function getZodIssues(error: unknown) {
   }
 
   return undefined;
+}
+
+function isKnownPermissionCode(code: string | null | undefined): code is PermissionCode {
+  return (
+    typeof code === "string" &&
+    (PERMISSION_CODES as readonly string[]).includes(code)
+  );
+}
+
+function isKnownModuleCode(code: string | null | undefined): code is ModuleCode {
+  return (
+    typeof code === "string" && (MODULE_CODES as readonly string[]).includes(code)
+  );
 }
 
 export const getCurrentUser = cache(async function getCurrentUser(): Promise<
@@ -271,7 +286,7 @@ export const getCurrentTenantContext = cache(async function getCurrentTenantCont
       ),
     )
     .map((permiso) => permiso?.codigo)
-    .filter((code): code is PermissionCode => Boolean(code));
+    .filter(isKnownPermissionCode);
 
   const activeModules = (modulesResult.data ?? [])
     .map((row) =>
@@ -280,7 +295,7 @@ export const getCurrentTenantContext = cache(async function getCurrentTenantCont
       ),
     )
     .map((modulo) => modulo?.codigo)
-    .filter((code): code is ModuleCode => Boolean(code));
+    .filter(isKnownModuleCode);
 
   const planRelation = getSingleRelation(
     planResult.data?.planes as

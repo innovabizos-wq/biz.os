@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
+import { InboxChannelBadge } from "@/modules/inbox/components/inbox-channel-badge";
 import { WhappChannelList } from "@/modules/whapp/components/whapp-channel-list";
 import {
   getInboxChannels,
@@ -43,15 +44,23 @@ export default async function WhappPage() {
     getInboxConversations(),
   ]);
   const recent = conversations.ok ? conversations.data.slice(0, 5) : [];
-  const whatsappChannels = channels.ok
-    ? channels.data.filter((channel) => channel.canal === "whatsapp")
+  const omnichannelChannels = channels.ok
+    ? channels.data.filter((channel) =>
+        ["whatsapp", "facebook", "instagram", "email", "manual"].includes(
+          channel.canal,
+        ),
+      )
     : [];
+  const slaBreached = conversations.ok
+    ? conversations.data.filter((conversation) => conversation.slaStatus === "vencido")
+        .length
+    : 0;
 
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeader
-          description="Centro operativo para conversaciones, canal Meta, salud y acciones comerciales desde WhatsApp."
+          description="Centro operativo omnicanal para WhatsApp, Facebook Messenger, Instagram DM, correo, CRM y acciones comerciales."
           eyebrow="Whapp"
           title="Whapp"
         />
@@ -61,6 +70,18 @@ export default async function WhappPage() {
           </Link>
           <Link className={buttonVariants({ variant: "outline" })} href="/whapp/canales">
             Canales
+          </Link>
+          <Link className={buttonVariants({ variant: "outline" })} href="/whapp/plantillas">
+            Plantillas
+          </Link>
+          <Link className={buttonVariants({ variant: "outline" })} href="/whapp/campanas">
+            Campanas
+          </Link>
+          <Link
+            className={buttonVariants({ variant: "outline" })}
+            href="/whapp/automatizaciones"
+          >
+            Automatizaciones
           </Link>
         </div>
       </div>
@@ -79,20 +100,21 @@ export default async function WhappPage() {
           </p>
         </div>
         <div className="rounded-lg border bg-background p-4">
-          <p className="text-sm text-muted-foreground">Canales activos</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {summary.ok ? summary.data.activeChannels : 0}
-          </p>
+          <p className="text-sm text-muted-foreground">SLA vencido</p>
+          <p className="mt-2 text-2xl font-semibold">{slaBreached}</p>
         </div>
         <div className="rounded-lg border bg-background p-4">
-          <p className="text-sm text-muted-foreground">WhatsApp Meta</p>
-          <p className="mt-2 text-2xl font-semibold">{whatsappChannels.length}</p>
+          <p className="text-sm text-muted-foreground">Canales omnicanal</p>
+          <p className="mt-2 text-2xl font-semibold">
+            {omnichannelChannels.length}
+          </p>
         </div>
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        Regla 24h pendiente de control estricto. En futuras fases se bloqueara
-        texto libre fuera de ventana y se agregara selector de plantillas Meta.
+        Cumplimiento Meta: usa texto libre solo dentro de la ventana operativa de
+        24 horas. Para conversaciones fuera de ventana se requiere plantilla
+        aprobada antes de enviar.
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -110,11 +132,19 @@ export default async function WhappPage() {
                 href={`/whapp/conversaciones/${conversation.id}`}
                 key={conversation.id}
               >
-                <p className="font-medium">
-                  {conversation.contactoNombre ??
-                    conversation.contactoTelefono ??
-                    "Contacto WhatsApp"}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <InboxChannelBadge channel={conversation.canal} showLabel={false} />
+                  <p className="font-medium">
+                    {conversation.contactoNombre ??
+                      conversation.contactoTelefono ??
+                      "Contacto omnicanal"}
+                  </p>
+                  {conversation.unreadCount > 0 ? (
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
+                      {conversation.unreadCount} nuevo
+                    </span>
+                  ) : null}
+                </div>
                 <p className="truncate text-sm text-muted-foreground">
                   {conversation.ultimoMensaje ?? "Sin mensajes"}
                 </p>
@@ -132,17 +162,19 @@ export default async function WhappPage() {
           <div className="rounded-lg border bg-background p-5">
             <p className="font-semibold">Alcance fase 1</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Recepcion real, envio manual, conversaciones, estados de mensaje,
-              notas, asignacion, vinculo CRM y salud de canal. Campanas,
-              automatizaciones, plantillas e IA quedan fuera de esta fase.
+              Visor omnicanal sobre Inbox con identidad por canal, recepcion Meta,
+              envio WhatsApp, correo preparado, no leidos por agente, notas,
+              asignacion, vinculo CRM y salud de canal. Campanas,
+              plantillas, campanas, reglas de autopilot y automatizaciones
+              avanzan hacia ejecucion controlada e IA contextual.
             </p>
           </div>
-          {whatsappChannels.length > 0 ? (
-            <WhappChannelList channels={whatsappChannels.slice(0, 3)} />
+          {omnichannelChannels.length > 0 ? (
+            <WhappChannelList channels={omnichannelChannels.slice(0, 3)} />
           ) : (
             <EmptyState
-              description="Configura un canal WhatsApp Meta desde Canales."
-              title="Sin canales WhatsApp"
+              description="Configura WhatsApp, Facebook, Instagram, correo o un canal manual desde Canales."
+              title="Sin canales omnicanal"
             />
           )}
         </div>

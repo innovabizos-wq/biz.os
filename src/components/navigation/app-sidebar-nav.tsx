@@ -4,34 +4,37 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Brain,
   Boxes,
   CalendarDays,
   FileText,
   Home,
   MessageCircle,
-  Newspaper,
-  PackageCheck,
+  Receipt,
   Settings,
   ShoppingCart,
-  Truck,
   Users,
-  Zap,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
 type AppSidebarNavProps = {
   showCrm: boolean;
   showAgenda: boolean;
+  showReports: boolean;
+  showBrain: boolean;
   showQuotes: boolean;
   showSales: boolean;
   showCatalog: boolean;
   showInventory: boolean;
+  showPayments: boolean;
+  showPurchases: boolean;
   showDispatch: boolean;
   showHr: boolean;
   showHrDashboard: boolean;
   showHrStates: boolean;
   showInbox: boolean;
   showAutoblog: boolean;
+  showBilling: boolean;
   showAdmin: boolean;
 };
 
@@ -45,47 +48,45 @@ function isItemActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebarNav({
-  showCrm,
-  showAgenda,
-  showQuotes,
-  showSales,
-  showCatalog,
-  showInventory,
-  showDispatch,
-  showHr,
-  showHrDashboard,
-  showHrStates,
-  showInbox,
-  showAutoblog,
-  showAdmin,
-}: AppSidebarNavProps) {
+function isAnyItemActive(pathname: string, item: NavItem) {
+  return isItemActive(pathname, item.href);
+}
+
+export function AppSidebarNav(props: AppSidebarNavProps) {
   const pathname = usePathname();
   const items = [
-    { href: "/dashboard", icon: Home, label: "Inicio" },
-    showCrm ? { href: "/crm/clientes", icon: Users, label: "CRM" } : null,
-    showSales ? { href: "/ventas", icon: ShoppingCart, label: "Ventas" } : null,
-    showQuotes ? { href: "/cotizaciones", icon: FileText, label: "Cotizaciones" } : null,
-    showCatalog ? { href: "/catalogo", icon: PackageCheck, label: "Catalogo" } : null,
-    showInventory ? { href: "/inventario", icon: Boxes, label: "Inventario" } : null,
-    showDispatch ? { href: "/despacho", icon: Truck, label: "Despacho" } : null,
-    showAgenda ? { href: "/agenda", icon: CalendarDays, label: "Agenda" } : null,
-    showAutoblog ? { href: "/autoblog", icon: Newspaper, label: "Autoblog" } : null,
-    showInbox ? { href: "/whapp/conversaciones", icon: MessageCircle, label: "Inbox" } : null,
-    showHrDashboard
-      ? { href: "/rrhh/planillas/dashboard", icon: BarChart3, label: "Reportes" }
+    {
+      href: "/dashboard",
+      icon: props.showReports ? BarChart3 : Home,
+      label: props.showReports ? "Reportes" : "Inicio",
+    },
+    props.showCrm ? { href: "/crm/clientes", icon: Users, label: "CRM" } : null,
+    props.showSales ? { href: "/ventas", icon: ShoppingCart, label: "Ventas" } : null,
+    props.showQuotes ? { href: "/cotizaciones", icon: FileText, label: "Cotizaciones" } : null,
+    props.showBilling ? { href: "/facturacion", icon: Receipt, label: "Facturacion" } : null,
+    props.showCatalog ? { href: "/catalogo", icon: Boxes, label: "Catalogo" } : null,
+    props.showInventory ? { href: "/inventario", icon: Boxes, label: "Inventario" } : null,
+    props.showPurchases ? { href: "/compras", icon: ShoppingCart, label: "Compras" } : null,
+    props.showPayments ? { href: "/pagos", icon: Receipt, label: "Pagos" } : null,
+    props.showDispatch ? { href: "/despacho", icon: Boxes, label: "Despacho" } : null,
+    props.showInbox ? { href: "/whapp/conversaciones", icon: MessageCircle, label: "Inbox" } : null,
+    props.showAgenda ? { href: "/agenda", icon: CalendarDays, label: "Agenda" } : null,
+    props.showAutoblog ? { href: "/autoblog", icon: FileText, label: "Autoblog" } : null,
+    props.showBrain ? { href: "/brain", icon: Brain, label: "Brain" } : null,
+    props.showHrDashboard
+      ? { href: "/rrhh/planillas/dashboard", icon: BarChart3, label: "Planillas" }
       : null,
-    showHr ? { href: "/rrhh/personal", icon: Zap, label: "RRHH" } : null,
-    showHrStates
+    props.showHr ? { href: "/rrhh/personal", icon: CalendarDays, label: "RRHH" } : null,
+    props.showHrStates
       ? { href: "/rrhh/planillas/estados", icon: CalendarDays, label: "Estados" }
       : null,
-    showAdmin ? { href: "/admin", icon: Settings, label: "Configuracion" } : null,
+    props.showAdmin ? { href: "/admin", icon: Settings, label: "Configuracion" } : null,
   ].filter(Boolean) as NavItem[];
 
   return (
     <nav aria-label="Navegacion principal" className="app-sidebar-nav">
       {items.map((item) => {
-        const isActive = isItemActive(pathname, item.href);
+        const isActive = isAnyItemActive(pathname, item);
         const Icon = item.icon;
 
         return (

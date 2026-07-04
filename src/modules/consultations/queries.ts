@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { normalizeConsultationDocument } from "@/modules/consultations/schemas";
+import { getNormalizedCrmIdentificationOrNull } from "@/modules/crm/identification";
 import { lookupHaciendaContributorByDocument } from "@/modules/consultations/hacienda";
 import type { ConsultationSearchResult } from "@/modules/consultations/types";
 import type { CrmCustomer } from "@/modules/crm/types";
@@ -43,12 +43,22 @@ function mapCustomer(row: CustomerRow): CrmCustomer {
     createdAt: row.created_at,
     empresaId: row.empresa_id,
     estado: row.estado,
+    followupsCount: 0,
     genero: row.genero ?? "o",
     id: row.id,
     identificacion: row.identificacion,
+    interactionsCount: 0,
+    lastActivityAt: null,
+    lastFollowupAt: null,
+    lastInteractionAt: null,
+    lastQuoteAt: null,
+    lastSaleAt: null,
     nombre: row.nombre,
     notas: row.notas,
     origen: row.origen,
+    pendingFollowupsCount: 0,
+    quotesCount: 0,
+    salesCount: 0,
     telefono: row.telefono,
     tipo: row.tipo,
     updatedAt: row.updated_at,
@@ -60,7 +70,7 @@ export async function findCrmCustomerByDocument(
   tenant: TenantContext,
   documento: string,
 ): Promise<CoreResult<CrmCustomer | null>> {
-  const normalized = normalizeConsultationDocument(documento);
+  const normalized = getNormalizedCrmIdentificationOrNull(documento);
 
   if (!normalized) return ok(null);
 
@@ -71,18 +81,14 @@ export async function findCrmCustomerByDocument(
       "id, empresa_id, tipo, estado, genero, nombre, identificacion, telefono, whatsapp, correo, origen, asignado_a, notas, created_at, updated_at, profiles!crm_clientes_asignado_empresa_fkey(nombre)",
     )
     .eq("empresa_id", tenant.empresaId)
-    .not("identificacion", "is", null)
-    .limit(200);
+    .eq("identificacion_normalizada", normalized)
+    .maybeSingle<CustomerRow>();
 
   if (error) {
     return fail("PERMISSION_DENIED", "No se pudo buscar en CRM.", error);
   }
 
-  const match = ((data ?? []) as CustomerRow[]).find(
-    (row) => normalizeConsultationDocument(row.identificacion ?? "") === normalized,
-  );
-
-  return ok(match ? mapCustomer(match) : null);
+  return ok(data ? mapCustomer(data) : null);
 }
 
 export async function getAutomaticCustomerType(
@@ -109,7 +115,12 @@ export async function getConsultationSearchResult(
   tenant: TenantContext,
   documento: string,
 ): Promise<CoreResult<ConsultationSearchResult>> {
-  const normalized = normalizeConsultationDocument(documento);
+  const normalized = getNormalizedCrmIdentificationOrNull(documento);
+
+  if (!normalized) {
+    return fail("VALIDATION_ERROR", "Documento invalido.");
+  }
+
   const internal = await findCrmCustomerByDocument(tenant, normalized);
 
   if (!internal.ok) return internal;

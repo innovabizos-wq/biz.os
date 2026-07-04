@@ -1,10 +1,14 @@
 import { z } from "zod";
 
 import { emailSchema, nonEmptyTextSchema, optionalTextSchema, uuidSchema } from "@/lib/validation/shared-schemas";
+import {
+  isValidCrmIdentification,
+  normalizeCrmIdentification,
+} from "@/modules/crm/identification";
 import { CRM_INTERACCION_TIPOS } from "@/modules/crm/constants";
 
 export function normalizeConsultationDocument(value: string) {
-  return value.trim().replace(/[\s-]/g, "").replace(/[^\d]/g, "");
+  return normalizeCrmIdentification(value);
 }
 
 const optionalFormUuidSchema = uuidSchema
@@ -20,7 +24,7 @@ export const consultationSearchSchema = z.object({
     .string()
     .trim()
     .transform(normalizeConsultationDocument)
-    .refine((value) => /^\d{9,12}$/.test(value), {
+    .refine((value) => isValidCrmIdentification(value), {
       message: "La identificacion debe tener entre 9 y 12 digitos numericos.",
     }),
 });
@@ -28,7 +32,7 @@ export const consultationSearchSchema = z.object({
 export const haciendaDocumentSchema = z
   .string()
   .transform(normalizeConsultationDocument)
-  .refine((value) => /^\d{9,12}$/.test(value), {
+  .refine((value) => isValidCrmIdentification(value), {
     message: "La identificacion debe tener entre 9 y 12 digitos numericos.",
   });
 

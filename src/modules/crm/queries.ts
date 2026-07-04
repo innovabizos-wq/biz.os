@@ -58,6 +58,141 @@ type AssignableUserRow = {
   nombre: string;
 };
 
+type InteractionMetricRow = {
+  cliente_id: string;
+  created_at: string;
+};
+
+type FollowupMetricRow = {
+  cliente_id: string;
+  created_at: string;
+  estado: CrmFollowup["estado"];
+  fecha_programada: string;
+};
+
+type QuoteMetricRow = {
+  cliente_id: string | null;
+  created_at: string;
+};
+
+type SaleMetricRow = {
+  cliente_id: string | null;
+  created_at: string;
+};
+
+type CustomerMetrics = Pick<
+  CrmCustomer,
+  | "followupsCount"
+  | "interactionsCount"
+  | "lastActivityAt"
+  | "lastFollowupAt"
+  | "lastInteractionAt"
+  | "lastQuoteAt"
+  | "lastSaleAt"
+  | "pendingFollowupsCount"
+  | "quotesCount"
+  | "salesCount"
+>;
+
+function emptyCustomerMetrics(): CustomerMetrics {
+  return {
+    followupsCount: 0,
+    interactionsCount: 0,
+    lastActivityAt: null,
+    lastFollowupAt: null,
+    lastInteractionAt: null,
+    lastQuoteAt: null,
+    lastSaleAt: null,
+    pendingFollowupsCount: 0,
+    quotesCount: 0,
+    salesCount: 0,
+  };
+}
+
+function maxDate(current: string | null, candidate: string | null | undefined) {
+  if (!candidate) {
+    return current;
+  }
+
+  if (!current) {
+    return candidate;
+  }
+
+  return candidate > current ? candidate : current;
+}
+
+function buildCustomerMetrics(input: {
+  customers: CustomerRow[];
+  followups: FollowupMetricRow[];
+  interactions: InteractionMetricRow[];
+  quotes: QuoteMetricRow[];
+  sales: SaleMetricRow[];
+}) {
+  const metrics = new Map<string, CustomerMetrics>();
+
+  for (const customer of input.customers) {
+    metrics.set(customer.id, emptyCustomerMetrics());
+  }
+
+  for (const interaction of input.interactions) {
+    const current = metrics.get(interaction.cliente_id);
+
+    if (!current) continue;
+
+    current.interactionsCount += 1;
+    current.lastInteractionAt = maxDate(
+      current.lastInteractionAt,
+      interaction.created_at,
+    );
+  }
+
+  for (const followup of input.followups) {
+    const current = metrics.get(followup.cliente_id);
+
+    if (!current) continue;
+
+    current.followupsCount += 1;
+    if (followup.estado === "pendiente") {
+      current.pendingFollowupsCount += 1;
+    }
+    current.lastFollowupAt = maxDate(
+      current.lastFollowupAt,
+      maxDate(followup.created_at, followup.fecha_programada),
+    );
+  }
+
+  for (const quote of input.quotes) {
+    if (!quote.cliente_id) continue;
+    const current = metrics.get(quote.cliente_id);
+
+    if (!current) continue;
+
+    current.quotesCount += 1;
+    current.lastQuoteAt = maxDate(current.lastQuoteAt, quote.created_at);
+  }
+
+  for (const sale of input.sales) {
+    if (!sale.cliente_id) continue;
+    const current = metrics.get(sale.cliente_id);
+
+    if (!current) continue;
+
+    current.salesCount += 1;
+    current.lastSaleAt = maxDate(current.lastSaleAt, sale.created_at);
+  }
+
+  for (const current of metrics.values()) {
+    current.lastActivityAt = [
+      current.lastInteractionAt,
+      current.lastFollowupAt,
+      current.lastQuoteAt,
+      current.lastSaleAt,
+    ].reduce<string | null>((latest, value) => maxDate(latest, value), null);
+  }
+
+  return metrics;
+}
+
 function firstProfile(
   value: ProfileRelation | ProfileRelation[] | null,
 ): ProfileRelation | null {
@@ -72,12 +207,22 @@ function mapCustomer(row: CustomerRow): CrmCustomer {
     createdAt: row.created_at,
     empresaId: row.empresa_id,
     estado: row.estado,
+    followupsCount: 0,
     genero: row.genero ?? "o",
     id: row.id,
     identificacion: row.identificacion,
+    interactionsCount: 0,
+    lastActivityAt: null,
+    lastFollowupAt: null,
+    lastInteractionAt: null,
+    lastQuoteAt: null,
+    lastSaleAt: null,
     nombre: row.nombre,
     notas: row.notas,
     origen: row.origen,
+    pendingFollowupsCount: 0,
+    quotesCount: 0,
+    salesCount: 0,
     telefono: row.telefono,
     tipo: row.tipo,
     updatedAt: row.updated_at,
@@ -127,7 +272,50 @@ export async function getCrmCustomers(
     return ok([]);
   }
 
-  return ok(((data ?? []) as CustomerRow[]).map(mapCustomer));
+  const customerRows = (data ?? []) as CustomerRow[];
+
+  if (customerRows.length === 0) {
+    return ok([]);
+  }
+
+  const [
+    interactionsResult,
+    followupsResult,
+    quotesResult,
+    salesResult,
+  ] = await Promise.all([
+    supabase
+      .from("crm_interacciones")
+      .select("cliente_id, created_at")
+      .eq("empresa_id", tenant.empresaId),
+    supabase
+      .from("crm_seguimientos")
+      .select("cliente_id, estado, created_at, fecha_programada")
+      .eq("empresa_id", tenant.empresaId),
+    supabase
+      .from("cotizaciones")
+      .select("cliente_id, created_at")
+      .eq("empresa_id", tenant.empresaId),
+    supabase
+      .from("ventas")
+      .select("cliente_id, created_at")
+      .eq("empresa_id", tenant.empresaId),
+  ]);
+
+  const metrics = buildCustomerMetrics({
+    customers: customerRows,
+    followups: (followupsResult.data ?? []) as FollowupMetricRow[],
+    interactions: (interactionsResult.data ?? []) as InteractionMetricRow[],
+    quotes: (quotesResult.data ?? []) as QuoteMetricRow[],
+    sales: (salesResult.data ?? []) as SaleMetricRow[],
+  });
+
+  return ok(
+    customerRows.map((row) => ({
+      ...mapCustomer(row),
+      ...(metrics.get(row.id) ?? emptyCustomerMetrics()),
+    })),
+  );
 }
 
 export async function getCrmCustomerDetail(

@@ -46,7 +46,7 @@ export default async function InboxChannelsPage({
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeader
-          description="Gestiona canales manuales y configuraciones oficiales Meta sin recibir ni enviar mensajes reales."
+          description="Gestiona canales manuales y configuraciones oficiales Meta para recepcion webhook y envio real condicionado."
           eyebrow="Inbox"
           title="Canales"
         />
@@ -71,7 +71,11 @@ export default async function InboxChannelsPage({
         <InboxChannelsTable canManage={canManage} channels={rows} />
       ) : (
         <EmptyState
-          description={channels.ok ? "Crea un canal manual para pruebas." : channels.error.message}
+          description={
+            channels.ok
+              ? "Crea un canal manual o configura un canal Meta oficial."
+              : channels.error.message
+          }
           title="Sin canales"
         />
       )}
