@@ -846,7 +846,11 @@ function buildSummaryFromContent(content: string) {
   return summary ? truncateChars(summary, MAX_SUMMARY_CHARS) || summary : null;
 }
 
-function shouldFallback(content, topicTerms, brandCandidates) {
+function shouldFallback(
+  content: string,
+  topicTerms: string[],
+  brandCandidates: string[],
+) {
   if (!content || content.length < 300) return true;
   if (hasRepeatedBlocks(content)) return true;
   if (!hasTopicCoverage(content, topicTerms)) return true;
@@ -1115,3 +1119,4 @@ export async function generateAutoblogDraft(
     };
   }
 }
+
