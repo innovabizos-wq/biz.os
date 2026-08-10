@@ -146,6 +146,23 @@ function createQuickReplyDraft(): QuickReply {
   };
 }
 
+function getVoiceRecordingFormat(channel: InboxWidgetConversation["canal"]) {
+  const whatsappFormats = [
+    ["audio/ogg;codecs=opus", "ogg"],
+    ["audio/mp4;codecs=opus", "m4a"],
+    ["audio/mp4", "m4a"],
+    ["audio/mpeg", "mp3"],
+  ] as const;
+  const messagingFormats = [
+    ["audio/webm;codecs=opus", "webm"],
+    ["audio/webm", "webm"],
+    ...whatsappFormats,
+  ] as const;
+  const candidates = channel === "whatsapp" ? whatsappFormats : messagingFormats;
+
+  return candidates.find(([mimeType]) => MediaRecorder.isTypeSupported(mimeType)) ?? null;
+}
+
 export function FloatingInboxWidget({
   conversations,
   isOpen,
@@ -387,13 +404,19 @@ export function FloatingInboxWidget({
       return;
     }
 
-    const mimeType = ["audio/ogg;codecs=opus", "audio/ogg"].find((candidate) =>
-      MediaRecorder.isTypeSupported(candidate),
-    );
-    if (!mimeType) {
-      setWidgetError("Este navegador no puede crear el formato de voz compatible con Meta.");
+    const recordingFormat = activeConversation
+      ? getVoiceRecordingFormat(activeConversation.canal)
+      : null;
+    if (!recordingFormat) {
+      setWidgetError(
+        activeConversation?.canal === "whatsapp"
+          ? "Este navegador no puede grabar OGG o MP4 compatible con WhatsApp."
+          : "Este navegador no ofrece un formato de voz compatible con Meta.",
+      );
       return;
     }
+
+    const [mimeType, extension] = recordingFormat;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -411,7 +434,7 @@ export function FloatingInboxWidget({
 
         const voice = new File(
           [new Blob(chunks, { type: mimeType })],
-          `nota-de-voz-${Date.now()}.ogg`,
+          `nota-de-voz-${Date.now()}.${extension}`,
           { type: mimeType },
         );
         sendMessage("", voice);
