@@ -24,10 +24,12 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   addInboxWidgetMessageAction,
+  createAndLinkInboxWidgetCustomerAction,
   getInboxWidgetOperationsAction,
   getInboxWidgetQuickRepliesAction,
   getInboxWidgetMessagesAction,
@@ -146,6 +148,10 @@ function createQuickReplyDraft(): QuickReply {
   };
 }
 
+function formatCrmCustomerNumber(numero: number | null) {
+  return numero ? `CRM ${String(numero).padStart(5, "0")}` : "CRM";
+}
+
 function getVoiceRecordingFormat(channel: InboxWidgetConversation["canal"]) {
   const whatsappFormats = [
     ["audio/ogg;codecs=opus", "ogg"],
@@ -169,6 +175,7 @@ export function FloatingInboxWidget({
   onClose,
   onMinimize,
 }: FloatingInboxWidgetProps) {
+  const router = useRouter();
   const [conversationRows, setConversationRows] =
     useState<InboxWidgetConversation[]>(conversations);
   const [activeConversation, setActiveConversation] =
@@ -183,10 +190,14 @@ export function FloatingInboxWidget({
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [toolView, setToolView] = useState<"management" | "replies">("replies");
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [operations, setOperations] = useState<InboxWidgetOperations>({
     canAssign: false,
     canChangeStatus: false,
+    canCreateCustomer: false,
     canReply: false,
+    currentProfileId: null,
+    currentProfileName: null,
     customers: [],
     users: [],
   });
@@ -256,6 +267,11 @@ export function FloatingInboxWidget({
     activeConversation?.contactoIdentificador ??
     activeConversation?.contactoUsuario ??
     "Sin telefono";
+  const activeCustomerNumber =
+    activeConversation?.contactoTelefono ??
+    activeConversation?.contactoIdentificador ??
+    activeConversation?.contactoUsuario ??
+    "";
 
   const filteredQuickReplies = useMemo(() => {
     const normalizedSearch = quickReplySearch.trim().toLowerCase();
@@ -311,6 +327,44 @@ export function FloatingInboxWidget({
     setWidgetError(null);
     setActiveConversation(conversation);
     setIsInternalNote(false);
+    setIsCustomerDialogOpen(false);
+  }
+
+  function createAndLinkCustomer(formData: FormData) {
+    if (!activeConversation || isSending) return;
+    const conversationId = activeConversation.id;
+    formData.set("conversacionId", conversationId);
+    setWidgetError(null);
+
+    startSendingTransition(async () => {
+      const result = await createAndLinkInboxWidgetCustomerAction(formData);
+      if (!result.ok) {
+        setWidgetError(result.error);
+        return;
+      }
+
+      const assignedName = operations.users.find(
+        (user) => user.id === result.assignedId,
+      )?.nombre ?? null;
+      updateConversation(conversationId, {
+        asignadoA: result.assignedId,
+        asignadoNombre: assignedName,
+        clienteId: result.customer.id,
+        clienteNombre: result.customer.nombre,
+        clienteNumero: result.customer.numero,
+      });
+      setOperations((current) => ({
+        ...current,
+        customers: current.customers.some(
+          (customer) => customer.id === result.customer.id,
+        )
+          ? current.customers
+          : [...current.customers, result.customer].sort((left, right) =>
+              left.nombre.localeCompare(right.nombre, "es"),
+            ),
+      }));
+      setIsCustomerDialogOpen(false);
+    });
   }
 
   function updateConversation(
@@ -476,7 +530,7 @@ export function FloatingInboxWidget({
       <div className="absolute inset-0 flex items-center justify-center px-2 py-4">
         <div
           aria-label="Widget de mensajeria WhatsApp"
-          className="grid h-[calc(100vh-2rem)] w-[min(1500px,calc(100vw-1rem))] grid-cols-[390px_minmax(760px,1fr)] gap-5 rounded-[24px] border border-white/45 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,246,255,0.94))] p-3 shadow-[0_36px_110px_rgba(2,6,23,0.46),0_0_0_1px_rgba(255,255,255,0.5)_inset] outline-none max-[1280px]:grid-cols-[340px_minmax(420px,1fr)] max-[1280px]:[&_.whapp-tools]:hidden"
+          className="relative grid h-[calc(100vh-2rem)] w-[min(1500px,calc(100vw-1rem))] grid-cols-[390px_minmax(760px,1fr)] gap-5 rounded-[24px] border border-white/45 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,246,255,0.94))] p-3 shadow-[0_36px_110px_rgba(2,6,23,0.46),0_0_0_1px_rgba(255,255,255,0.5)_inset] outline-none max-[1280px]:grid-cols-[340px_minmax(420px,1fr)] max-[1280px]:[&_.whapp-tools]:hidden"
           ref={widgetRef}
           tabIndex={0}
         >
@@ -612,18 +666,9 @@ export function FloatingInboxWidget({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
-                      {activeConversation.clienteId ? (
-                        <Link
-                          className="truncate text-lg font-black text-slate-950 transition hover:text-emerald-700"
-                          href={`/crm/clientes/${activeConversation.clienteId}`}
-                        >
-                          {activeName}
-                        </Link>
-                      ) : (
-                        <p className="truncate text-lg font-black text-slate-950">
-                          {activeName}
-                        </p>
-                      )}
+                      <p className="truncate text-lg font-black text-slate-950">
+                        {activeName}
+                      </p>
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black ${getConversationStatusTone(activeConversation.estado)}`}
                       >
@@ -661,18 +706,37 @@ export function FloatingInboxWidget({
                     </div>
                   </div>
                   {activeConversation.clienteId ? (
-                    <Link
+                    <button
+                      aria-label={`${formatCrmCustomerNumber(activeConversation.clienteNumero)}. Doble clic para abrir el cliente.`}
                       className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2 text-xs font-black text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition hover:border-emerald-200 hover:text-emerald-700"
-                      href={`/crm/clientes/${activeConversation.clienteId}`}
+                      onDoubleClick={() =>
+                        router.push(`/crm/clientes/${activeConversation.clienteId}`)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          router.push(`/crm/clientes/${activeConversation.clienteId}`);
+                        }
+                      }}
+                      title="Doble clic para abrir la ficha CRM"
+                      type="button"
                     >
                       <UserRound aria-hidden="true" size={15} />
-                      Perfil CRM
-                    </Link>
+                      {formatCrmCustomerNumber(activeConversation.clienteNumero)}
+                    </button>
                   ) : (
-                    <span className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+                    <button
+                      className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 shadow-[0_8px_18px_rgba(15,23,42,0.05)] transition hover:border-emerald-200 hover:text-emerald-700 disabled:cursor-not-allowed"
+                      disabled={!operations.canCreateCustomer}
+                      onClick={() => setIsCustomerDialogOpen(true)}
+                      title={operations.canCreateCustomer ? "Agregar cliente al CRM" : "Tu rol no puede crear clientes"}
+                      type="button"
+                    >
                       <UserRound aria-hidden="true" size={14} />
-                      Sin cliente
-                    </span>
+                      + Cliente
+                      {!operations.canCreateCustomer ? (
+                        <span className="size-2 rounded-full bg-red-500" aria-hidden="true" />
+                      ) : null}
+                    </button>
                   )}
                   <button
                     aria-label="Etiqueta"
@@ -1106,6 +1170,104 @@ export function FloatingInboxWidget({
               </div>
             )}
           </section>
+          {isCustomerDialogOpen && activeConversation ? (
+            <div
+              aria-labelledby="create-customer-title"
+              aria-modal="true"
+              className="absolute inset-0 z-30 flex items-center justify-center rounded-[24px] bg-slate-950/35 p-5 backdrop-blur-[2px]"
+              role="dialog"
+            >
+              <form
+                className="w-full max-w-md rounded-[22px] border border-white/70 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.30)]"
+                key={`create-customer-${activeConversation.id}`}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  createAndLinkCustomer(new FormData(event.currentTarget));
+                }}
+              >
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-950" id="create-customer-title">
+                      Agregar cliente
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Se guardara en CRM y quedara vinculado a esta conversacion.
+                    </p>
+                  </div>
+                  <button
+                    aria-label="Cerrar"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+                    onClick={() => setIsCustomerDialogOpen(false)}
+                    type="button"
+                  >
+                    <X aria-hidden="true" size={17} />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <label className="block text-xs font-black text-slate-700">
+                    Nombre
+                    <input
+                      autoFocus
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                      defaultValue={activeName}
+                      maxLength={200}
+                      name="nombre"
+                      required
+                    />
+                  </label>
+                  <label className="block text-xs font-black text-slate-700">
+                    Numero
+                    <input
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                      defaultValue={activeCustomerNumber}
+                      inputMode="tel"
+                      maxLength={40}
+                      name="telefono"
+                      required
+                    />
+                  </label>
+                  <label className="block text-xs font-black text-slate-700">
+                    Asignado a
+                    <select
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                      defaultValue={operations.currentProfileId ?? ""}
+                      name="asignadoA"
+                    >
+                      <option value="">Sin asignar</option>
+                      {operations.users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.nombre}
+                          {user.id === operations.currentProfileId ? " (yo)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {widgetError ? (
+                  <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    {widgetError}
+                  </p>
+                ) : null}
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <button
+                    className="h-11 rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                    disabled={isSending}
+                    onClick={() => setIsCustomerDialogOpen(false)}
+                    type="button"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-700 text-xs font-black text-white shadow-[0_12px_24px_rgba(5,150,105,0.24)] disabled:opacity-50"
+                    disabled={isSending}
+                    type="submit"
+                  >
+                    {isSending ? "Guardando..." : "Guardar"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

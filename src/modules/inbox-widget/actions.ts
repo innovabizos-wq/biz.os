@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { getCurrentTenantContext } from "@/lib/auth/session";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
@@ -55,6 +56,31 @@ type MetaErrorPayload = {
 const META_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const WIDGET_CONVERSATION_STATUSES = ["abierta", "pendiente", "cerrada", "spam"] as const;
+const createLinkedCustomerSchema = z.object({
+  asignadoA: z.string().uuid().optional().or(z.literal("")),
+  conversacionId: z.string().uuid(),
+  nombre: z.string().trim().min(1).max(200),
+  telefono: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .transform((value) => value.replace(/\D/g, ""))
+    .refine((value) => value.length > 0),
+});
+
+type WidgetCustomerRow = {
+  asignado_a: string | null;
+  id: string;
+  nombre: string;
+  numero: number;
+  telefono: string | null;
+  whatsapp: string | null;
+};
+
+type CreatedCustomerRow = {
+  cliente_id?: string;
+};
 
 function firstRelation<T>(value: T | T[] | null) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -248,7 +274,10 @@ export async function getInboxWidgetOperationsAction() {
     return {
       canAssign: false,
       canChangeStatus: false,
+      canCreateCustomer: false,
       canReply: false,
+      currentProfileId: null,
+      currentProfileName: null,
       customers: [],
       users: [],
     };
@@ -258,15 +287,162 @@ export async function getInboxWidgetOperationsAction() {
     getAssignableUsersForInbox(),
     getCustomersForInbox(),
   ]);
+  const customerRows = customers.ok ? customers.data : [];
+  const supabase = await createClient();
+  const { data: numberRows } = customerRows.length > 0
+    ? await supabase
+        .from("crm_clientes")
+        .select("id, numero")
+        .eq("empresa_id", tenant.data.empresaId)
+        .in("id", customerRows.map((customer) => customer.id))
+    : { data: [] };
+  const customerNumberById = new Map(
+    (numberRows ?? []).map((row) => [row.id, row.numero]),
+  );
 
   return {
     canAssign: tenant.data.permissions.includes("inbox.conversations.assign"),
     canChangeStatus: tenant.data.permissions.includes(
       "inbox.conversations.status.change",
     ),
+    canCreateCustomer:
+      tenant.data.permissions.includes("crm.customers.create") &&
+      tenant.data.permissions.includes("inbox.conversations.assign"),
     canReply: tenant.data.permissions.includes("inbox.conversations.reply"),
-    customers: customers.ok ? customers.data : [],
+    currentProfileId: tenant.data.profileId,
+    currentProfileName: tenant.data.profileName ?? null,
+    customers: customerRows.flatMap((customer) => {
+      const numero = customerNumberById.get(customer.id);
+      return typeof numero === "number" ? [{ ...customer, numero }] : [];
+    }),
     users: users.ok ? users.data : [],
+  };
+}
+
+export async function createAndLinkInboxWidgetCustomerAction(formData: FormData) {
+  const tenant = await getCurrentTenantContext();
+  if (!tenant.ok || !tenant.data) {
+    return { error: "No hay empresa activa.", ok: false as const };
+  }
+
+  if (
+    !tenant.data.permissions.includes("crm.customers.create") ||
+    !tenant.data.permissions.includes("inbox.conversations.assign")
+  ) {
+    return {
+      error: "No tienes permiso para crear y vincular clientes.",
+      ok: false as const,
+    };
+  }
+
+  const parsed = createLinkedCustomerSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  if (!parsed.success) {
+    return { error: "Revisa el nombre, numero y responsable.", ok: false as const };
+  }
+
+  const supabase = await createClient();
+  const { data: conversation, error: conversationError } = await supabase
+    .from("inbox_conversaciones")
+    .select("id, canal")
+    .eq("empresa_id", tenant.data.empresaId)
+    .eq("id", parsed.data.conversacionId)
+    .maybeSingle<{ canal: MetaChannel | string; id: string }>();
+
+  if (conversationError || !conversation) {
+    return { error: "La conversacion ya no esta disponible.", ok: false as const };
+  }
+
+  const { data: existingCustomer } = await supabase
+    .from("crm_clientes")
+    .select("id, nombre, numero, telefono, whatsapp, asignado_a")
+    .eq("empresa_id", tenant.data.empresaId)
+    .or(`telefono.eq.${parsed.data.telefono},whatsapp.eq.${parsed.data.telefono}`)
+    .limit(1)
+    .maybeSingle<WidgetCustomerRow>();
+
+  let customer = existingCustomer;
+  if (!customer) {
+    const { data: created, error: createError } = await supabase.rpc(
+      "crear_crm_cliente",
+      {
+        p_asignado_a: parsed.data.asignadoA || null,
+        p_correo: null,
+        p_genero: "o",
+        p_identificacion: null,
+        p_nombre: parsed.data.nombre,
+        p_notas: "Creado desde el popup de conversaciones.",
+        p_origen: `Inbox ${conversation.canal}`,
+        p_telefono: parsed.data.telefono,
+        p_tipo: "prospecto",
+        p_whatsapp:
+          conversation.canal === "whatsapp" ? parsed.data.telefono : null,
+      },
+    );
+
+    if (createError) {
+      return { error: "No se pudo crear el cliente en CRM.", ok: false as const };
+    }
+
+    const customerId = (created as CreatedCustomerRow[] | null)?.[0]?.cliente_id;
+    if (!customerId) {
+      return { error: "CRM no devolvio el cliente creado.", ok: false as const };
+    }
+
+    const { data: createdCustomer, error: customerError } = await supabase
+      .from("crm_clientes")
+      .select("id, nombre, numero, telefono, whatsapp, asignado_a")
+      .eq("empresa_id", tenant.data.empresaId)
+      .eq("id", customerId)
+      .single<WidgetCustomerRow>();
+
+    if (customerError || !createdCustomer) {
+      return { error: "No se pudo recuperar el cliente creado.", ok: false as const };
+    }
+    customer = createdCustomer;
+  }
+
+  const { error: linkError } = await supabase.rpc(
+    "vincular_inbox_conversacion_cliente",
+    {
+      p_cliente_id: customer.id,
+      p_conversacion_id: conversation.id,
+    },
+  );
+  if (linkError) {
+    return { error: "No se pudo vincular el cliente a la conversacion.", ok: false as const };
+  }
+
+  const assignedId = parsed.data.asignadoA || null;
+  const { error: assignmentError } = await supabase.rpc(
+    "asignar_inbox_conversacion",
+    {
+      p_asignado_a: assignedId,
+      p_conversacion_id: conversation.id,
+    },
+  );
+  if (assignmentError) {
+    return { error: "El cliente se vinculo, pero no se pudo asignar.", ok: false as const };
+  }
+
+  revalidatePath("/crm");
+  revalidatePath("/crm/clientes");
+  revalidatePath(`/crm/clientes/${customer.id}`);
+  revalidatePath("/inbox/conversaciones");
+  revalidatePath(`/inbox/conversaciones/${conversation.id}`);
+  revalidatePath("/whapp/conversaciones");
+
+  return {
+    assignedId,
+    customer: {
+      id: customer.id,
+      nombre: customer.nombre,
+      numero: customer.numero,
+      telefono: customer.telefono,
+      whatsapp: customer.whatsapp,
+    },
+    ok: true as const,
   };
 }
 

@@ -8,14 +8,22 @@ import type {
 export type InboxWidgetConversation = InboxConversation & {
   etiquetas: string[];
   etapaFunnel: string | null;
+  clienteNumero: number | null;
 };
 export type InboxWidgetMessage = InboxMessage;
+
+export type InboxWidgetCustomer = InboxCustomer & {
+  numero: number;
+};
 
 export type InboxWidgetOperations = {
   canAssign: boolean;
   canChangeStatus: boolean;
+  canCreateCustomer: boolean;
   canReply: boolean;
-  customers: InboxCustomer[];
+  currentProfileId: string | null;
+  currentProfileName: string | null;
+  customers: InboxWidgetCustomer[];
   users: InboxAssignableUser[];
 };
 

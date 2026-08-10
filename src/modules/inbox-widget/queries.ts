@@ -18,13 +18,28 @@ export async function getInboxWidgetConversations(): Promise<
   }
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const linkedCustomerIds = result.data
+    .map((conversation) => conversation.clienteId)
+    .filter((value): value is string => Boolean(value));
+  const [{ data }, { data: customerRows }] = await Promise.all([
+    supabase
     .from("inbox_eventos")
     .select("conversacion_id, metadata, created_at")
     .eq("empresa_id", tenant.data.empresaId)
     .eq("tipo", "clasificacion_widget")
     .in("conversacion_id", result.data.map((conversation) => conversation.id))
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }),
+    supabase
+      .from("crm_clientes")
+      .select("id, numero")
+      .eq("empresa_id", tenant.data.empresaId)
+      .in(
+        "id",
+        linkedCustomerIds.length > 0
+          ? linkedCustomerIds
+          : ["00000000-0000-0000-0000-000000000000"],
+      ),
+  ]);
 
   const classificationByConversation = new Map<
     string,
@@ -50,9 +65,16 @@ export async function getInboxWidgetConversations(): Promise<
     });
   }
 
+  const customerNumberById = new Map(
+    (customerRows ?? []).map((row) => [row.id, row.numero]),
+  );
+
   return ok(
     result.data.map((conversation) => ({
       ...conversation,
+      clienteNumero: conversation.clienteId
+        ? (customerNumberById.get(conversation.clienteId) ?? null)
+        : null,
       ...(classificationByConversation.get(conversation.id) ?? {
         etiquetas: [],
         etapaFunnel: null,
