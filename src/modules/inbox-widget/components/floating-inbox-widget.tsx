@@ -28,12 +28,17 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   addInboxWidgetMessageAction,
+  getInboxWidgetOperationsAction,
+  getInboxWidgetQuickRepliesAction,
   getInboxWidgetMessagesAction,
+  saveInboxWidgetQuickRepliesAction,
+  updateInboxWidgetConversationAction,
 } from "@/modules/inbox-widget/actions";
 import { MessageBubble } from "@/modules/inbox-widget/components/message-bubble";
 import type {
   InboxWidgetConversation,
   InboxWidgetMessage,
+  InboxWidgetOperations,
 } from "@/modules/inbox-widget/types";
 import {
   formatWidgetTime,
@@ -71,38 +76,7 @@ const quickReplyTone = {
     "border-slate-200 bg-white text-slate-800",
 } as const;
 
-const defaultQuickReplies: QuickReply[] = [
-  {
-    accent: "green",
-    id: "bienvenida",
-    text: "Hola! Gracias por contactarnos. Como podemos ayudarte hoy?",
-    title: "Bienvenida",
-  },
-  {
-    accent: "blue",
-    id: "producto",
-    text: "Te comparto la informacion de nuestro producto o servicio.",
-    title: "Informacion producto",
-  },
-  {
-    accent: "violet",
-    id: "datos",
-    text: "Para enviarte la cotizacion, podrias confirmarme tu nombre y correo?",
-    title: "Confirmar datos",
-  },
-  {
-    accent: "orange",
-    id: "pagos",
-    text: "Enviamos a todo Mexico. Aceptamos tarjeta, transferencia y PayPal.",
-    title: "Envio y pagos",
-  },
-  {
-    accent: "amber",
-    id: "cierre",
-    text: "Hay algo mas en lo que podamos ayudarte?",
-    title: "Cierre cordial",
-  },
-];
+const defaultQuickReplies: QuickReply[] = [];
 
 const chatWallpaperStyle = {
   backgroundColor: "#f4f1ec",
@@ -112,8 +86,6 @@ const chatWallpaperStyle = {
   backgroundSize: "cover",
   opacity: 1,
 };
-
-const quickReplyStorageKey = "bizos.whatsapp.quickReplies";
 
 function getQuickReplyIcon(accent: QuickReplyAccent) {
   const icons = {
@@ -180,6 +152,8 @@ export function FloatingInboxWidget({
   onClose,
   onMinimize,
 }: FloatingInboxWidgetProps) {
+  const [conversationRows, setConversationRows] =
+    useState<InboxWidgetConversation[]>(conversations);
   const [activeConversation, setActiveConversation] =
     useState<InboxWidgetConversation | null>(conversations[0] ?? null);
   const [messagesByConversation, setMessagesByConversation] = useState<
@@ -189,29 +163,27 @@ export function FloatingInboxWidget({
   const [conversationFilter, setConversationFilter] =
     useState<ConversationFilter>("todas");
   const [draft, setDraft] = useState("");
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [isInternalNote, setIsInternalNote] = useState(false);
+  const [toolView, setToolView] = useState<"management" | "replies">("replies");
+  const [operations, setOperations] = useState<InboxWidgetOperations>({
+    canAssign: false,
+    canChangeStatus: false,
+    canReply: false,
+    customers: [],
+    users: [],
+  });
   const [widgetError, setWidgetError] = useState<string | null>(null);
   const [lastQuickReply, setLastQuickReply] = useState<string | null>(null);
   const [quickReplySearch, setQuickReplySearch] = useState("");
-  const [quickReplies, setQuickReplies] = useState<QuickReply[]>(() => {
-    if (typeof window === "undefined") return defaultQuickReplies;
-
-    try {
-      const saved = window.localStorage.getItem(quickReplyStorageKey);
-      if (!saved) return defaultQuickReplies;
-
-      const parsed = JSON.parse(saved) as QuickReply[];
-      return Array.isArray(parsed) && parsed.length > 0
-        ? parsed
-        : defaultQuickReplies;
-    } catch {
-      return defaultQuickReplies;
-    }
-  });
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>(defaultQuickReplies);
   const [quickReplyDraft, setQuickReplyDraft] = useState<QuickReply | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isSending, startSendingTransition] = useTransition();
   const widgetRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   const activeMessages = activeConversation
     ? (messagesByConversation[activeConversation.id] ?? [])
@@ -219,22 +191,22 @@ export function FloatingInboxWidget({
 
   const conversationCounts = useMemo(
     () => ({
-      abierta: conversations.filter((conversation) => conversation.estado === "abierta")
+      abierta: conversationRows.filter((conversation) => conversation.estado === "abierta")
         .length,
-      cerrada: conversations.filter((conversation) => conversation.estado === "cerrada")
+      cerrada: conversationRows.filter((conversation) => conversation.estado === "cerrada")
         .length,
-      pendiente: conversations.filter(
+      pendiente: conversationRows.filter(
         (conversation) => conversation.estado === "pendiente",
       ).length,
-      todas: conversations.length,
+      todas: conversationRows.length,
     }),
-    [conversations],
+    [conversationRows],
   );
 
   const filteredConversations = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
-    return conversations.filter((conversation) => {
+    return conversationRows.filter((conversation) => {
       const matchesFilter =
         conversationFilter === "todas" || conversation.estado === conversationFilter;
 
@@ -249,12 +221,14 @@ export function FloatingInboxWidget({
         conversation.asignadoNombre ?? "",
         conversation.contactoTelefono ?? "",
         conversation.contactoIdentificador ?? "",
+        conversation.etapaFunnel ?? "",
+        conversation.etiquetas.join(" "),
       ]
         .join(" ")
         .toLowerCase()
         .includes(normalizedSearch);
     });
-  }, [conversationFilter, conversations, search]);
+  }, [conversationFilter, conversationRows, search]);
 
   const activeName = activeConversation
     ? getWidgetContactName(activeConversation)
@@ -281,8 +255,21 @@ export function FloatingInboxWidget({
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(quickReplyStorageKey, JSON.stringify(quickReplies));
-  }, [quickReplies]);
+    startTransition(async () => {
+      const [nextOperations, savedReplies] = await Promise.all([
+        getInboxWidgetOperationsAction(),
+        getInboxWidgetQuickRepliesAction(),
+      ]);
+      setOperations(nextOperations);
+      setQuickReplies(
+        savedReplies.filter((value): value is QuickReply => {
+          if (!value || typeof value !== "object") return false;
+          const reply = value as Partial<QuickReply>;
+          return Boolean(reply.id && reply.title && reply.text && reply.accent);
+        }),
+      );
+    });
+  }, []);
 
   useEffect(() => {
     threadRef.current?.scrollTo({
@@ -306,19 +293,73 @@ export function FloatingInboxWidget({
   function handleSelectConversation(conversation: InboxWidgetConversation) {
     setWidgetError(null);
     setActiveConversation(conversation);
+    setIsInternalNote(false);
   }
 
-  function sendMessage(contenido: string) {
-    if (!activeConversation || !contenido.trim() || isSending) return;
+  function updateConversation(
+    conversationId: string,
+    patch: Partial<InboxWidgetConversation>,
+  ) {
+    setConversationRows((current) =>
+      current.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, ...patch } : conversation,
+      ),
+    );
+    setActiveConversation((current) =>
+      current?.id === conversationId ? { ...current, ...patch } : current,
+    );
+  }
+
+  function runConversationOperation(
+    formData: FormData,
+    patch: Partial<InboxWidgetConversation>,
+  ) {
+    if (!activeConversation || isSending) return;
+    const conversationId = activeConversation.id;
+    formData.set("conversacionId", conversationId);
+    setWidgetError(null);
+
+    startSendingTransition(async () => {
+      const result = await updateInboxWidgetConversationAction(formData);
+      if (!result.ok) {
+        setWidgetError(result.error);
+        return;
+      }
+      updateConversation(conversationId, patch);
+    });
+  }
+
+  function sendMessage(contenido: string, attachment?: File) {
+    if (!activeConversation || (!contenido.trim() && !attachment) || isSending) return;
 
     const trimmed = contenido.trim();
     setWidgetError(null);
 
     startSendingTransition(async () => {
-      const result = await addInboxWidgetMessageAction({
-        contenido: trimmed,
-        conversacionId: activeConversation.id,
-      });
+      if (isInternalNote) {
+        const noteData = new FormData();
+        noteData.set("contenido", trimmed);
+        noteData.set("conversacionId", activeConversation.id);
+        noteData.set("operation", "note");
+        const noteResult = await updateInboxWidgetConversationAction(noteData);
+        if (!noteResult.ok) {
+          setWidgetError(noteResult.error);
+          return;
+        }
+        const messages = await getInboxWidgetMessagesAction(activeConversation.id);
+        setMessagesByConversation((current) => ({
+          ...current,
+          [activeConversation.id]: messages,
+        }));
+        setDraft("");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.set("contenido", trimmed);
+      formData.set("conversacionId", activeConversation.id);
+      if (attachment) formData.set("attachment", attachment, attachment.name);
+      const result = await addInboxWidgetMessageAction(formData);
 
       if (!result.ok) {
         setWidgetError(result.error);
@@ -333,6 +374,55 @@ export function FloatingInboxWidget({
     });
   }
 
+  async function toggleVoiceRecording() {
+    if (isSending) return;
+
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setWidgetError("Este navegador no permite grabar notas de voz.");
+      return;
+    }
+
+    const mimeType = ["audio/ogg;codecs=opus", "audio/ogg"].find((candidate) =>
+      MediaRecorder.isTypeSupported(candidate),
+    );
+    if (!mimeType) {
+      setWidgetError("Este navegador no puede crear el formato de voz compatible con Meta.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: BlobPart[] = [];
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+      recorder.addEventListener("stop", () => {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorderRef.current = null;
+        setIsRecordingVoice(false);
+
+        const voice = new File(
+          [new Blob(chunks, { type: mimeType })],
+          `nota-de-voz-${Date.now()}.ogg`,
+          { type: mimeType },
+        );
+        sendMessage("", voice);
+      });
+      recorder.start();
+      setIsRecordingVoice(true);
+    } catch {
+      setWidgetError("No se pudo acceder al micrófono. Revisa el permiso del navegador.");
+    }
+  }
+
   function handleQuickReply(reply: QuickReply) {
     sendMessage(reply.text);
     setLastQuickReply(reply.title);
@@ -342,15 +432,16 @@ export function FloatingInboxWidget({
   function saveQuickReply() {
     if (!quickReplyDraft?.title.trim() || !quickReplyDraft.text.trim()) return;
 
-    setQuickReplies((current) => {
-      const exists = current.some((reply) => reply.id === quickReplyDraft.id);
-      if (exists) {
-        return current.map((reply) =>
+    const exists = quickReplies.some((reply) => reply.id === quickReplyDraft.id);
+    const nextReplies = exists
+      ? quickReplies.map((reply) =>
           reply.id === quickReplyDraft.id ? quickReplyDraft : reply,
-        );
-      }
-
-      return [...current, quickReplyDraft];
+        )
+      : [...quickReplies, quickReplyDraft];
+    setQuickReplies(nextReplies);
+    startTransition(async () => {
+      const result = await saveInboxWidgetQuickRepliesAction(nextReplies);
+      if (!result.ok) setWidgetError(result.error);
     });
     setQuickReplyDraft(null);
   }
@@ -563,6 +654,7 @@ export function FloatingInboxWidget({
                   <button
                     aria-label="Etiqueta"
                     className="flex size-9 items-center justify-center border-l border-slate-100 text-slate-500 transition hover:text-slate-900"
+                    onClick={() => setToolView((current) => current === "management" ? "replies" : "management")}
                     type="button"
                   >
                     <Tag aria-hidden="true" size={17} />
@@ -627,13 +719,30 @@ export function FloatingInboxWidget({
                         <button
                           aria-label="Adjuntar"
                           className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          disabled={isSending || isInternalNote}
+                          onClick={() => attachmentInputRef.current?.click()}
                           type="button"
                         >
                           <Paperclip aria-hidden="true" size={20} />
                         </button>
+                        <input
+                          className="sr-only"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) sendMessage("", file);
+                            event.target.value = "";
+                          }}
+                          ref={attachmentInputRef}
+                          type="file"
+                        />
                         <button
-                          aria-label="Accion rapida"
-                          className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          aria-label={isInternalNote ? "Volver a respuesta" : "Agregar nota interna"}
+                          className={`flex size-9 items-center justify-center rounded-lg transition ${
+                            isInternalNote
+                              ? "bg-amber-100 text-amber-700"
+                              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                          onClick={() => setIsInternalNote((current) => !current)}
                           type="button"
                         >
                           <Zap aria-hidden="true" size={18} />
@@ -646,7 +755,11 @@ export function FloatingInboxWidget({
                           /
                         </button>
                         <textarea
-                          className="max-h-28 min-h-11 flex-1 resize-none rounded-2xl border border-blue-100 bg-white/95 px-4 py-3 text-sm shadow-[0_10px_26px_rgba(59,130,246,0.10)] outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100/80"
+                          className={`max-h-28 min-h-11 flex-1 resize-none rounded-2xl border bg-white/95 px-4 py-3 text-sm shadow-[0_10px_26px_rgba(59,130,246,0.10)] outline-none transition ${
+                            isInternalNote
+                              ? "border-amber-300 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                              : "border-blue-100 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100/80"
+                          }`}
                           onChange={(event) => setDraft(event.target.value)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" && !event.shiftKey) {
@@ -654,15 +767,19 @@ export function FloatingInboxWidget({
                               sendMessage(draft);
                             }
                           }}
-                          placeholder="Escribe un mensaje o usa / para atajos"
+                          placeholder={isInternalNote ? "Escribe una nota interna; el cliente no la verá" : "Escribe un mensaje o usa / para atajos"}
                           rows={1}
                           value={draft}
                         />
                         <button
-                          aria-label="Enviar respuesta"
-                          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-[0_14px_30px_rgba(5,150,105,0.34)] ring-2 ring-white transition hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(5,150,105,0.42)] disabled:opacity-60"
-                          disabled={!draft.trim() || isSending}
-                          onClick={() => sendMessage(draft)}
+                          aria-label={draft.trim() ? "Enviar respuesta" : isRecordingVoice ? "Detener y enviar nota de voz" : "Grabar nota de voz"}
+                          className={`flex size-12 shrink-0 items-center justify-center rounded-full text-white shadow-[0_14px_30px_rgba(5,150,105,0.34)] ring-2 ring-white transition hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(5,150,105,0.42)] disabled:opacity-60 ${
+                            isRecordingVoice
+                              ? "bg-gradient-to-br from-red-500 to-red-700"
+                              : "bg-gradient-to-br from-emerald-500 to-emerald-700"
+                          }`}
+                          disabled={isSending || (isInternalNote && !draft.trim())}
+                          onClick={() => (draft.trim() ? sendMessage(draft) : void toggleVoiceRecording())}
                           type="button"
                         >
                           {draft.trim() ? (
@@ -675,7 +792,133 @@ export function FloatingInboxWidget({
                     </div>
                   </div>
 
-                  <aside className="whapp-tools flex min-w-0 flex-col overflow-hidden bg-white">
+                  <aside className="whapp-tools relative flex min-w-0 flex-col overflow-hidden bg-white">
+                    {toolView === "management" ? (
+                      <div className="absolute inset-0 z-10 flex min-h-0 flex-col bg-white">
+                        <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-sky-50 px-4">
+                          <div>
+                            <p className="text-sm font-black text-slate-950">Gestión de conversación</p>
+                            <p className="text-[11px] text-slate-500">SLA {activeConversation.slaStatus}</p>
+                          </div>
+                          <button
+                            className="rounded-full px-3 py-1.5 text-xs font-black text-slate-600 hover:bg-white"
+                            onClick={() => setToolView("replies")}
+                            type="button"
+                          >
+                            Respuestas
+                          </button>
+                        </div>
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                          <div className="rounded-2xl border border-slate-200 p-4 text-xs text-slate-600">
+                            <p className="font-black text-slate-900">SLA de primera respuesta</p>
+                            <p className="mt-1">
+                              {activeConversation.slaDueAt
+                                ? `Vence ${new Date(activeConversation.slaDueAt).toLocaleString("es-CR")}`
+                                : "Sin SLA pendiente"}
+                            </p>
+                          </div>
+
+                          {!operations.canAssign && !operations.canChangeStatus ? (
+                            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs leading-5 text-red-700">
+                              <span className="mr-2 inline-block size-2 rounded-full bg-red-500" aria-hidden="true" />
+                              Tu rol puede ver la conversación, pero no tiene permisos para asignar, vincular CRM, clasificar ni cambiar estado.
+                            </div>
+                          ) : null}
+
+                          {operations.canChangeStatus ? (
+                            <form
+                              className="space-y-2 rounded-2xl border border-slate-200 p-4"
+                              key={`status-${activeConversation.id}-${activeConversation.estado}`}
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                const data = new FormData(event.currentTarget);
+                                runConversationOperation(data, {
+                                  estado: String(data.get("estado")) as InboxWidgetConversation["estado"],
+                                });
+                              }}
+                            >
+                              <input name="operation" type="hidden" value="status" />
+                              <label className="block text-xs font-black text-slate-700">Estado</label>
+                              <select className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" defaultValue={activeConversation.estado} name="estado">
+                                <option value="abierta">Abierta</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="cerrada">Cerrada</option>
+                                <option value="spam">Spam</option>
+                              </select>
+                              <button className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white" disabled={isSending} type="submit">Guardar estado</button>
+                            </form>
+                          ) : null}
+
+                          {operations.canAssign ? (
+                            <>
+                              <form
+                                className="space-y-2 rounded-2xl border border-slate-200 p-4"
+                                key={`assign-${activeConversation.id}-${activeConversation.asignadoA}`}
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  const data = new FormData(event.currentTarget);
+                                  const assignedId = String(data.get("asignadoA") ?? "") || null;
+                                  runConversationOperation(data, {
+                                    asignadoA: assignedId,
+                                    asignadoNombre: operations.users.find((user) => user.id === assignedId)?.nombre ?? null,
+                                  });
+                                }}
+                              >
+                                <input name="operation" type="hidden" value="assign" />
+                                <label className="block text-xs font-black text-slate-700">Asignación</label>
+                                <select className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" defaultValue={activeConversation.asignadoA ?? ""} name="asignadoA">
+                                  <option value="">Sin asignar</option>
+                                  {operations.users.map((user) => <option key={user.id} value={user.id}>{user.nombre}</option>)}
+                                </select>
+                                <button className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white" disabled={isSending} type="submit">Guardar asignación</button>
+                              </form>
+
+                              <form
+                                className="space-y-2 rounded-2xl border border-slate-200 p-4"
+                                key={`customer-${activeConversation.id}-${activeConversation.clienteId}`}
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  const data = new FormData(event.currentTarget);
+                                  const customerId = String(data.get("clienteId") ?? "");
+                                  runConversationOperation(data, {
+                                    clienteId: customerId,
+                                    clienteNombre: operations.customers.find((customer) => customer.id === customerId)?.nombre ?? null,
+                                  });
+                                }}
+                              >
+                                <input name="operation" type="hidden" value="customer" />
+                                <label className="block text-xs font-black text-slate-700">Cliente CRM</label>
+                                <select className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" defaultValue={activeConversation.clienteId ?? ""} name="clienteId" required>
+                                  <option value="">Seleccionar cliente</option>
+                                  {operations.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.nombre}</option>)}
+                                </select>
+                                <button className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white" disabled={isSending} type="submit">Vincular CRM</button>
+                              </form>
+
+                              <form
+                                className="space-y-2 rounded-2xl border border-slate-200 p-4"
+                                key={`classification-${activeConversation.id}-${activeConversation.etiquetas.join("-")}-${activeConversation.etapaFunnel}`}
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  const data = new FormData(event.currentTarget);
+                                  runConversationOperation(data, {
+                                    etiquetas: String(data.get("etiquetas") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
+                                    etapaFunnel: String(data.get("etapaFunnel") ?? "").trim() || null,
+                                  });
+                                }}
+                              >
+                                <input name="operation" type="hidden" value="classification" />
+                                <label className="block text-xs font-black text-slate-700">Etiquetas</label>
+                                <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" defaultValue={activeConversation.etiquetas.join(", ")} name="etiquetas" placeholder="venta, urgente, mayorista" />
+                                <label className="block text-xs font-black text-slate-700">Etapa del funnel</label>
+                                <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" defaultValue={activeConversation.etapaFunnel ?? ""} name="etapaFunnel" placeholder="Nuevo, calificado, propuesta..." />
+                                <button className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white" disabled={isSending} type="submit">Guardar clasificación</button>
+                              </form>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-sky-50 px-4 shadow-[0_12px_28px_rgba(16,185,129,0.08)]">
                       <label className="relative block min-w-0 flex-1 rounded-2xl shadow-[0_8px_22px_rgba(15,23,42,0.06)]">
                         <Search
@@ -700,6 +943,11 @@ export function FloatingInboxWidget({
                       </button>
                     </div>
                     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {filteredQuickReplies.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-center text-xs leading-5 text-slate-500">
+                          No hay respuestas rápidas configuradas para este negocio. Usa el botón + para crear la primera.
+                        </div>
+                      ) : null}
                       {filteredQuickReplies.map((reply) => {
                         const ReplyIcon = getQuickReplyIcon(reply.accent);
 
