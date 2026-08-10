@@ -13,8 +13,6 @@ import {
 } from "@/modules/inbox/queries";
 import type { InboxConversationStatus } from "@/modules/inbox/types";
 import {
-  sendFacebookTextMessage,
-  sendInstagramTextMessage,
   sendWhatsAppTextMessage,
 } from "@/services/meta/client";
 import { META_GRAPH_API_VERSION } from "@/services/meta/constants";
@@ -142,6 +140,37 @@ async function uploadAndSendMessagingAttachment({
     await fetch(getGraphEndpoint(host, accountId, "messages"), {
       body: JSON.stringify({
         message: { attachment: { payload: { attachment_id: uploaded.attachmentId }, type } },
+        messaging_type: includeMessagingType ? "RESPONSE" : undefined,
+        recipient: { id: recipientId },
+      }),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    }),
+  );
+}
+
+async function sendMessagingText({
+  accessToken,
+  accountId,
+  body,
+  host,
+  includeMessagingType,
+  recipientId,
+}: {
+  accessToken: string;
+  accountId: string;
+  body: string;
+  host: string;
+  includeMessagingType: boolean;
+  recipientId: string;
+}) {
+  return parseMetaResponse(
+    await fetch(getGraphEndpoint(host, accountId, "messages"), {
+      body: JSON.stringify({
+        message: { text: body.trim() },
         messaging_type: includeMessagingType ? "RESPONSE" : undefined,
         recipient: { id: recipientId },
       }),
@@ -503,17 +532,22 @@ export async function addInboxWidgetMessageAction(formData: FormData) {
           to: config.recipient_id,
         })
       : config.channel_type === "facebook"
-        ? await sendFacebookTextMessage({
+        ? await sendMessagingText({
             accessToken: config.access_token,
+            accountId: config.account_id,
             body: contenido,
-            pageId: config.account_id,
+            host: "graph.facebook.com",
+            includeMessagingType: true,
             recipientId: config.recipient_id,
           })
-        : await sendInstagramTextMessage({
+        : await sendMessagingText({
             accessToken: config.access_token,
-            apiHost: config.api_host,
+            accountId: config.account_id,
             body: contenido,
-            instagramBusinessAccountId: config.account_id,
+            host: config.api_host === "graph.instagram.com"
+              ? "graph.instagram.com"
+              : "graph.facebook.com",
+            includeMessagingType: false,
             recipientId: config.recipient_id,
           });
 
