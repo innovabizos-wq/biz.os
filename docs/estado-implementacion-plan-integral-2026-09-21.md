@@ -66,4 +66,6 @@ Cada bloque aumenta únicamente cuando la funcionalidad:
 
 RRHH se retomará como un bloque separado cuando esté aprobado su alcance ajustado.
 
+El proyecto de Vercel está actualmente sujeto a la frecuencia diaria del plan Hobby. Los procesadores de integraciones y recordatorios quedan publicados y protegidos, pero su ejecución automática está programada una vez al día para que el despliegue sea válido. El criterio comercial de activación dentro de un minuto requiere cambiar el proyecto a Vercel Pro o conectar un programador externo equivalente antes del piloto.
+
 La mayor incertidumbre de calendario está en accesos, contratos y revisiones externas. Sin esas cuentas, el código puede avanzar, pero los conectores no pueden declararse comercialmente comprobados.
