@@ -60,6 +60,9 @@ export function WhappCampaignRecipientsTable({
                 <p className="font-mono text-xs text-muted-foreground">
                   {recipient.telefono}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  Mercado: {recipient.marketCode ?? "sin definir"}
+                </p>
                 {recipient.externalRecipientId ? (
                   <p className="text-xs text-muted-foreground">
                     ID: {recipient.externalRecipientId}
@@ -102,6 +105,10 @@ export function WhappCampaignRecipientsTable({
               </td>
               <td className="max-w-xs px-4 py-3 text-xs text-muted-foreground">
                 {recipient.lastError ?? "Sin error"}
+                <p className="mt-1">
+                  Cobro: {recipient.billingStatus}
+                  {recipient.actualCost !== null ? ` (${recipient.actualCost.toFixed(4)})` : ""}
+                </p>
               </td>
               {canManage ? (
                 <td className="min-w-44 px-4 py-3">

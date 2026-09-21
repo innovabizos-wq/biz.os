@@ -83,6 +83,9 @@ export default async function WhappPage() {
           >
             Automatizaciones
           </Link>
+          <Link className={buttonVariants({ variant: "outline" })} href="/whapp/clasificacion">
+            Etiquetas y funnels
+          </Link>
         </div>
       </div>
 
@@ -160,13 +163,12 @@ export default async function WhappPage() {
 
         <div className="space-y-4">
           <div className="rounded-lg border bg-background p-5">
-            <p className="font-semibold">Alcance fase 1</p>
+            <p className="font-semibold">Operacion protegida</p>
             <p className="mt-2 text-sm text-muted-foreground">
               Visor omnicanal sobre Inbox con identidad por canal, recepcion Meta,
-              envio WhatsApp, correo preparado, no leidos por agente, notas,
-              asignacion, vinculo CRM y salud de canal. Campanas,
-              plantillas, campanas, reglas de autopilot y automatizaciones
-              avanzan hacia ejecucion controlada e IA contextual.
+              envio Meta, adjuntos, notas de voz, no leidos por agente, notas,
+              asignacion, vinculo CRM, etiquetas, funnel, consentimiento, bajas,
+              costos, plantillas oficiales y salud de canal.
             </p>
           </div>
           {omnichannelChannels.length > 0 ? (

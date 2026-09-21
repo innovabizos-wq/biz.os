@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/shared/empty-state";
+import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
@@ -18,6 +19,8 @@ import { SaleNotesForm } from "@/modules/sales/components/sale-notes-form";
 import { SaleStatusActions } from "@/modules/sales/components/sale-status-actions";
 import { SaleSummaryCard } from "@/modules/sales/components/sale-summary-card";
 import { getSaleDetail, getSaleItems } from "@/modules/sales/queries";
+import { SaleReturnsPanel } from "@/modules/sales-returns/components/sale-returns-panel";
+import { getSalesReturnsForSale } from "@/modules/sales-returns/queries";
 import { SaleInventoryPanel } from "@/modules/sales-inventory/components/sale-inventory-panel";
 import {
   canApplySaleInventory,
@@ -29,7 +32,7 @@ import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type SaleDetailPageProps = {
   params: Promise<{ ventaId: string }>;
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; success?: string }>;
 };
 
 export default async function SaleDetailPage({
@@ -57,6 +60,10 @@ export default async function SaleDetailPage({
   const canViewPayments =
     isModuleActive(access.tenant.activeModules, "payments") &&
     hasPermission(access.tenant.permissions, "payments.accounts.view");
+  const canProcessReturnFinancial =
+    canEdit &&
+    isModuleActive(access.tenant.activeModules, "payments") &&
+    hasPermission(access.tenant.permissions, "payments.accounts.manage");
   const billingActive = isModuleActive(access.tenant.activeModules, "billing");
   const canViewBilling =
     billingActive &&
@@ -72,6 +79,10 @@ export default async function SaleDetailPage({
       "billing.issue",
       "billing.invoices.create",
     ]);
+  const canPrepareReturnCreditNote =
+    canEdit &&
+    billingActive &&
+    hasPermission(access.tenant.permissions, "billing.credit_note");
 
   if (!canView) {
     return (
@@ -96,6 +107,7 @@ export default async function SaleDetailPage({
     inventoryWarehouses,
     dispatch,
     dispatchUsers,
+    salesReturns,
   ] = await Promise.all([
     getSaleDetail(access.tenant, ventaId),
     getSaleItems(access.tenant, ventaId),
@@ -103,6 +115,7 @@ export default async function SaleDetailPage({
     canApplyInventory ? getActiveWarehousesForSaleInventory(access.tenant) : null,
     canViewDispatch ? getDispatchForSale(access.tenant, ventaId) : null,
     canCreateDispatch ? getAssignableUsersForDispatch(access.tenant) : null,
+    getSalesReturnsForSale(access.tenant, ventaId),
   ]);
 
   if (!sale.ok || !sale.data) {
@@ -117,11 +130,7 @@ export default async function SaleDetailPage({
         title={sale.data.numero}
       />
 
-      {query?.error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {query.error}
-        </p>
-      ) : null}
+      <EphemeralPageAlert error={query?.error} success={query?.success} />
 
       <div className="rounded-lg border bg-background p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -191,6 +200,24 @@ export default async function SaleDetailPage({
       ) : null}
 
       <SaleNotesForm canEdit={canEdit} sale={sale.data} />
+
+      <SaleReturnsPanel
+        canCreate={canEdit}
+        canPrepareCreditNote={canPrepareReturnCreditNote}
+        canProcessFinancial={canProcessReturnFinancial}
+        canReturnInventory={canApplyInventory}
+        loadError={
+          !salesReturns.ok
+            ? salesReturns.error.message
+            : !items.ok
+              ? items.error.message
+              : null
+        }
+        returns={salesReturns.ok ? salesReturns.data : []}
+        sale={sale.data}
+        saleItems={items.ok ? items.data : []}
+        warehouses={inventoryWarehouses?.ok ? inventoryWarehouses.data : []}
+      />
 
       {canViewInventory ? (
         <SaleInventoryPanel

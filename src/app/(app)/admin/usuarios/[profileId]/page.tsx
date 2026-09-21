@@ -85,7 +85,11 @@ export default async function UserDetailPage({
         </div>
         <div className="rounded-lg border bg-background p-4">
           <p className="text-sm text-muted-foreground">Estado</p>
-          <p className="mt-1 font-medium">{user.data.estado}</p>
+          <p className="mt-1 font-medium">
+            {user.data.requiereCambioContrasena
+              ? "Debe cambiar contrasena"
+              : user.data.estado}
+          </p>
         </div>
         <div className="rounded-lg border bg-background p-4">
           <p className="text-sm text-muted-foreground">Rol</p>

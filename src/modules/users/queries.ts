@@ -21,6 +21,7 @@ type UserRow = {
   estado: Profile["estado"];
   id: string;
   nombre: string;
+  requiere_cambio_contrasena: boolean;
   rol_id: string | null;
   roles: UserRelation | UserRelation[] | null;
   sucursal_id: string | null;
@@ -67,6 +68,7 @@ function mapUser(row: UserRow): AccessibleUser {
     estado: row.estado,
     id: row.id,
     nombre: row.nombre,
+    requiereCambioContrasena: row.requiere_cambio_contrasena,
     rolId: row.rol_id,
     rolNombre: firstRelation(row.roles)?.nombre ?? null,
     sucursalId: row.sucursal_id,
@@ -111,7 +113,7 @@ export async function getAccessibleUsersForCurrentTenant(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, empresa_id, sucursal_id, rol_id, nombre, correo, telefono, estado, ultimo_acceso, created_at, updated_at, sucursales(nombre), roles(nombre)",
+      "id, empresa_id, sucursal_id, rol_id, nombre, correo, telefono, requiere_cambio_contrasena, estado, ultimo_acceso, created_at, updated_at, sucursales(nombre), roles(nombre)",
     )
     .eq("empresa_id", tenant.empresaId)
     .order("created_at", { ascending: true });
@@ -133,7 +135,7 @@ export async function getUserDetailForCurrentTenant(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, empresa_id, sucursal_id, rol_id, nombre, correo, telefono, estado, ultimo_acceso, created_at, updated_at, sucursales(nombre), roles(nombre)",
+      "id, empresa_id, sucursal_id, rol_id, nombre, correo, telefono, requiere_cambio_contrasena, estado, ultimo_acceso, created_at, updated_at, sucursales(nombre), roles(nombre)",
     )
     .eq("id", profileId)
     .eq("empresa_id", tenant.empresaId)

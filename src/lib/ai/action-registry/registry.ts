@@ -24,31 +24,43 @@ import type {
 } from "@/lib/ai/action-registry/types";
 import type { PermissionCode } from "@/types/core";
 
-const optionalText = z.string().trim().optional().or(z.literal("").transform(() => undefined));
-const optionalEmail = z
-  .string()
-  .trim()
-  .email()
-  .optional()
-  .or(z.literal("").transform(() => undefined));
-const optionalPhone = z
-  .string()
-  .trim()
-  .transform((value) => value.replace(/\D/g, ""))
-  .refine((value) => value === "" || value.length >= 7, {
-    message: "El telefono debe tener al menos 7 digitos.",
-  })
-  .transform((value) => value || undefined);
-const optionalIdentification = z
-  .string()
-  .trim()
-  .transform(normalizeCrmIdentification)
-  .refine((value) => value === "" || isValidCrmIdentification(value), {
-    message: "La identificacion debe tener entre 9 y 12 digitos numericos.",
-  })
-  .transform((value) => value || undefined)
-  .optional()
-  .or(z.literal("").transform(() => undefined));
+// Gemini function declarations reject empty-string literal unions. Normalize
+// browser-form blanks before schema validation so the model sees plain strings.
+const emptyStringToUndefined = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+
+const optionalText = z.preprocess(
+  emptyStringToUndefined,
+  z.string().trim().optional(),
+);
+const optionalEmail = z.preprocess(
+  emptyStringToUndefined,
+  z.string().trim().email().optional(),
+);
+const optionalPhone = z.preprocess(
+  emptyStringToUndefined,
+  z
+    .string()
+    .trim()
+    .transform((value) => value.replace(/\D/g, ""))
+    .refine((value) => value === "" || value.length >= 7, {
+      message: "El telefono debe tener al menos 7 digitos.",
+    })
+    .transform((value) => value || undefined)
+    .optional(),
+);
+const optionalIdentification = z.preprocess(
+  emptyStringToUndefined,
+  z
+    .string()
+    .trim()
+    .transform(normalizeCrmIdentification)
+    .refine((value) => value === "" || isValidCrmIdentification(value), {
+      message: "La identificacion debe tener entre 9 y 12 digitos numericos.",
+    })
+    .transform((value) => value || undefined)
+    .optional(),
+);
 
 const searchSchema = z.object({
   query: z.string().trim().min(1),
@@ -94,6 +106,8 @@ const createCustomerSchema = z.object({
 });
 
 const createProductSchema = z.object({
+  bodegaNombre: optionalText,
+  cantidadInicial: z.coerce.number().positive("La cantidad inicial debe ser mayor que cero.").optional(),
   codigo: optionalText,
   descripcion: optionalText,
   impuestoPorcentaje: z.coerce.number().min(0).max(100).default(0),
@@ -102,6 +116,33 @@ const createProductSchema = z.object({
   precioBase: z.coerce.number().min(0).default(0),
   tipo: z.enum(["producto", "servicio"]).default("producto"),
   unidadMedida: z.string().trim().min(1).default("unidad"),
+}).superRefine((value, context) => {
+  const hasInitialStock = value.cantidadInicial !== undefined;
+  const hasWarehouse = Boolean(value.bodegaNombre);
+
+  if (value.tipo === "servicio" && (hasInitialStock || hasWarehouse)) {
+    context.addIssue({
+      code: "custom",
+      message: "Un servicio no puede tener bodega ni stock inicial.",
+      path: ["cantidadInicial"],
+    });
+  }
+
+  if (hasInitialStock && !hasWarehouse) {
+    context.addIssue({
+      code: "custom",
+      message: "Indica la bodega donde debe registrarse la cantidad inicial.",
+      path: ["bodegaNombre"],
+    });
+  }
+
+  if (hasWarehouse && !hasInitialStock) {
+    context.addIssue({
+      code: "custom",
+      message: "Indica la cantidad inicial para la bodega seleccionada.",
+      path: ["cantidadInicial"],
+    });
+  }
 });
 
 const createQuoteDraftSchema = z.object({
@@ -247,37 +288,33 @@ async function assertNoDuplicateCustomer(empresaId: string, input: z.infer<typeo
   return null;
 }
 
-async function initializeProductStockRows(
+async function resolveActiveWarehouse(
   supabase: Awaited<ReturnType<typeof createClient>>,
   input: {
     empresaId: string;
-    productId: string | null | undefined;
+    nombre: string;
   },
 ) {
-  if (!input.productId) return 0;
-
   const { data: warehouses, error: warehouseError } = await supabase
     .from("inventario_bodegas")
-    .select("id")
+    .select("id, nombre")
     .eq("empresa_id", input.empresaId)
     .eq("estado", "activa");
 
-  if (warehouseError || !warehouses?.length) return 0;
-
-  let initialized = 0;
-
-  for (const warehouse of warehouses) {
-    const { error } = await supabase.rpc("actualizar_stock_minimos", {
-      p_bodega_id: warehouse.id,
-      p_producto_id: input.productId,
-      p_stock_maximo: null,
-      p_stock_minimo: 0,
-    });
-
-    if (!error) initialized += 1;
+  if (warehouseError) {
+    throw new Error("No se pudieron consultar las bodegas activas.");
   }
 
-  return initialized;
+  const target = normalizeSearch(input.nombre);
+  const warehouse = (warehouses ?? []).find(
+    (candidate) => normalizeSearch(candidate.nombre) === target,
+  );
+
+  if (!warehouse) {
+    throw new Error(`No existe una bodega activa llamada \"${input.nombre}\".`);
+  }
+
+  return warehouse;
 }
 
 export const conversationActionRegistry: ConversationActionDefinition[] = [
@@ -491,6 +528,24 @@ export const conversationActionRegistry: ConversationActionDefinition[] = [
     schema: createProductSchema,
     async handler(params: z.infer<typeof createProductSchema>, { tenant }) {
       const supabase = await createClient();
+      const shouldRegisterInitialStock =
+        params.tipo === "producto" && params.cantidadInicial !== undefined;
+
+      if (shouldRegisterInitialStock && !tenant.activeModules.includes("inventory")) {
+        throw new Error("El modulo de Inventario no esta activo para registrar stock inicial.");
+      }
+
+      if (shouldRegisterInitialStock && !hasPermission(tenant.permissions, "inventory.stock.adjust")) {
+        throw new Error("No tienes permiso para registrar stock inicial en Inventario.");
+      }
+
+      const warehouse = shouldRegisterInitialStock
+        ? await resolveActiveWarehouse(supabase, {
+            empresaId: tenant.empresaId,
+            nombre: params.bodegaNombre ?? "",
+          })
+        : null;
+
       const { data, error } = await supabase.rpc("crear_catalogo_producto", {
         p_categoria_id: null,
         p_codigo: params.codigo ?? null,
@@ -506,26 +561,42 @@ export const conversationActionRegistry: ConversationActionDefinition[] = [
       if (error) throw new Error(error.message || "No se pudo crear el producto.");
 
       const created = (data as { producto_id?: string }[] | null)?.[0] ?? null;
-      const stockRows =
-        params.tipo === "producto" &&
-        tenant.activeModules.includes("inventory") &&
-        hasPermission(tenant.permissions, "inventory.stock.adjust")
-          ? await initializeProductStockRows(supabase, {
-              empresaId: tenant.empresaId,
-              productId: created?.producto_id,
-            })
-          : 0;
+      if (shouldRegisterInitialStock && (!created?.producto_id || !warehouse)) {
+        throw new Error("No se pudo identificar el producto o la bodega para registrar el stock inicial.");
+      }
+
+      if (shouldRegisterInitialStock && created?.producto_id && warehouse) {
+        const { error: stockError } = await supabase.rpc("registrar_movimiento_inventario", {
+          p_bodega_id: warehouse.id,
+          p_cantidad: params.cantidadInicial,
+          p_motivo: "Stock inicial registrado desde Biz.Brain",
+          p_producto_id: created.producto_id,
+          p_referencia_id: null,
+          p_referencia_tipo: null,
+          p_tipo: "entrada",
+        });
+
+        if (stockError) {
+          throw new Error(stockError.message || "No se pudo registrar el stock inicial.");
+        }
+      }
 
       return {
         entityId: created?.producto_id ?? null,
         message:
-          stockRows > 0
-            ? `Producto creado correctamente y agregado a inventario en ${stockRows} bodega(s) con stock 0.`
+          shouldRegisterInitialStock && warehouse
+            ? `Producto creado correctamente con stock inicial de ${params.cantidadInicial} en la bodega ${warehouse.nombre}.`
             : "Producto creado correctamente en Catalogo. Para verlo en Inventario, registra stock o limites en una bodega.",
         result: {
           created: true,
+          initialStock: shouldRegisterInitialStock && warehouse
+            ? {
+                bodegaId: warehouse.id,
+                bodegaNombre: warehouse.nombre,
+                cantidad: params.cantidadInicial,
+              }
+            : null,
           productId: created?.producto_id ?? null,
-          stockRowsInitialized: stockRows,
         },
       };
     },
@@ -770,6 +841,57 @@ export const conversationActionRegistry: ConversationActionDefinition[] = [
       return {
         message: "Recordatorio de cobro creado.",
         result: { href: "/pagos" },
+      };
+    },
+  }),
+  defineConversationAction({
+    aliases: [
+      "cuentas por pagar pendientes",
+      "por pagar pendientes",
+      "cxp pendientes",
+      "pagos a proveedores pendientes",
+    ],
+    description: "Consulta cuentas por pagar pendientes o vencidas.",
+    executionMode: "read",
+    id: "pagos.consultar_cuentas_pagar",
+    module: "payments",
+    name: "Consultar cuentas por pagar",
+    requiredPermissions: ["payments.accounts.view"],
+    requiresConfirmation: false,
+    risk: "low",
+    schema: optionalSearchSchema,
+    async handler(params: z.infer<typeof optionalSearchSchema>, { tenant }) {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("payments_accounts")
+        .select("id, numero, descripcion, estado, saldo, total, fecha_vencimiento, moneda")
+        .eq("empresa_id", tenant.empresaId)
+        .eq("tipo", "payable")
+        .gt("saldo", 0)
+        .in("estado", ["pendiente", "parcial", "vencida"])
+        .order("fecha_vencimiento", { ascending: true })
+        .limit(50);
+
+      if (error) throw new Error("No se pudieron consultar cuentas por pagar.");
+
+      const query = normalizeSearch(params.query ?? "");
+      const rows = (data ?? [])
+        .filter((account) =>
+          query
+            ? fuzzyIncludesSearch(account.numero, query) ||
+              fuzzyIncludesSearch(account.descripcion, query) ||
+              fuzzyIncludesSearch(account.estado, query)
+            : true,
+        )
+        .slice(0, params.limit);
+
+      return {
+        message: summarizeRows(
+          rows,
+          "No encontre cuentas por pagar pendientes.",
+          (account) => `${account.numero} saldo ${Number(account.saldo ?? 0).toLocaleString("es-CR")}`,
+        ),
+        result: { accounts: rows },
       };
     },
   }),

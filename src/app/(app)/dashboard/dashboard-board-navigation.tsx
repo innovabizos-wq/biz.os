@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 const DASHBOARD_PATHS = [
   "/dashboard",
+  "/dashboard/direccion",
 ];
 
 function getDashboardIndex(pathname: string | null) {

@@ -103,6 +103,7 @@ type MessageRow = {
 type UnreadMessageRow = {
   conversacion_id: string;
   created_at: string;
+  received_at: string | null;
 };
 
 type ConversationReadRow = {
@@ -147,9 +148,13 @@ type MetaTemplateRow = {
   estado: InboxMetaTemplate["estado"];
   id: string;
   idioma: string;
+  last_synced_at: string | null;
+  meta_category: string | null;
+  meta_status: string | null;
   meta_template_id: string | null;
   nombre: string;
   rechazo_motivo: string | null;
+  sync_error: string | null;
   updated_at: string;
   variables: unknown;
 };
@@ -162,10 +167,13 @@ type CampaignTemplateRelation = {
 };
 
 type CampaignRow = {
+  actual_cost: number;
   audiencia: unknown;
+  billing_status: string;
   canal_id: string;
   canal_rel: NameRelation | NameRelation[] | null;
   created_at: string;
+  cost_currency: string | null;
   delivered_count: number;
   estado: InboxCampaign["estado"];
   failed_count: number;
@@ -183,7 +191,9 @@ type CampaignRow = {
 };
 
 type CampaignRecipientRow = {
+  actual_cost: number | null;
   attempt_count: number;
+  billing_status: string;
   campana_id: string;
   canal_message_id: string | null;
   cliente_id: string | null;
@@ -195,6 +205,7 @@ type CampaignRecipientRow = {
   id: string;
   last_attempt_at: string | null;
   last_error: string | null;
+  market_code: string | null;
   nombre: string | null;
   opt_in: boolean;
   opt_in_at: string | null;
@@ -418,7 +429,7 @@ async function getConversationSignalsForCurrentProfile(
       .in("conversacion_id", conversationIds),
     supabase
       .from("inbox_mensajes")
-      .select("conversacion_id, created_at")
+      .select("conversacion_id, created_at, received_at")
       .eq("empresa_id", tenant.empresaId)
       .eq("direccion", "entrante")
       .eq("es_nota_interna", false)
@@ -435,13 +446,14 @@ async function getConversationSignalsForCurrentProfile(
   const signals = new Map<string, ConversationSignal>();
   for (const row of ((incomingMessages.data ?? []) as UnreadMessageRow[])) {
     const readAt = readAtByConversation.get(row.conversacion_id);
+    const incomingAt = row.received_at ?? row.created_at;
     const current = signals.get(row.conversacion_id) ?? {
       lastIncomingAt: null,
       unreadCount: 0,
     };
 
-    if (!current.lastIncomingAt || row.created_at > current.lastIncomingAt) {
-      current.lastIncomingAt = row.created_at;
+    if (!current.lastIncomingAt || incomingAt > current.lastIncomingAt) {
+      current.lastIncomingAt = incomingAt;
     }
 
     if (!readAt || row.created_at > readAt) {
@@ -497,9 +509,13 @@ function mapTemplate(row: MetaTemplateRow): InboxMetaTemplate {
     estado: row.estado,
     id: row.id,
     idioma: row.idioma,
+    lastSyncedAt: row.last_synced_at,
+    metaCategory: row.meta_category,
+    metaStatus: row.meta_status,
     metaTemplateId: row.meta_template_id,
     nombre: row.nombre,
     rechazoMotivo: row.rechazo_motivo,
+    syncError: row.sync_error,
     updatedAt: row.updated_at,
     variables,
   };
@@ -513,10 +529,13 @@ function mapCampaign(row: CampaignRow): InboxCampaign {
       : {};
 
   return {
+    actualCost: row.actual_cost,
     audiencia,
+    billingStatus: row.billing_status,
     canalId: row.canal_id,
     canalNombre: firstRelation(row.canal_rel)?.nombre ?? null,
     createdAt: row.created_at,
+    costCurrency: row.cost_currency,
     deliveredCount: row.delivered_count,
     estado: row.estado,
     failedCount: row.failed_count,
@@ -539,7 +558,9 @@ function mapCampaign(row: CampaignRow): InboxCampaign {
 
 function mapCampaignRecipient(row: CampaignRecipientRow): InboxCampaignRecipient {
   return {
+    actualCost: row.actual_cost,
     attemptCount: row.attempt_count,
+    billingStatus: row.billing_status,
     campaignId: row.campana_id,
     canalMessageId: row.canal_message_id,
     clienteId: row.cliente_id,
@@ -551,6 +572,7 @@ function mapCampaignRecipient(row: CampaignRecipientRow): InboxCampaignRecipient
     id: row.id,
     lastAttemptAt: row.last_attempt_at,
     lastError: row.last_error,
+    marketCode: row.market_code,
     nombre: row.nombre,
     optIn: row.opt_in,
     optInAt: row.opt_in_at,
@@ -860,7 +882,7 @@ export async function getInboxMetaTemplates(): Promise<
   const { data, error } = await supabase
     .from("inbox_meta_plantillas")
     .select(
-      "id, canal_id, nombre, idioma, categoria, estado, cuerpo, variables, meta_template_id, rechazo_motivo, updated_at, canal_rel:inbox_canales!inbox_meta_plantillas_canal_empresa_fkey(nombre)",
+      "id, canal_id, nombre, idioma, categoria, estado, cuerpo, variables, meta_template_id, meta_status, meta_category, last_synced_at, sync_error, rechazo_motivo, updated_at, canal_rel:inbox_canales!inbox_meta_plantillas_canal_empresa_fkey(nombre)",
     )
     .eq("empresa_id", tenant.data.empresaId)
     .order("updated_at", { ascending: false });
@@ -886,6 +908,8 @@ export async function getApprovedInboxMetaTemplatesForConversation(
     templates.data.filter(
       (template) =>
         template.estado === "aprobada" &&
+        template.metaStatus === "APPROVED" &&
+        Boolean(template.lastSyncedAt) &&
         (!template.canalId || template.canalId === conversation.canalId),
     ),
   );
@@ -909,7 +933,7 @@ export async function getInboxCampaigns(): Promise<CoreResult<InboxCampaign[]>> 
   const { data, error } = await supabase
     .from("inbox_campanas")
     .select(
-      "id, canal_id, plantilla_id, nombre, objetivo, estado, audiencia, scheduled_at, recipient_count, sent_count, delivered_count, read_count, replied_count, failed_count, created_at, updated_at, canal_rel:inbox_canales!inbox_campanas_canal_empresa_fkey(nombre), plantilla_rel:inbox_meta_plantillas!inbox_campanas_plantilla_empresa_fkey(nombre, idioma, categoria, estado)",
+      "id, canal_id, plantilla_id, nombre, objetivo, estado, audiencia, scheduled_at, recipient_count, sent_count, delivered_count, read_count, replied_count, failed_count, actual_cost, cost_currency, billing_status, created_at, updated_at, canal_rel:inbox_canales!inbox_campanas_canal_empresa_fkey(nombre), plantilla_rel:inbox_meta_plantillas!inbox_campanas_plantilla_empresa_fkey(nombre, idioma, categoria, estado)",
     )
     .eq("empresa_id", tenant.data.empresaId)
     .order("created_at", { ascending: false });
@@ -941,7 +965,7 @@ export async function getInboxCampaignRecipients(): Promise<
   const { data, error } = await supabase
     .from("inbox_campana_destinatarios")
     .select(
-      "id, campana_id, cliente_id, conversacion_id, nombre, telefono, external_recipient_id, opt_in, opt_in_source, opt_in_at, estado, variables, canal_message_id, attempt_count, last_attempt_at, last_error, sent_at, delivered_at, read_at, replied_at, created_at, updated_at",
+      "id, campana_id, cliente_id, conversacion_id, nombre, telefono, external_recipient_id, opt_in, opt_in_source, opt_in_at, estado, variables, canal_message_id, attempt_count, last_attempt_at, last_error, sent_at, delivered_at, read_at, replied_at, market_code, actual_cost, billing_status, created_at, updated_at",
     )
     .eq("empresa_id", tenant.data.empresaId)
     .order("created_at", { ascending: false });
@@ -1090,10 +1114,33 @@ export async function getInboxConversationDetail(
 export async function getInboxConversationMetaSendStatus(
   conversation: InboxConversation,
 ): Promise<CoreResult<InboxConversationMetaSendStatus>> {
-  if (conversation.canal !== "whatsapp" || !conversation.canalId) {
-    return ok({
+  const metaChannel = ["whatsapp", "facebook", "instagram"].includes(
+    conversation.canal,
+  )
+    ? (conversation.canal as InboxConversationMetaSendStatus["channel"])
+    : null;
+  const notReady = (
+    reason: string,
+    isConfigured = false,
+    windowClosesAt: string | null = null,
+  ) =>
+    ok({
+      channel: metaChannel,
+      isConfigured,
+      isMetaChannel: Boolean(metaChannel),
       isReady: false,
-      reason: "Esta conversacion no pertenece a un canal WhatsApp Meta.",
+      reason,
+      windowClosesAt,
+    });
+
+  if (!metaChannel || !conversation.canalId) {
+    return ok({
+      channel: null,
+      isConfigured: false,
+      isMetaChannel: false,
+      isReady: false,
+      reason: "Esta conversacion no pertenece a un canal de mensajeria Meta.",
+      windowClosesAt: null,
     });
   }
 
@@ -1103,39 +1150,83 @@ export async function getInboxConversationMetaSendStatus(
   ]);
 
   if (!channel.ok || !channel.data || channel.data.proveedor !== "meta") {
-    return ok({
-      isReady: false,
-      reason: "El canal no es proveedor Meta.",
-    });
+    return notReady("El canal no es proveedor Meta.");
   }
 
   if (
     channel.data.estado !== "activo" ||
     channel.data.conexionEstado !== "configurado"
   ) {
-    return ok({
-      isReady: false,
-      reason: "El canal WhatsApp Meta no esta activo/configurado.",
-    });
+    return notReady(
+      `El canal ${metaChannel} Meta no esta activo/configurado.`,
+    );
   }
 
-  const phoneNumberId = channel.data.configuracionPublica.phone_number_id;
+  const accountField =
+    metaChannel === "whatsapp"
+      ? "phone_number_id"
+      : metaChannel === "facebook"
+        ? "page_id"
+        : "instagram_business_account_id";
+  const accountId = channel.data.configuracionPublica[accountField];
 
-  if (typeof phoneNumberId !== "string" || !phoneNumberId.trim()) {
-    return ok({
-      isReady: false,
-      reason: "Falta phone_number_id en la configuracion del canal.",
-    });
+  if (typeof accountId !== "string" || !accountId.trim()) {
+    return notReady(`Falta ${accountField} en la configuracion del canal.`);
   }
 
   if (!metaStatus.ok || !metaStatus.data?.tieneAccessToken) {
-    return ok({
-      isReady: false,
-      reason: "Falta access_token configurado.",
-    });
+    return notReady("Falta access_token configurado.");
   }
 
-  return ok({ isReady: true, reason: null });
+  if (
+    metaStatus.data.tokenExpiresAt &&
+    new Date(metaStatus.data.tokenExpiresAt).getTime() <= Date.now()
+  ) {
+    return notReady("El access_token de Meta esta vencido.");
+  }
+
+  const recipient =
+    metaChannel === "whatsapp"
+      ? conversation.contactoTelefono ??
+        conversation.contactoIdentificador ??
+        conversation.contactoUsuario
+      : conversation.contactoIdentificador ?? conversation.contactoUsuario;
+
+  if (!recipient?.trim()) {
+    return notReady(
+      `La conversacion no tiene destinatario valido para ${metaChannel}.`,
+    );
+  }
+
+  if (!conversation.lastIncomingAt) {
+    return notReady(
+      "El cliente debe iniciar la conversacion antes de que se le pueda responder por Meta.",
+      true,
+    );
+  }
+
+  const windowClosesAt = new Date(
+    new Date(conversation.lastIncomingAt).getTime() + 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  if (new Date(windowClosesAt).getTime() <= Date.now()) {
+    return notReady(
+      metaChannel === "whatsapp"
+        ? "La ventana de 24 horas cerro. Envia una plantilla WhatsApp aprobada para reabrir el contacto."
+        : `La ventana de respuesta de 24 horas de ${metaChannel} cerro; el cliente debe escribir nuevamente.`,
+      true,
+      windowClosesAt,
+    );
+  }
+
+  return ok({
+    channel: metaChannel,
+    isConfigured: true,
+    isMetaChannel: true,
+    isReady: true,
+    reason: null,
+    windowClosesAt,
+  });
 }
 
 export async function getInboxMessages(

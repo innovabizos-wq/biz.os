@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
 import { createClient } from "@/lib/supabase/server";
-import { getHaciendaClient } from "@/modules/billing/hacienda/client";
+import { getHaciendaClientForConnection } from "@/modules/billing/hacienda/client";
+import { archiveOfficialHaciendaResponseXml } from "@/modules/billing/hacienda/artifacts";
 import type { HaciendaStatusResult } from "@/modules/billing/hacienda/types";
 import { getFiscalDocumentDetail, type FiscalDocumentDetail } from "@/modules/billing/queries";
 import { generateFiscalClave } from "@/modules/billing/sequences";
@@ -12,6 +13,7 @@ import { validateFiscalXmlAgainstOfficialXsd } from "@/modules/billing/xml/valid
 import type { JsonRecord, TenantContext } from "@/types/core";
 
 export type FiscalIssuanceStep =
+  | "connection"
   | "identity"
   | "validation"
   | "xml"
@@ -29,6 +31,17 @@ export type ImmediateFiscalIssuanceResult = {
     status: "completed" | "blocked" | "failed" | "skipped";
     step: FiscalIssuanceStep;
   }[];
+};
+
+export type FiscalIssuanceWorkerContext = {
+  leaseToken: string;
+  outboxJobId: string;
+};
+
+type FiscalConnectionBindingRow = {
+  fiscal_connection_id: string;
+  provider_code: string;
+  provider_environment: "testing" | "production";
 };
 
 function textFromRecord(record: JsonRecord, key: string) {
@@ -58,9 +71,66 @@ async function loadDocument(tenant: TenantContext, documentId: string) {
   return document.ok ? document.data : null;
 }
 
+export async function ensureFiscalDocumentConnection(
+  tenant: TenantContext,
+  document: FiscalDocumentDetail,
+  workerContext?: FiscalIssuanceWorkerContext,
+): Promise<FiscalDocumentDetail> {
+  if (document.providerConnectionId) {
+    if (!document.providerCode || !document.providerEnvironment || !document.providerBoundAt) {
+      throw new Error("El documento tiene una asignación fiscal incompleta.");
+    }
+    if (document.providerEnvironment !== document.environment) {
+      throw new Error("El ambiente de la conexión fiscal no coincide con el documento.");
+    }
+    return document;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = workerContext
+    ? await supabase.rpc("bind_fiscal_document_connection_from_outbox", {
+        p_document_id: document.id,
+        p_job_id: workerContext.outboxJobId,
+        p_lease_token: workerContext.leaseToken,
+      })
+    : await supabase.rpc("bind_fiscal_document_connection", {
+        p_document_id: document.id,
+      });
+  if (error) throw new Error(`No se pudo fijar la conexión fiscal: ${error.message}`);
+
+  const binding = ((data ?? []) as FiscalConnectionBindingRow[])[0];
+  if (!binding?.fiscal_connection_id || !binding.provider_code || !binding.provider_environment) {
+    throw new Error("La asignación fiscal no devolvió una conexión completa.");
+  }
+
+  const refreshed = await loadDocument(tenant, document.id);
+  if (!refreshed || refreshed.providerConnectionId !== binding.fiscal_connection_id) {
+    throw new Error("La conexión fiscal se asignó, pero el documento no pudo recargarse.");
+  }
+  return refreshed;
+}
+
+function haciendaBinding(document: FiscalDocumentDetail): {
+  connectionId: string;
+  environment: "testing" | "production";
+} {
+  if (document.providerCode !== "hacienda" || !document.providerConnectionId) {
+    throw new Error("El proveedor asignado no tiene un adaptador de emisión disponible.");
+  }
+  if (document.providerEnvironment !== "testing" && document.providerEnvironment !== "production") {
+    throw new Error("El documento no conserva un ambiente fiscal válido.");
+  }
+  const environment = document.providerEnvironment;
+  return {
+    connectionId: document.providerConnectionId,
+    environment,
+  };
+}
+
 async function ensureFiscalIdentity(
   tenant: TenantContext,
   document: FiscalDocumentDetail,
+  workerContext?: FiscalIssuanceWorkerContext,
 ): Promise<FiscalDocumentDetail> {
   if (document.status !== "validated" || (document.clave && document.consecutivo)) {
     return document;
@@ -73,15 +143,21 @@ async function ensureFiscalIdentity(
   }
 
   const supabase = await createClient();
-  const { data: sequenceData, error: sequenceError } = await supabase.rpc(
-    "reserve_fiscal_sequence_for_current_company",
-    {
-      p_branch_code: document.branchCode,
-      p_document_type_code: document.documentTypeCode,
-      p_environment: document.environment,
-      p_terminal_code: document.terminalCode,
-    },
-  );
+  const { data: sequenceData, error: sequenceError } = workerContext
+    ? await supabase.rpc("reserve_fiscal_sequence_from_outbox", {
+        p_branch_code: document.branchCode,
+        p_document_type_code: document.documentTypeCode,
+        p_environment: document.environment,
+        p_job_id: workerContext.outboxJobId,
+        p_lease_token: workerContext.leaseToken,
+        p_terminal_code: document.terminalCode,
+      })
+    : await supabase.rpc("reserve_fiscal_sequence_for_current_company", {
+        p_branch_code: document.branchCode,
+        p_document_type_code: document.documentTypeCode,
+        p_environment: document.environment,
+        p_terminal_code: document.terminalCode,
+      });
 
   if (sequenceError) {
     throw new Error(`No se pudo reservar consecutivo fiscal: ${sequenceError.message}`);
@@ -170,27 +246,6 @@ async function generateUnsignedXml(tenant: TenantContext, document: FiscalDocume
   }
 
   const unsignedXml = buildUnsignedXmlFromFiscalDocument(document);
-  const xmlValidation = await validateFiscalXmlAgainstOfficialXsd(unsignedXml.xml);
-
-  if (xmlValidation.enabled && !xmlValidation.ok) {
-    const message = xmlValidation.errors[0] ?? "XML no valido contra XSD oficial.";
-    await supabase
-      .from("fiscal_documents")
-      .update({
-        last_error: message,
-        status: "error_xml",
-        validation_errors: xmlValidation.errors.map((validationError) => ({
-          code: "xsd_validation_error",
-          group: "XML",
-          message: validationError,
-        })),
-      })
-      .eq("empresa_id", tenant.empresaId)
-      .eq("id", document.id)
-      .eq("status", "validated");
-
-    throw new Error(message);
-  }
 
   const storagePath = [
     "billing",
@@ -202,13 +257,13 @@ async function generateUnsignedXml(tenant: TenantContext, document: FiscalDocume
   const metadata = {
     generatedAt: new Date().toISOString(),
     generatedBy: "runImmediateFiscalIssuance",
-    pendingXsdValidation: xmlValidation.pendingXsdValidation,
+    pendingXsdValidation: true,
     xsdValidation: {
-      enabled: xmlValidation.enabled,
-      errors: xmlValidation.errors,
-      ok: xmlValidation.ok,
-      validator: xmlValidation.validator,
-      xsdVersion: xmlValidation.xsdVersion,
+      enabled: true,
+      errors: [],
+      ok: false,
+      validator: "awaiting-xades-signature",
+      xsdVersion: "4.4",
     },
   };
 
@@ -246,6 +301,7 @@ async function generateUnsignedXml(tenant: TenantContext, document: FiscalDocume
 }
 
 async function signXml(tenant: TenantContext, document: FiscalDocumentDetail) {
+  const binding = haciendaBinding(document);
   const supabase = await createClient();
   const { data: unsignedArtifact, error: artifactError } = await supabase
     .from("fiscal_document_artifacts")
@@ -263,13 +319,33 @@ async function signXml(tenant: TenantContext, document: FiscalDocumentDetail) {
   }
 
   const result = await getBillingXmlSigner().sign({
-    certificateSecretRef: `company:${tenant.empresaId}:billing:fiscal:p12`,
-    pinSecretRef: `company:${tenant.empresaId}:billing:fiscal:pin`,
+    connectionId: binding.connectionId,
+    empresaId: tenant.empresaId,
     unsignedXml: unsignedArtifact.content_text,
   });
 
   if (!hasXmlSignature(result.signedXml)) {
     throw new Error("La firma XML no contiene Signature; no se marca como firmado.");
+  }
+
+  const xsdValidation = await validateFiscalXmlAgainstOfficialXsd(result.signedXml);
+  if (!xsdValidation.ok) {
+    const message = xsdValidation.errors[0] ?? "XML firmado no valido contra XSD oficial 4.4.";
+    await supabase
+      .from("fiscal_documents")
+      .update({
+        last_error: message,
+        status: "error_xml",
+        validation_errors: xsdValidation.errors.map((validationError) => ({
+          code: "signed_xsd_validation_error",
+          group: "XML",
+          message: validationError,
+        })),
+      })
+      .eq("empresa_id", tenant.empresaId)
+      .eq("id", document.id)
+      .eq("status", "xml_generated");
+    throw new Error(message);
   }
 
   const storagePath = [
@@ -281,9 +357,12 @@ async function signXml(tenant: TenantContext, document: FiscalDocumentDetail) {
   ].join("/");
   const metadata = {
     algorithm: result.algorithm,
+    certificateExpiresAt: result.certificateExpiresAt,
+    certificateSerialLast4: result.certificateSerialLast4,
     generatedAt: new Date().toISOString(),
     generatedBy: "runImmediateFiscalIssuance",
     signer: "BillingXmlSigner",
+    xsdValidation,
   };
 
   const { error: signedArtifactError } = await supabase.from("fiscal_document_artifacts").insert({
@@ -340,8 +419,29 @@ async function sendToHacienda(tenant: TenantContext, document: FiscalDocumentDet
     throw new Error("No se encontro un XML firmado valido para enviar.");
   }
 
-  const sendResult = await getHaciendaClient().sendSignedXml({
+  const xsdValidation = await validateFiscalXmlAgainstOfficialXsd(signedArtifact.content_text);
+  if (!xsdValidation.ok) {
+    throw new Error(xsdValidation.errors[0] ?? "El XML firmado no supera el XSD oficial 4.4.");
+  }
+
+  const issuerType = textFromRecord(document.issuerSnapshot, "identificationType");
+  const issuerNumber = textFromRecord(document.issuerSnapshot, "identificationNumber");
+  if (!issuerType || !issuerNumber) throw new Error("Falta identificacion completa del emisor para Hacienda.");
+  const receiverType = document.receiverIdentificationType;
+  const receiverNumber = textFromRecord(document.receiverSnapshot, "identificationNumber");
+  const binding = haciendaBinding(document);
+  const client = await getHaciendaClientForConnection(
+    tenant.empresaId,
+    binding.connectionId,
+    binding.environment,
+  );
+  const sendResult = await client.sendSignedXml({
     clave: document.clave,
+    emisor: { numeroIdentificacion: issuerNumber, tipoIdentificacion: issuerType },
+    fecha: new Date(document.issueDatetime ?? document.createdAt).toISOString(),
+    ...(receiverType && receiverNumber
+      ? { receptor: { numeroIdentificacion: receiverNumber, tipoIdentificacion: receiverType } }
+      : {}),
     signedXml: signedArtifact.content_text,
   });
   const responseText = safeJsonText(sendResult.rawResponse);
@@ -370,13 +470,18 @@ async function sendToHacienda(tenant: TenantContext, document: FiscalDocumentDet
   });
 
   const nextStatus = sendResult.status === "error" ? "error_sending" : "sent";
+  const respondedAt = new Date().toISOString();
   await supabase
     .from("fiscal_documents")
     .update({
       hacienda_response_storage_path: responseStoragePath,
       hacienda_status: sendResult.status,
       last_error: sendResult.status === "error" ? "Hacienda retorno error en envio." : null,
-      sent_at: sendResult.status === "error" ? null : new Date().toISOString(),
+      provider_document_id: document.clave,
+      provider_last_response_at: respondedAt,
+      provider_reference: document.clave,
+      provider_status: sendResult.status,
+      sent_at: sendResult.status === "error" ? null : respondedAt,
       status: nextStatus,
     })
     .eq("empresa_id", tenant.empresaId)
@@ -391,7 +496,14 @@ async function queryHaciendaStatus(tenant: TenantContext, document: FiscalDocume
     throw new Error("Falta clave numerica para consultar Hacienda.");
   }
 
-  const statusResult = await getHaciendaClient().queryStatus(document.clave);
+  const binding = haciendaBinding(document);
+  const statusResult = await (
+    await getHaciendaClientForConnection(
+      tenant.empresaId,
+      binding.connectionId,
+      binding.environment,
+    )
+  ).queryStatus(document.clave);
   const supabase = await createClient();
   const responseText = safeJsonText(statusResult.rawResponse);
   const responseStoragePath = [
@@ -418,6 +530,13 @@ async function queryHaciendaStatus(tenant: TenantContext, document: FiscalDocume
     storage_path: responseStoragePath,
   });
 
+  const officialResponsePath = await archiveOfficialHaciendaResponseXml({
+    empresaId: tenant.empresaId,
+    fiscalDocumentId: document.id,
+    generatedBy: "runImmediateFiscalIssuance",
+    responseXmlBase64: statusResult.responseXmlBase64,
+  });
+
   const now = new Date().toISOString();
   const documentStatusByHaciendaStatus: Record<HaciendaStatusResult["status"], string> = {
     aceptado: "accepted",
@@ -431,9 +550,11 @@ async function queryHaciendaStatus(tenant: TenantContext, document: FiscalDocume
     .from("fiscal_documents")
     .update({
       accepted_at: statusResult.status === "aceptado" ? now : null,
-      hacienda_response_storage_path: responseStoragePath,
+      hacienda_response_storage_path: officialResponsePath ?? responseStoragePath,
       hacienda_status: statusResult.status,
       last_error: statusResult.status === "error" ? "Hacienda retorno error en consulta." : null,
+      provider_last_response_at: now,
+      provider_status: statusResult.status,
       rejected_at: statusResult.status === "rechazado" ? now : null,
       status: documentStatusByHaciendaStatus[statusResult.status],
     })
@@ -447,6 +568,7 @@ async function queryHaciendaStatus(tenant: TenantContext, document: FiscalDocume
 export async function runImmediateFiscalIssuance(
   tenant: TenantContext,
   documentId: string,
+  workerContext?: FiscalIssuanceWorkerContext,
 ): Promise<ImmediateFiscalIssuanceResult> {
   const steps: ImmediateFiscalIssuanceResult["steps"] = [];
   let document = await loadDocument(tenant, documentId);
@@ -497,7 +619,40 @@ export async function runImmediateFiscalIssuance(
   }
 
   try {
-    document = await ensureFiscalIdentity(tenant, document);
+    document = await ensureFiscalDocumentConnection(tenant, document, workerContext);
+    steps.push({
+      detail: `Conexión ${document.providerCode ?? "fiscal"} fijada para este documento.`,
+      status: "completed",
+      step: "connection",
+    });
+  } catch (error) {
+    return {
+      documentId,
+      finalStatus: document.status,
+      message: safeMessage(error, "No se pudo fijar la conexión fiscal."),
+      ok: false,
+      steps: [
+        ...steps,
+        { detail: "La emisión se detuvo antes de usar un proveedor.", status: "blocked", step: "connection" },
+      ],
+    };
+  }
+
+  if (document.providerCode !== "hacienda") {
+    return {
+      documentId,
+      finalStatus: document.status,
+      message: `El proveedor ${document.providerCode ?? "desconocido"} no tiene un adaptador de emisión instalado.`,
+      ok: false,
+      steps: [
+        ...steps,
+        { detail: "La conexión se conserva sin enviar el documento.", status: "blocked", step: "connection" },
+      ],
+    };
+  }
+
+  try {
+    document = await ensureFiscalIdentity(tenant, document, workerContext);
     steps.push({ detail: "Clave y consecutivo fiscal listos.", status: "completed", step: "identity" });
   } catch (error) {
     return {

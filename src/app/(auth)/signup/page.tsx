@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/session";
 import { signupAction } from "@/modules/auth/actions";
 import { getPendingInvitationToken } from "@/modules/users/invitations/invitation-cookie";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -13,13 +15,29 @@ type SignupPageProps = {
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
-  const pendingInvitationToken = await getPendingInvitationToken();
+  const [pendingInvitationToken, userResult, profileResult] = await Promise.all([
+    getPendingInvitationToken(),
+    getCurrentUser(),
+    getCurrentProfile(),
+  ]);
   const invitationToken = params?.invitation_token ?? pendingInvitationToken;
   const publicSignupEnabled = process.env.PUBLIC_SIGNUP_ENABLED !== "false";
   const loginHref = invitationToken
     ? `/login?invitation_token=${encodeURIComponent(invitationToken)}`
     : "/login";
   const signupBlocked = !publicSignupEnabled && !invitationToken;
+
+  if (userResult.ok && userResult.data && profileResult.ok && profileResult.data) {
+    redirect("/dashboard");
+  }
+
+  if (userResult.ok && userResult.data && profileResult.ok && !profileResult.data && invitationToken) {
+    redirect(`/invitation?token=${encodeURIComponent(invitationToken)}`);
+  }
+
+  if (userResult.ok && userResult.data && profileResult.ok && !profileResult.data) {
+    redirect("/onboarding");
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted px-6">

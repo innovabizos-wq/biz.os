@@ -190,18 +190,29 @@ export default async function WhappConversationDetailPage({
         </aside>
 
         <main className="space-y-4">
-          <WhappMessageThread messages={messages.ok ? messages.data : []} />
+          <WhappMessageThread
+            channel={conversation.data.canal}
+            messages={messages.ok ? messages.data : []}
+          />
           <InboxReplyForm
             canReply={canReply}
+            channel={conversation.data.canal}
             conversacionId={conversation.data.id}
-            realWhatsAppReady={metaSendStatus.ok ? metaSendStatus.data.isReady : false}
-            realWhatsAppReason={metaSendStatus.ok ? metaSendStatus.data.reason : null}
+            isMetaChannel={
+              metaSendStatus.ok ? metaSendStatus.data.isMetaChannel : false
+            }
+            realMetaReady={metaSendStatus.ok ? metaSendStatus.data.isReady : false}
+            realMetaReason={metaSendStatus.ok ? metaSendStatus.data.reason : null}
             redirectTo={redirectTo}
           />
           <InboxWhatsAppTemplateForm
             canReply={canReply}
             conversacionId={conversation.data.id}
-            realWhatsAppReady={metaSendStatus.ok ? metaSendStatus.data.isReady : false}
+            realWhatsAppReady={
+              metaSendStatus.ok && metaSendStatus.data.channel === "whatsapp"
+                ? metaSendStatus.data.isConfigured
+                : false
+            }
             redirectTo={redirectTo}
             templates={approvedTemplates.ok ? approvedTemplates.data : []}
           />

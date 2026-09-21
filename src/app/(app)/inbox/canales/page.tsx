@@ -54,6 +54,12 @@ export default async function InboxChannelsPage({
           <div className="flex gap-2">
             <Link
               className={buttonVariants({ variant: "outline" })}
+              href="/inbox/conexiones"
+            >
+              Redes y mensajeria
+            </Link>
+            <Link
+              className={buttonVariants({ variant: "outline" })}
               href="/inbox/canales/nuevo?tipo=manual"
             >
               Crear canal manual

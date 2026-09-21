@@ -1,17 +1,25 @@
 import { z } from "zod";
 
 import {
-  nonEmptyTextSchema,
   optionalTextSchema,
   uuidSchema,
 } from "@/lib/validation/shared-schemas";
 
 export const recordPaymentSchema = z.object({
   accountId: uuidSchema,
-  metodo: nonEmptyTextSchema.default("manual"),
-  monto: z.coerce.number().positive(),
+  metodo: z.enum(["cash", "card", "sinpe", "transfer", "other"]).default("cash"),
+  monto: z.coerce.number().positive().multipleOf(0.01),
   notas: optionalTextSchema,
+  operationId: uuidSchema,
   referencia: optionalTextSchema,
+}).superRefine((value, context) => {
+  if (["card", "sinpe", "transfer"].includes(value.metodo) && !value.referencia) {
+    context.addIssue({
+      code: "custom",
+      message: "La referencia es requerida para tarjeta, SINPE o transferencia.",
+      path: ["referencia"],
+    });
+  }
 });
 
 export const voidPaymentAccountSchema = z.object({

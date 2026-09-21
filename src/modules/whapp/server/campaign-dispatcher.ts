@@ -16,9 +16,11 @@ type CampaignDispatchConfigRow = {
 type CampaignDispatchRecipientRow = {
   attempt_count: number;
   campana_id: string;
+  consentimiento_id: string | null;
   empresa_id: string;
   id: string;
   last_attempt_at: string | null;
+  market_code: string | null;
   nombre: string | null;
   telefono: string;
   variables: unknown;
@@ -33,11 +35,27 @@ type CampaignDispatchCampaignRow = {
 };
 
 type CampaignDispatchTemplateRow = {
+  disabled_at: string | null;
   estado: string;
   id: string;
   idioma: string;
   nombre: string;
+  last_synced_at: string | null;
+  meta_category: string | null;
+  meta_status: string | null;
   variables: unknown;
+};
+
+type MetaSendPolicyRow = {
+  daily_limit: number;
+  hourly_limit: number;
+  max_failure_percent: number;
+  min_interval_ms: number;
+  paused_at: string | null;
+  quality_status: string;
+  require_active_consent: boolean;
+  require_recent_template_sync: boolean;
+  template_sync_max_age_hours: number;
 };
 
 export type CampaignDispatchResult = {
@@ -139,6 +157,150 @@ function resolveVariableValues(
 
     return JSON.stringify(value);
   });
+}
+
+async function validateDispatchGuard(
+  supabase: ServiceRoleClient,
+  recipient: CampaignDispatchRecipientRow,
+  campaign: CampaignDispatchCampaignRow,
+  template: CampaignDispatchTemplateRow,
+) {
+  const { data: policyData } = await supabase
+    .from("inbox_meta_politicas_envio")
+    .select(
+      "daily_limit, hourly_limit, min_interval_ms, max_failure_percent, require_active_consent, require_recent_template_sync, template_sync_max_age_hours, quality_status, paused_at",
+    )
+    .eq("empresa_id", campaign.empresa_id)
+    .eq("canal_id", campaign.canal_id)
+    .maybeSingle<MetaSendPolicyRow>();
+  const policy = policyData ?? {
+    daily_limit: 1000,
+    hourly_limit: 200,
+    max_failure_percent: 10,
+    min_interval_ms: 250,
+    paused_at: null,
+    quality_status: "UNKNOWN",
+    require_active_consent: true,
+    require_recent_template_sync: true,
+    template_sync_max_age_hours: 168,
+  };
+
+  if (policy.paused_at) return "Canal pausado por politica de envio.";
+  if (policy.quality_status === "RED") {
+    return "Canal bloqueado porque Meta reporta calidad roja.";
+  }
+
+  if (policy.require_active_consent) {
+    if (!recipient.consentimiento_id) return "Destinatario sin consentimiento auditable.";
+    const normalizedPhone = recipient.telefono.replace(/\D/g, "");
+    const { data: globalOptOut, error: globalOptOutError } = await supabase
+      .from("inbox_contacto_preferencias")
+      .select("id")
+      .eq("empresa_id", recipient.empresa_id)
+      .eq("canal", "whatsapp")
+      .eq("identificador_normalizado", normalizedPhone)
+      .eq("estado", "baja")
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    if (globalOptOutError) return "No se pudo validar si el contacto solicito la baja.";
+    if (globalOptOut) return "Consentimiento revocado por solicitud de baja.";
+
+    const { data: preference, error: preferenceError } = await supabase
+      .from("inbox_contacto_preferencias")
+      .select("estado, identificador_normalizado")
+      .eq("empresa_id", recipient.empresa_id)
+      .eq("id", recipient.consentimiento_id)
+      .maybeSingle<{ estado: string; identificador_normalizado: string }>();
+    if (preferenceError) return "No se pudo validar el consentimiento del contacto.";
+    if (
+      preference?.estado !== "consentido" ||
+      preference.identificador_normalizado !== normalizedPhone
+    ) {
+      return "Consentimiento ausente, revocado o asociado a otro contacto.";
+    }
+  }
+
+  if (template.disabled_at || template.meta_status !== "APPROVED") {
+    return "Plantilla no aprobada actualmente por Meta.";
+  }
+  if (!recipient.market_code || !template.meta_category) {
+    return "No se pudo determinar mercado y categoria para calcular el cobro Meta.";
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = `${today.slice(0, 7)}-01T00:00:00.000Z`;
+  const nextMonthDate = new Date(monthStart);
+  nextMonthDate.setUTCMonth(nextMonthDate.getUTCMonth() + 1);
+  const { count: monthlyVolume, error: monthlyVolumeError } = await supabase
+    .from("inbox_meta_costos_mensajes")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", campaign.empresa_id)
+    .eq("market_code", recipient.market_code)
+    .eq("categoria", template.meta_category)
+    .eq("billable", true)
+    .gte("delivered_at", monthStart)
+    .lt("delivered_at", nextMonthDate.toISOString());
+  if (monthlyVolumeError) return "No se pudo calcular el tramo mensual de cobro Meta.";
+  const volumePosition = (monthlyVolume ?? 0) + 1;
+  const { data: rate, error: rateError } = await supabase
+    .from("inbox_meta_tarifas")
+    .select("id")
+    .eq("market_code", recipient.market_code)
+    .eq("categoria", template.meta_category)
+    .lte("effective_from", today)
+    .lte("volume_from", volumePosition)
+    .or([
+      "and(effective_to.is.null,volume_to.is.null)",
+      `and(effective_to.is.null,volume_to.gte.${volumePosition})`,
+      `and(effective_to.gte.${today},volume_to.is.null)`,
+      `and(effective_to.gte.${today},volume_to.gte.${volumePosition})`,
+    ].join(","))
+    .order("effective_from", { ascending: false })
+    .order("volume_from", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (rateError || !rate) {
+    return `No existe tarifa Meta vigente para ${recipient.market_code}/${template.meta_category}.`;
+  }
+  if (policy.require_recent_template_sync) {
+    const syncedAt = template.last_synced_at
+      ? new Date(template.last_synced_at).getTime()
+      : Number.NaN;
+    const maxAgeMs = policy.template_sync_max_age_hours * 60 * 60 * 1000;
+    if (!Number.isFinite(syncedAt) || Date.now() - syncedAt > maxAgeMs) {
+      return "Plantilla sin sincronizacion reciente con Meta.";
+    }
+  }
+
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [hourly, daily, failures, total, latest] = await Promise.all([
+    supabase.from("inbox_campana_destinatarios").select("id", { count: "exact", head: true })
+      .eq("empresa_id", campaign.empresa_id).gte("sent_at", hourAgo),
+    supabase.from("inbox_campana_destinatarios").select("id", { count: "exact", head: true })
+      .eq("empresa_id", campaign.empresa_id).gte("sent_at", dayAgo),
+    supabase.from("inbox_campana_destinatarios").select("id", { count: "exact", head: true })
+      .eq("empresa_id", campaign.empresa_id).eq("estado", "fallido").gte("last_attempt_at", dayAgo),
+    supabase.from("inbox_campana_destinatarios").select("id", { count: "exact", head: true })
+      .eq("empresa_id", campaign.empresa_id).gte("last_attempt_at", dayAgo),
+    supabase.from("inbox_campana_destinatarios").select("sent_at")
+      .eq("empresa_id", campaign.empresa_id).not("sent_at", "is", null)
+      .order("sent_at", { ascending: false }).limit(1).maybeSingle<{ sent_at: string }>(),
+  ]);
+
+  if ((hourly.count ?? 0) >= policy.hourly_limit) return "Limite horario de envio alcanzado.";
+  if ((daily.count ?? 0) >= policy.daily_limit) return "Limite diario de envio alcanzado.";
+  if (
+    (total.count ?? 0) >= 20 &&
+    ((failures.count ?? 0) / Math.max(total.count ?? 1, 1)) * 100 >= policy.max_failure_percent
+  ) {
+    return "Envios pausados por tasa de fallos elevada.";
+  }
+  const lastSentAt = latest.data?.sent_at ? new Date(latest.data.sent_at).getTime() : Number.NaN;
+  if (Number.isFinite(lastSentAt) && Date.now() - lastSentAt < policy.min_interval_ms) {
+    return "Canal esperando intervalo minimo entre mensajes.";
+  }
+
+  return null;
 }
 
 async function countRecipients(
@@ -268,7 +430,7 @@ async function processRecipient(
 
   const { data: template, error: templateError } = await supabase
     .from("inbox_meta_plantillas")
-    .select("id, nombre, idioma, estado, variables")
+    .select("id, nombre, idioma, estado, variables, meta_status, meta_category, last_synced_at, disabled_at")
     .eq("empresa_id", campaign.empresa_id)
     .eq("id", campaign.plantilla_id)
     .maybeSingle<CampaignDispatchTemplateRow>();
@@ -279,6 +441,21 @@ async function processRecipient(
       recipientId: recipient.id,
       status: "skipped",
     };
+  }
+
+  const guardError = await validateDispatchGuard(supabase, recipient, campaign, template);
+  if (guardError) {
+    const normalizedGuardError = guardError.toLowerCase();
+    const shouldExclude = normalizedGuardError.includes("consentimiento");
+    if (shouldExclude) {
+      await supabase
+        .from("inbox_campana_destinatarios")
+        .update({ estado: "excluido", last_error: guardError })
+        .eq("empresa_id", recipient.empresa_id)
+        .eq("id", recipient.id)
+        .eq("estado", "en_cola");
+    }
+    return { error: guardError, recipientId: recipient.id, status: "skipped" };
   }
 
   const { data: configData, error: configError } = await supabase.rpc(
@@ -370,7 +547,7 @@ export async function dispatchInboxCampaignBatch({
   let query = supabase
     .from("inbox_campana_destinatarios")
     .select(
-      "id, empresa_id, campana_id, nombre, telefono, variables, attempt_count, last_attempt_at",
+      "id, empresa_id, campana_id, nombre, telefono, variables, attempt_count, last_attempt_at, consentimiento_id, market_code",
     )
     .eq("estado", "en_cola")
     .eq("opt_in", true)

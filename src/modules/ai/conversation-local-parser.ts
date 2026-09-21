@@ -1,5 +1,7 @@
 import "server-only";
 
+import { parseProductCreationEntities } from "@/modules/brain/runtime/product-creation-parser";
+
 type LocalParsedAction = {
   actionId: string;
   confidence: number;
@@ -55,8 +57,8 @@ function stripPrefix(original: string) {
     .replace(/^agrega a\s+/i, "")
     .replace(/^agregar a\s+/i, "")
     .replace(/^crear cliente\s+/i, "")
-    .replace(/^(?:crea|crear|crees) un cliente(?: que se llame)?\s+/i, "")
-    .replace(/^(?:crea|crear|crees) cliente(?: que se llame)?\s+/i, "")
+    .replace(/^(?:crea|crear|crees) un cliente(?: que se llame| llamado)?\s+/i, "")
+    .replace(/^(?:crea|crear|crees) cliente(?: que se llame| llamado)?\s+/i, "")
     .replace(/^registre(?: un)? cliente(?: que se llame)?\s+/i, "")
     .replace(/^registrar(?: un)? cliente(?: que se llame)?\s+/i, "")
     .replace(/^agregue(?: un)? cliente(?: que se llame)?\s+/i, "")
@@ -74,10 +76,11 @@ function firstMatch(value: string, pattern: RegExp) {
 function extractBeforeLabels(value: string) {
   return value
     .split(
-      /\b(?:con\s+)?(?:correo|email|mail|cedula|c[eé]dula|ced|id|identificacion|identificaci[oó]n|cc|numero|n[uú]mero|telefono|tel[eé]fono|tel|cel|whatsapp)\b/i,
+      /\b(?:con\s+)?(?:correo|email|mail|cedula|c[eé]dula|ced|id|identificacion|identificaci[oó]n|cc|numero|n[uú]mero|telefono|tel[eé]fono|tel|celular|cel|whatsapp)\b/i,
     )[0]
     ?.replace(/\bque se llame\b/i, "")
     .replace(/\bse llame\b/i, "")
+    .replace(/^llamad[oa]\s+/i, "")
     .replace(/\bcon\b$/i, "")
     .trim();
 }
@@ -85,7 +88,7 @@ function extractBeforeLabels(value: string) {
 function parseCreateCustomer(message: string): LocalParsedAction | null {
   const normalized = normalize(message);
   const hasCreateIntent = CREATE_CUSTOMER_PATTERNS.some((pattern) =>
-    normalized.includes(pattern),
+    normalized.startsWith(pattern),
   );
   const hasRegisterPersonIntent = /^(registre|registrar|agregue|agregar) a\b/.test(
     normalized,
@@ -93,7 +96,7 @@ function parseCreateCustomer(message: string): LocalParsedAction | null {
 
   if (!hasCreateIntent && !hasRegisterPersonIntent) return null;
 
-  const email = firstMatch(message, /\b[\w.+-]+@[\w.-]+\.\w+\b/i);
+  const email = firstMatch(message, /\b([\w.+-]+@[\w.-]+\.\w+)\b/i);
   const identificacion = firstMatch(
     message,
     /\b(?:cedula|c[eé]dula|ced|id|identificacion|identificaci[oó]n|cc)\s*[:#-]?\s*([0-9-]{6,20})\b/i,
@@ -106,12 +109,12 @@ function parseCreateCustomer(message: string): LocalParsedAction | null {
     whatsapp ||
     firstMatch(
       message,
-      /\b(?:numero|n[uú]mero|telefono|tel[eé]fono|tel|cel)\s*[:#-]?\s*([0-9\s-]{7,20})\b/i,
+      /\b(?:numero|n[uú]mero|telefono|tel[eé]fono|tel|celular|cel)\s*[:#-]?\s*([0-9\s-]{7,20})\b/i,
     )
   )?.replace(/\D/g, "");
   const explicitName = firstMatch(
     message,
-    /\b(?:nombre|llamado|llamada|se llama)\s*[:#-]?\s*([A-Za-zÀ-ÿ\s.'-]{2,80}?)(?=\s*,?\s*(?:cedula|c[eé]dula|ced|id|identificacion|identificación|cc|numero|n[uú]mero|telefono|tel[eé]fono|tel|cel|whatsapp|correo|email|mail)\b|$)/i,
+    /\b(?:nombre|llamado|llamada|se llama)\s*[:#-]?\s*([\p{L}\s.'-]{2,80}?)(?=\s*,?\s*(?:con\s+)?(?:cedula|c[eé]dula|ced|id|identificacion|identificación|cc|numero|n[uú]mero|telefono|tel[eé]fono|tel|celular|cel|whatsapp|correo|email|mail)\b|$)/iu,
   );
   const nameCandidate = explicitName ?? extractBeforeLabels(stripPrefix(message));
   const nombre = nameCandidate && normalize(nameCandidate) !== "cliente"
@@ -136,7 +139,7 @@ function parseCreateCustomer(message: string): LocalParsedAction | null {
 function parseSearch(message: string): LocalParsedAction | null {
   const normalized = normalize(message);
 
-  const customerMatch = normalized.match(/\b(?:busca|buscar|encuentra|encontrar)\s+(?:cliente|clientes)\s+(.+)$/);
+  const customerMatch = normalized.match(/\b(?:busca|buscar|encuentra|encontrar)\s+(?:al\s+)?(?:cliente|clientes)\s+(.+)$/);
   if (customerMatch?.[1]) {
     return {
       actionId: "clientes.buscar_cliente",
@@ -145,7 +148,7 @@ function parseSearch(message: string): LocalParsedAction | null {
     };
   }
 
-  const productMatch = normalized.match(/\b(?:busca|buscar|encuentra|encontrar)\s+(?:producto|productos|servicio|servicios)\s+(.+)$/);
+  const productMatch = normalized.match(/\b(?:busca|buscar|encuentra|encontrar)\s+(?:el\s+)?(?:producto|productos|servicio|servicios)\s+(.+)$/);
   if (productMatch?.[1]) {
     return {
       actionId: "productos.buscar_producto",
@@ -154,12 +157,50 @@ function parseSearch(message: string): LocalParsedAction | null {
     };
   }
 
-  const stockMatch = normalized.match(/\b(?:stock|inventario|existencias)\s+(?:de\s+)?(.+)$/);
+  const strategicInventoryQuestion = /\b(?:stock|inventario)\s+bajo\b/.test(normalized);
+  const stockPatterns = [
+    /\b(?:cuanto|cuanta|cuantos|cuantas)\s+(?:stock|inventario|existencias)\s+(?:tenemos|hay)?\s*(?:del|de)?\s*(?:el\s+)?(?:producto\s+)?(.+)$/,
+    /\b(?:stock|inventario|existencias)\s+(?:disponible\s+)?(?:del|de)?\s*(?:el\s+)?(?:producto\s+)?(.+)$/,
+    /\b(?:hay|tenemos)\s+(?:stock|inventario|existencias)\s+(?:del|de)?\s*(?:el\s+)?(?:producto\s+)?(.+)$/,
+    /\b(?:cuantas|cuantos)\s+unidades\s+(?:hay|tenemos)\s+(?:del|de)?\s*(?:el\s+)?(?:producto\s+)?(.+)$/,
+  ];
+  const stockMatch = strategicInventoryQuestion
+    ? null
+    : stockPatterns.map((pattern) => normalized.match(pattern)).find(Boolean);
   if (stockMatch?.[1]) {
     return {
       actionId: "inventario.consultar_stock",
-      confidence: 0.86,
+      confidence: 0.94,
       params: { limit: 8, query: stockMatch[1].trim() },
+    };
+  }
+
+  if (
+    /\b(?:muestra|muestrame|ver|consulta|consultar|buscar)\s+(?:las\s+)?ventas(?:\s+recientes)?\b/.test(
+      normalized,
+    ) ||
+    /\bventas\s+recientes\b/.test(normalized)
+  ) {
+    return {
+      actionId: "ventas.buscar_ventas",
+      confidence: 0.92,
+      params: { limit: 10 },
+    };
+  }
+
+  if (/\b(?:cuentas?\s+por\s+pagar|por\s+pagar|cxp|pagos?\s+a\s+proveedores?).*\b(?:vencidos?|pendientes?)\b/.test(normalized)) {
+    return {
+      actionId: "pagos.consultar_cuentas_pagar",
+      confidence: 0.92,
+      params: { limit: 10 },
+    };
+  }
+
+  if (/\b(?:cobros?|cuentas?\s+por\s+cobrar).*\b(?:vencidos?|pendientes?)\b/.test(normalized)) {
+    return {
+      actionId: "pagos.consultar_vencidos",
+      confidence: 0.92,
+      params: { limit: 10 },
     };
   }
 
@@ -168,23 +209,21 @@ function parseSearch(message: string): LocalParsedAction | null {
 
 function parseCreateProduct(message: string): LocalParsedAction | null {
   const normalized = normalize(message);
-  if (!/\b(crear|crea|agregar|agregue|nuevo)\s+(un\s+)?(producto|servicio)\b/.test(normalized)) {
+  if (!/\b(crear|crea|agregar|agregue|nuevo)\s+(?:(?:un|el)\s+)?(producto|servicio)\b/.test(normalized)) {
     return null;
   }
 
-  const price = firstMatch(message, /\bprecio\s*[:#-]?\s*([0-9]+(?:[.,][0-9]+)?)\b/i);
-  const name = message
-    .replace(/^.*?\b(?:producto|servicio)\b/i, "")
-    .split(/\bprecio\b/i)[0]
-    ?.trim();
+  const product = parseProductCreationEntities(message);
 
   return {
     actionId: "productos.crear_producto",
-    confidence: name ? 0.86 : 0.62,
+    confidence: product.nombre ? 0.86 : 0.62,
     params: {
+      bodegaNombre: product.bodegaNombre,
+      cantidadInicial: product.cantidadInicial,
       moneda: "CRC",
-      nombre: name || undefined,
-      precioBase: price ? Number(price.replace(",", ".")) : 0,
+      nombre: product.nombre,
+      precioBase: product.precioBase,
       tipo: normalized.includes("servicio") ? "servicio" : "producto",
       unidadMedida: "unidad",
     },
@@ -230,20 +269,25 @@ function parseBrainQuestion(message: string): LocalParsedAction | null {
   }
 
   // Preguntas estratégicas y operativas — van al Brain
-  if (
+if (
     // Prioridades y urgencias
-    /\bque\s+(debo|tengo)\s+(atender|hacer)\s+hoy\b/.test(normalized) ||
-    /\bprioridades?\b/.test(normalized) ||
     /\burgente\b/.test(normalized) ||
     /\bmas\s+importante\b/.test(normalized) ||
+    /\bprioridades?\b/.test(normalized) ||
+    /\bque\s+(debo|tengo)\s+(atender|hacer)\s+hoy\b/.test(normalized) ||
     /\bque\s+hago\s+primero\b/.test(normalized) ||
     /\bpor\s+donde\s+empez(ar|o)\b/.test(normalized) ||
+    /\buna\s+hora\s+libre\b/.test(normalized) ||
+    /\btiempo\s+libre\b/.test(normalized) ||
 
-    // Ventas
-    /\bque\s+esta\s+pasando\s+con\s+mis\s+ventas\b/.test(normalized) ||
-    /\b(resumen|reporte|analisis)\s+(de\s+)?(las\s+)?ventas\b/.test(normalized) ||
+    // Ventas y métricas
+    /\bvend(i|iste|imos)\b/.test(normalized) ||
     /\bcomo\s+van\s+(las\s+)?ventas\b/.test(normalized) ||
     /\bcomo\s+estoy\s+en\s+ventas\b/.test(normalized) ||
+    /\b(resumen|reporte|analisis)\s+(de\s+)?(las\s+)?ventas\b/.test(normalized) ||
+    /\bque\s+esta\s+pasando\s+con\s+mis\s+ventas\b/.test(normalized) ||
+    /\bcuanto\s+vend\b/.test(normalized) ||
+    /\bventas\s+(de\s+)?(hoy|ayer|semana|mes)\b/.test(normalized) ||
 
     // Flujo de caja y finanzas
     /\bflujo\s+de\s+caja\b/.test(normalized) ||
@@ -252,36 +296,57 @@ function parseBrainQuestion(message: string): LocalParsedAction | null {
     /\bfinancieramente\b/.test(normalized) ||
     /\bliquidez\b/.test(normalized) ||
     /\bdinero\b/.test(normalized) ||
+    /\brecuperar\s+dinero\b/.test(normalized) ||
+    /\bsin\s+conseguir\s+clientes\s+nuevos\b/.test(normalized) ||
+    /\bmejorar\s+.*(caja|financ|ingreso)\b/.test(normalized) ||
 
-    // Clientes
+    // Clientes y seguimientos
     /\bclientes?\s+en\s+riesgo\b/.test(normalized) ||
     /\bseguimientos?\s+vencidos?\b/.test(normalized) ||
     /\bcomo\s+(estan|van)\s+(mis\s+)?clientes?\b/.test(normalized) ||
+    /\bclientes?\s+(tienen|con)\s+(cotizaciones?|seguimientos?)\b/.test(normalized) ||
+    /\bcruzar\b/.test(normalized) ||
 
-    // Inventario y compras
-    /\bproductos?\s+(debo|tengo)\s+comprar\b/.test(normalized) ||
-    /\bque\s+productos?\s+comprar\b/.test(normalized) ||
+    // Inventario
     /\bstock\s+bajo\b/.test(normalized) ||
     /\binventario\s+bajo\b/.test(normalized) ||
+    /\bproductos?\s+(debo|tengo)\s+comprar\b/.test(normalized) ||
 
-    // Estado general del negocio
+    // Estado general y diagnóstico
     /\bcomo\s+va\s+(mi\s+)?negocio\b/.test(normalized) ||
     /\bcomo\s+estoy\b/.test(normalized) ||
     /\bque\s+(tipo|clase)\s+de\s+negocio\b/.test(normalized) ||
     /\bcual\s+es\s+mi\s+sector\b/.test(normalized) ||
-    /\ben\s+que\s+(tipo|clase)\s+de\s+negocio\b/.test(normalized) ||
     /\bmi\s+sector\b/.test(normalized) ||
+    /\bcreciendo\b/.test(normalized) ||
+    /\bestancado\b/.test(normalized) ||
+    /\bdiagnostico\b/.test(normalized) ||
+    /\bsenal(es)?\s+mix\b/.test(normalized) ||
 
     // Recomendaciones y decisiones
     /\bque\s+(me\s+)?(recomiendas?|sugieres?|aconsejas?)\b/.test(normalized) ||
     /\bque\s+debo\s+hacer\b/.test(normalized) ||
     /\bsolo\s+puedo\s+hacer\s+una\s+cosa\b/.test(normalized) ||
-    /\bsi\s+solo\s+pudiera\b/.test(normalized) ||
     /\buna\s+sola\s+accion\b/.test(normalized) ||
     /\bmejorar\s+el\s+flujo\b/.test(normalized) ||
     /\bque\s+me\s+falta\b/.test(normalized) ||
     /\bque\s+esta\s+mal\b/.test(normalized) ||
-    /\bcomo\s+mejorar\b/.test(normalized)
+    /\bcomo\s+mejorar\b/.test(normalized) ||
+
+    // Síntesis y reportes
+    /\binversionista\b/.test(normalized) ||
+    /\b3\s+oraciones?\b/.test(normalized) ||
+    /\bresume\b/.test(normalized) ||
+    /\bcomo\s+esta\s+(el\s+)?negocio\b/.test(normalized) ||
+    /\bsalud\s+(del\s+)?negocio\b/.test(normalized) ||
+    /\bpanorama\b/.test(normalized) ||
+
+    // Riesgo y futuro
+    /\bcuesta\s+caro\b/.test(normalized) ||
+    /\bmes\s+que\s+viene\b/.test(normalized) ||
+    /\bsemana\s+que\s+viene\b/.test(normalized) ||
+    /\bsi\s+no\s+lo\s+atiendo\b/.test(normalized) ||
+    /\briesgo\b/.test(normalized)
   ) {
     return {
       actionId: "brain.responder_pregunta",
@@ -289,7 +354,18 @@ function parseBrainQuestion(message: string): LocalParsedAction | null {
       params: { question: message },
     };
   }
-
+  // Captura de seguridad: si es una pregunta genuina (tiene signo de interrogación
+  // o palabras de pregunta) y no matcheó ninguna acción específica, va al Brain
+  if (
+    message.includes("?") ||
+    /^(que|cual|cuanto|como|donde|cuando|por que|quien)\b/.test(normalized)
+  ) {
+    return {
+      actionId: "brain.responder_pregunta",
+      confidence: 0.75,
+      params: { question: message },
+    };
+  }
   return null;
 }
 
@@ -357,11 +433,11 @@ export function parseLocalConversationAction(
   context?: LocalParserContext,
 ): LocalParsedAction | null {
   return (
-    parseBrainQuestion(message) ||
     parseCreateAutoblog(message) ||
     parseCreateCustomer(message) ||
     parseCreateProduct(message) ||
     parseSearch(message) ||
-    parseContextualSearch(message, context)
+    parseContextualSearch(message, context) ||
+    parseBrainQuestion(message)
   );
 }

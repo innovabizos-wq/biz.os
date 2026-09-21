@@ -44,6 +44,7 @@ export function DispatchStatusActions({
           <form action={changeDispatchStatusAction} key={status}>
             <input name="despachoId" type="hidden" value={dispatch.id} />
             <input name="estado" type="hidden" value={status} />
+            <input name="ventaId" type="hidden" value={dispatch.ventaId} />
             <Button
               size="sm"
               type="submit"
@@ -57,6 +58,7 @@ export function DispatchStatusActions({
       <form action={changeDispatchStatusAction} className="flex flex-wrap items-end gap-2">
         <input name="despachoId" type="hidden" value={dispatch.id} />
         <input name="estado" type="hidden" value={dispatch.estado} />
+        <input name="ventaId" type="hidden" value={dispatch.ventaId} />
         <label className="space-y-1 text-sm">
           <span className="font-medium">Resultado</span>
           <input

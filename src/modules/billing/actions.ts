@@ -4,13 +4,18 @@ import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { parseCabysImportText } from "@/modules/billing/cabys/import";
 import { encryptSecret } from "@/modules/billing/crypto";
-import { getHaciendaClient } from "@/modules/billing/hacienda/client";
-import { runImmediateFiscalIssuance } from "@/modules/billing/issuance";
+import { getHaciendaClientForConnection } from "@/modules/billing/hacienda/client";
+import { archiveOfficialHaciendaResponseXml } from "@/modules/billing/hacienda/artifacts";
+import {
+  ensureFiscalDocumentConnection,
+  runImmediateFiscalIssuance,
+} from "@/modules/billing/issuance";
 import { buildFiscalPrintableRepresentation } from "@/modules/billing/pdf/representation";
 import { buildReceiverMessageXml } from "@/modules/billing/received/receiver-message";
 import { parseReceivedFiscalXml } from "@/modules/billing/received/xml";
@@ -35,7 +40,11 @@ import {
   sendFiscalDocumentToHaciendaSchema,
   signFiscalDocumentXmlSchema,
 } from "@/modules/billing/schemas";
-import { getFiscalConfiguration, getFiscalDocumentDetail } from "@/modules/billing/queries";
+import {
+  getFiscalConfiguration,
+  getFiscalDocumentDetail,
+  type FiscalDocumentDetail,
+} from "@/modules/billing/queries";
 import { buildUnsignedXmlFromFiscalDocument } from "@/modules/billing/xml/document";
 import { validateFiscalXmlAgainstOfficialXsd } from "@/modules/billing/xml/validation";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
@@ -68,8 +77,16 @@ function buildFiscalValuePatch(value: JsonRecord, encrypted: JsonRecord) {
   const patch: JsonRecord = {
     actividadEconomica: value.actividadEconomica,
     ambiente: value.ambiente,
+    barrio: value.barrio,
+    canton: value.canton,
+    condicionVenta: value.condicionVenta,
     correoEmisor: value.correoEmisor,
+    distrito: value.distrito,
     identificacion: value.identificacion,
+    identificacionProveedorSistema: value.identificacionProveedorSistema,
+    medioPago: value.medioPago,
+    otrasSenas: value.otrasSenas,
+    provincia: value.provincia,
     razonSocial: value.razonSocial,
     sucursal: value.sucursal,
     terminal: value.terminal,
@@ -123,6 +140,45 @@ function safeJsonText(value: unknown) {
   }
 }
 
+async function requireHaciendaDocumentConnection(
+  tenant: TenantContext,
+  document: FiscalDocumentDetail,
+  redirectPath: string,
+): Promise<{
+  connectionId: string;
+  document: FiscalDocumentDetail;
+  environment: "testing" | "production";
+}> {
+  let boundDocument: FiscalDocumentDetail;
+  try {
+    boundDocument = await ensureFiscalDocumentConnection(tenant, document);
+  } catch (error) {
+    redirectWithError(
+      redirectPath,
+      error instanceof Error ? error.message : "No se pudo fijar la conexión fiscal.",
+    );
+  }
+
+  if (
+    boundDocument.providerCode !== "hacienda" ||
+    !boundDocument.providerConnectionId ||
+    (boundDocument.providerEnvironment !== "testing" &&
+      boundDocument.providerEnvironment !== "production")
+  ) {
+    redirectWithError(
+      redirectPath,
+      "El documento no tiene una conexión Hacienda directa válida y fija.",
+    );
+  }
+
+  const environment = boundDocument.providerEnvironment;
+  return {
+    connectionId: boundDocument.providerConnectionId,
+    document: boundDocument,
+    environment,
+  };
+}
+
 async function ensureFiscalIdentityForDocument(
   tenant: TenantContext,
   documentId: string,
@@ -134,15 +190,21 @@ async function ensureFiscalIdentityForDocument(
     redirectWithError(redirectPath, "Documento fiscal no encontrado.");
   }
 
-  if (document.data.status !== "validated") {
-    return document.data;
+  const { document: fiscalDocument } = await requireHaciendaDocumentConnection(
+    tenant,
+    document.data,
+    redirectPath,
+  );
+
+  if (fiscalDocument.status !== "validated") {
+    return fiscalDocument;
   }
 
-  if (document.data.clave && document.data.consecutivo) {
-    return document.data;
+  if (fiscalDocument.clave && fiscalDocument.consecutivo) {
+    return fiscalDocument;
   }
 
-  const identificationNumber = textFromRecord(document.data.issuerSnapshot, "identificationNumber");
+  const identificationNumber = textFromRecord(fiscalDocument.issuerSnapshot, "identificationNumber");
 
   if (!identificationNumber) {
     redirectWithError(
@@ -155,10 +217,10 @@ async function ensureFiscalIdentityForDocument(
   const { data: sequenceData, error: sequenceError } = await supabase.rpc(
     "reserve_fiscal_sequence_for_current_company",
     {
-      p_branch_code: document.data.branchCode,
-      p_document_type_code: document.data.documentTypeCode,
-      p_environment: document.data.environment,
-      p_terminal_code: document.data.terminalCode,
+      p_branch_code: fiscalDocument.branchCode,
+      p_document_type_code: fiscalDocument.documentTypeCode,
+      p_environment: fiscalDocument.environment,
+      p_terminal_code: fiscalDocument.terminalCode,
     },
   );
 
@@ -182,7 +244,7 @@ async function ensureFiscalIdentityForDocument(
     clave = generateFiscalClave({
       consecutivo: reservation.consecutivo,
       identificationNumber,
-      issueDate: document.data.issueDatetime ?? document.data.createdAt,
+      issueDate: fiscalDocument.issueDatetime ?? fiscalDocument.createdAt,
     });
   } catch (error) {
     redirectWithError(
@@ -192,7 +254,7 @@ async function ensureFiscalIdentityForDocument(
   }
 
   const identityMetadata = {
-    ...document.data.metadata,
+    ...fiscalDocument.metadata,
     fiscalIdentityAssignedAt: new Date().toISOString(),
     fiscalSequenceReservationId: reservation.reservation_id,
     fiscalSequenceNumber: reservation.sequence_number ?? null,
@@ -208,7 +270,7 @@ async function ensureFiscalIdentityForDocument(
     })
     .select("id")
     .eq("empresa_id", tenant.empresaId)
-    .eq("id", document.data.id)
+    .eq("id", fiscalDocument.id)
     .eq("status", "validated")
     .is("clave", null)
     .is("consecutivo", null)
@@ -225,7 +287,7 @@ async function ensureFiscalIdentityForDocument(
     .from("fiscal_sequence_reservations")
     .update({
       clave,
-      fiscal_document_id: document.data.id,
+      fiscal_document_id: fiscalDocument.id,
       status: "used",
       used_at: new Date().toISOString(),
     })
@@ -324,6 +386,11 @@ export async function saveFiscalConfigurationAction(formData: FormData) {
       parsed.data.identificacion &&
       parsed.data.correoEmisor &&
       parsed.data.actividadEconomica &&
+      parsed.data.identificacionProveedorSistema &&
+      parsed.data.provincia &&
+      parsed.data.canton &&
+      parsed.data.distrito &&
+      parsed.data.otrasSenas &&
       parsed.data.sucursal &&
       parsed.data.terminal &&
       haciendaUsernameRef &&
@@ -334,11 +401,16 @@ export async function saveFiscalConfigurationAction(formData: FormData) {
 
   const { error: structuredError } = await supabase.from("company_fiscal_settings").upsert(
     {
+      address_line: parsed.data.otrasSenas,
       branch_code: parsed.data.sucursal,
+      canton_code: parsed.data.canton,
       certificate_pin_secret_ref: certificatePinRef,
       certificate_secret_ref: certificateRef,
       certificate_uploaded_at: parsed.data.p12Base64 ? new Date().toISOString() : undefined,
       default_currency: "CRC",
+      default_payment_method_code: parsed.data.medioPago,
+      default_sale_condition_code: parsed.data.condicionVenta,
+      district_code: parsed.data.distrito,
       email: parsed.data.correoEmisor,
       empresa_id: access.tenant.empresaId,
       environment: normalizeFiscalEnvironment(parsed.data.ambiente),
@@ -352,6 +424,9 @@ export async function saveFiscalConfigurationAction(formData: FormData) {
       last_validated_at: new Date().toISOString(),
       legal_name: parsed.data.razonSocial,
       main_activity_code: parsed.data.actividadEconomica,
+      neighborhood: parsed.data.barrio || null,
+      province_code: parsed.data.provincia,
+      software_provider_identification: parsed.data.identificacionProveedorSistema,
       terminal_code: parsed.data.terminal,
     },
     {
@@ -548,48 +623,6 @@ export async function generateFiscalDocumentXmlAction(formData: FormData) {
     );
   }
 
-  let xmlValidation;
-  try {
-    xmlValidation = await validateFiscalXmlAgainstOfficialXsd(unsignedXml.xml);
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Validacion XSD XML 4.4 no configurada.";
-    await (await createClient())
-      .from("fiscal_documents")
-      .update({
-        last_error: message,
-        status: "error_xml",
-        validation_errors: [{ code: "xsd_validator_not_configured", group: "XML", message }],
-      })
-      .eq("empresa_id", access.tenant.empresaId)
-      .eq("id", document.id)
-      .eq("status", "validated");
-    revalidatePath(redirectPath);
-    redirectWithError(redirectPath, message);
-  }
-
-  if (xmlValidation.enabled && !xmlValidation.ok) {
-    const message = xmlValidation.errors[0] ?? "XML no valido contra XSD oficial.";
-    await (await createClient())
-      .from("fiscal_documents")
-      .update({
-        last_error: message,
-        status: "error_xml",
-        validation_errors: xmlValidation.errors.map((validationError) => ({
-          code: "xsd_validation_error",
-          group: "XML",
-          message: validationError,
-        })),
-      })
-      .eq("empresa_id", access.tenant.empresaId)
-      .eq("id", document.id)
-      .eq("status", "validated");
-    revalidatePath(redirectPath);
-    redirectWithError(redirectPath, message);
-  }
-
   const storagePath = [
     "billing",
     access.tenant.empresaId,
@@ -601,13 +634,13 @@ export async function generateFiscalDocumentXmlAction(formData: FormData) {
   const metadata = {
     generatedBy: "generateFiscalDocumentXmlAction",
     generatedAt: new Date().toISOString(),
-    pendingXsdValidation: xmlValidation.pendingXsdValidation,
+    pendingXsdValidation: true,
     xsdValidation: {
-      enabled: xmlValidation.enabled,
-      errors: xmlValidation.errors,
-      ok: xmlValidation.ok,
-      validator: xmlValidation.validator,
-      xsdVersion: xmlValidation.xsdVersion,
+      enabled: true,
+      errors: [],
+      ok: false,
+      validator: "awaiting-xades-signature",
+      xsdVersion: "4.4",
     },
   };
 
@@ -679,7 +712,13 @@ export async function signFiscalDocumentXmlAction(formData: FormData) {
     redirectWithError(redirectPath, "Documento fiscal no encontrado.");
   }
 
-  if (document.data.status !== "xml_generated" || !document.data.xmlUnsignedStoragePath) {
+  const binding = await requireHaciendaDocumentConnection(
+    access.tenant,
+    document.data,
+    redirectPath,
+  );
+
+  if (binding.document.status !== "xml_generated" || !binding.document.xmlUnsignedStoragePath) {
     redirectWithError(redirectPath, "Primero debes generar el XML sin firmar.");
   }
 
@@ -688,7 +727,7 @@ export async function signFiscalDocumentXmlAction(formData: FormData) {
     .from("fiscal_document_artifacts")
     .select("content_text")
     .eq("empresa_id", access.tenant.empresaId)
-    .eq("fiscal_document_id", document.data.id)
+    .eq("fiscal_document_id", binding.document.id)
     .eq("artifact_type", "xml_unsigned")
     .eq("status", "generated")
     .order("created_at", { ascending: false })
@@ -701,14 +740,18 @@ export async function signFiscalDocumentXmlAction(formData: FormData) {
 
   let signedXml: string;
   let algorithm: string;
+  let certificateExpiresAt: string | undefined;
+  let certificateSerialLast4: string | undefined;
   try {
     const result = await getBillingXmlSigner().sign({
-      certificateSecretRef: `company:${access.tenant.empresaId}:billing:fiscal:p12`,
-      pinSecretRef: `company:${access.tenant.empresaId}:billing:fiscal:pin`,
+      connectionId: binding.connectionId,
+      empresaId: access.tenant.empresaId,
       unsignedXml: unsignedArtifact.content_text,
     });
     signedXml = result.signedXml;
     algorithm = result.algorithm;
+    certificateExpiresAt = result.certificateExpiresAt;
+    certificateSerialLast4 = result.certificateSerialLast4;
   } catch (error) {
     redirectWithError(
       redirectPath,
@@ -722,19 +765,51 @@ export async function signFiscalDocumentXmlAction(formData: FormData) {
     redirectWithError(redirectPath, "La firma XML no contiene Signature; no se marca como firmado.");
   }
 
+  let xsdValidation;
+  try {
+    xsdValidation = await validateFiscalXmlAgainstOfficialXsd(signedXml);
+  } catch (error) {
+    redirectWithError(
+      redirectPath,
+      error instanceof Error ? error.message : "No se pudo ejecutar la validacion XSD oficial.",
+    );
+  }
+  if (!xsdValidation.ok) {
+    const message = xsdValidation.errors[0] ?? "XML firmado no valido contra XSD oficial 4.4.";
+    await supabase
+      .from("fiscal_documents")
+      .update({
+        last_error: message,
+        status: "error_xml",
+        validation_errors: xsdValidation.errors.map((validationError) => ({
+          code: "signed_xsd_validation_error",
+          group: "XML",
+          message: validationError,
+        })),
+      })
+      .eq("empresa_id", access.tenant.empresaId)
+      .eq("id", binding.document.id)
+      .eq("status", "xml_generated");
+    revalidatePath(redirectPath);
+    redirectWithError(redirectPath, message);
+  }
+
   const storagePath = [
     "billing",
     access.tenant.empresaId,
     "fiscal-documents",
-    document.data.id,
+    binding.document.id,
     "signed.xml",
   ].join("/");
   const signedHash = createHash("sha256").update(signedXml).digest("hex");
   const metadata = {
     algorithm,
+    certificateExpiresAt,
+    certificateSerialLast4,
     generatedAt: new Date().toISOString(),
     generatedBy: "signFiscalDocumentXmlAction",
     signer: "BillingXmlSigner",
+    xsdValidation,
   };
 
   const { error: signedArtifactError } = await supabase.from("fiscal_document_artifacts").insert({
@@ -742,7 +817,7 @@ export async function signFiscalDocumentXmlAction(formData: FormData) {
     content_mime_type: "application/xml",
     content_text: signedXml,
     empresa_id: access.tenant.empresaId,
-    fiscal_document_id: document.data.id,
+    fiscal_document_id: binding.document.id,
     metadata,
     sha256: signedHash,
     status: "generated",
@@ -757,12 +832,12 @@ export async function signFiscalDocumentXmlAction(formData: FormData) {
     .from("fiscal_documents")
     .update({
       last_error: null,
-      metadata: { ...document.data.metadata, ...metadata },
+      metadata: { ...binding.document.metadata, ...metadata },
       status: "signed",
       xml_signed_storage_path: storagePath,
     })
     .eq("empresa_id", access.tenant.empresaId)
-    .eq("id", document.data.id)
+    .eq("id", binding.document.id)
     .eq("status", "xml_generated");
 
   if (updateError) {
@@ -804,11 +879,17 @@ export async function sendFiscalDocumentToHaciendaAction(formData: FormData) {
     redirectWithError(redirectPath, "Documento fiscal no encontrado.");
   }
 
-  if (document.data.status !== "signed") {
+  const binding = await requireHaciendaDocumentConnection(
+    access.tenant,
+    document.data,
+    redirectPath,
+  );
+
+  if (binding.document.status !== "signed") {
     redirectWithError(redirectPath, "Solo se puede enviar a Hacienda un XML firmado realmente.");
   }
 
-  if (!document.data.clave) {
+  if (!binding.document.clave) {
     redirectWithError(redirectPath, "Falta clave numerica para enviar a Hacienda.");
   }
 
@@ -817,7 +898,7 @@ export async function sendFiscalDocumentToHaciendaAction(formData: FormData) {
     .from("fiscal_document_artifacts")
     .select("content_text")
     .eq("empresa_id", access.tenant.empresaId)
-    .eq("fiscal_document_id", document.data.id)
+    .eq("fiscal_document_id", binding.document.id)
     .eq("artifact_type", "xml_signed")
     .eq("status", "generated")
     .order("created_at", { ascending: false })
@@ -828,10 +909,43 @@ export async function sendFiscalDocumentToHaciendaAction(formData: FormData) {
     redirectWithError(redirectPath, "No se encontro un XML firmado valido para enviar.");
   }
 
+  let xsdValidation;
+  try {
+    xsdValidation = await validateFiscalXmlAgainstOfficialXsd(signedArtifact.content_text);
+  } catch (error) {
+    redirectWithError(
+      redirectPath,
+      error instanceof Error ? error.message : "No se pudo ejecutar la validacion XSD oficial.",
+    );
+  }
+  if (!xsdValidation.ok) {
+    redirectWithError(
+      redirectPath,
+      xsdValidation.errors[0] ?? "El XML firmado no supera el XSD oficial 4.4.",
+    );
+  }
+
   let sendResult;
   try {
-    sendResult = await getHaciendaClient().sendSignedXml({
-      clave: document.data.clave,
+    const issuerType = textFromRecord(binding.document.issuerSnapshot, "identificationType");
+    const issuerNumber = textFromRecord(binding.document.issuerSnapshot, "identificationNumber");
+    if (!issuerType || !issuerNumber) {
+      redirectWithError(redirectPath, "Falta identificacion completa del emisor para Hacienda.");
+    }
+    const receiverNumber = textFromRecord(binding.document.receiverSnapshot, "identificationNumber");
+    sendResult = await (
+      await getHaciendaClientForConnection(
+        access.tenant.empresaId,
+        binding.connectionId,
+        binding.environment,
+      )
+    ).sendSignedXml({
+      clave: binding.document.clave,
+      emisor: { numeroIdentificacion: issuerNumber, tipoIdentificacion: issuerType },
+      fecha: new Date(binding.document.issueDatetime ?? binding.document.createdAt).toISOString(),
+      ...(binding.document.receiverIdentificationType && receiverNumber
+        ? { receptor: { numeroIdentificacion: receiverNumber, tipoIdentificacion: binding.document.receiverIdentificationType } }
+        : {}),
       signedXml: signedArtifact.content_text,
     });
   } catch (error) {
@@ -849,7 +963,7 @@ export async function sendFiscalDocumentToHaciendaAction(formData: FormData) {
     "billing",
     access.tenant.empresaId,
     "fiscal-documents",
-    document.data.id,
+    binding.document.id,
     "hacienda-send-response.json",
   ].join("/");
 
@@ -858,7 +972,7 @@ export async function sendFiscalDocumentToHaciendaAction(formData: FormData) {
     content_mime_type: "application/json",
     content_text: responseText,
     empresa_id: access.tenant.empresaId,
-    fiscal_document_id: document.data.id,
+    fiscal_document_id: binding.document.id,
     metadata: {
       generatedAt: new Date().toISOString(),
       generatedBy: "sendFiscalDocumentToHaciendaAction",
@@ -874,17 +988,22 @@ export async function sendFiscalDocumentToHaciendaAction(formData: FormData) {
   }
 
   const nextStatus = sendResult.status === "error" ? "error_sending" : "sent";
+  const respondedAt = new Date().toISOString();
   const { error: updateError } = await supabase
     .from("fiscal_documents")
     .update({
       hacienda_response_storage_path: responseStoragePath,
       hacienda_status: sendResult.status,
       last_error: sendResult.status === "error" ? "Hacienda retorno error en envio." : null,
-      sent_at: sendResult.status === "error" ? null : new Date().toISOString(),
+      provider_document_id: binding.document.clave,
+      provider_last_response_at: respondedAt,
+      provider_reference: binding.document.clave,
+      provider_status: sendResult.status,
+      sent_at: sendResult.status === "error" ? null : respondedAt,
       status: nextStatus,
     })
     .eq("empresa_id", access.tenant.empresaId)
-    .eq("id", document.data.id)
+    .eq("id", binding.document.id)
     .eq("status", "signed");
 
   if (updateError) {
@@ -931,20 +1050,32 @@ export async function queryFiscalDocumentHaciendaStatusAction(formData: FormData
     redirectWithError(redirectPath, "Documento fiscal no encontrado.");
   }
 
-  if (!document.data.clave) {
+  const binding = await requireHaciendaDocumentConnection(
+    access.tenant,
+    document.data,
+    redirectPath,
+  );
+
+  if (!binding.document.clave) {
     redirectWithError(redirectPath, "Falta clave numerica para consultar Hacienda.");
   }
 
   if (
-    !["sent", "processing"].includes(document.data.status) &&
-    !["recibido", "procesando"].includes(document.data.haciendaStatus)
+    !["sent", "processing"].includes(binding.document.status) &&
+    !["recibido", "procesando"].includes(binding.document.haciendaStatus)
   ) {
     redirectWithError(redirectPath, "Solo se consulta Hacienda despues de enviar un XML firmado.");
   }
 
   let statusResult;
   try {
-    statusResult = await getHaciendaClient().queryStatus(document.data.clave);
+    statusResult = await (
+      await getHaciendaClientForConnection(
+        access.tenant.empresaId,
+        binding.connectionId,
+        binding.environment,
+      )
+    ).queryStatus(binding.document.clave);
   } catch (error) {
     redirectWithError(
       redirectPath,
@@ -960,7 +1091,7 @@ export async function queryFiscalDocumentHaciendaStatusAction(formData: FormData
     "billing",
     access.tenant.empresaId,
     "fiscal-documents",
-    document.data.id,
+    binding.document.id,
     "hacienda-status-response.json",
   ].join("/");
   const supabase = await createClient();
@@ -970,7 +1101,7 @@ export async function queryFiscalDocumentHaciendaStatusAction(formData: FormData
     content_mime_type: "application/json",
     content_text: responseText,
     empresa_id: access.tenant.empresaId,
-    fiscal_document_id: document.data.id,
+    fiscal_document_id: binding.document.id,
     metadata: {
       generatedAt: new Date().toISOString(),
       generatedBy: "queryFiscalDocumentHaciendaStatusAction",
@@ -983,6 +1114,18 @@ export async function queryFiscalDocumentHaciendaStatusAction(formData: FormData
 
   if (responseArtifactError) {
     redirectWithError(redirectPath, "Hacienda respondio, pero no se pudo archivar la consulta.");
+  }
+
+  let officialResponsePath: string | null;
+  try {
+    officialResponsePath = await archiveOfficialHaciendaResponseXml({
+      empresaId: access.tenant.empresaId,
+      fiscalDocumentId: binding.document.id,
+      generatedBy: "queryFiscalDocumentHaciendaStatusAction",
+      responseXmlBase64: statusResult.responseXmlBase64,
+    });
+  } catch (error) {
+    redirectWithError(redirectPath, error instanceof Error ? error.message : "No se pudo archivar el XML oficial de Hacienda.");
   }
 
   const documentStatusByHaciendaStatus: Record<typeof statusResult.status, string> = {
@@ -998,14 +1141,16 @@ export async function queryFiscalDocumentHaciendaStatusAction(formData: FormData
     .from("fiscal_documents")
     .update({
       accepted_at: statusResult.status === "aceptado" ? now : null,
-      hacienda_response_storage_path: responseStoragePath,
+      hacienda_response_storage_path: officialResponsePath ?? responseStoragePath,
       hacienda_status: statusResult.status,
       last_error: statusResult.status === "error" ? "Hacienda retorno error en consulta." : null,
+      provider_last_response_at: now,
+      provider_status: statusResult.status,
       rejected_at: statusResult.status === "rechazado" ? now : null,
       status: nextStatus,
     })
     .eq("empresa_id", access.tenant.empresaId)
-    .eq("id", document.data.id)
+    .eq("id", binding.document.id)
     .in("status", ["sent", "processing"]);
 
   if (updateError) {
@@ -1274,80 +1419,225 @@ export async function registerReceivedFiscalXmlAction(formData: FormData) {
   const xmlText = parsed.data.xmlText;
   const parsedXml = parseReceivedFiscalXml(xmlText);
   const xmlHash = createHash("sha256").update(xmlText).digest("hex");
-  const status = parsedXml.validationErrors.length ? "error" : "pending";
-  const storagePath = [
-    "billing",
-    access.tenant.empresaId,
-    "received-documents",
-    parsedXml.clave ?? xmlHash,
-    "received.xml",
-  ].join("/");
-
   const supabase = await createClient();
-  const { data: receivedDocument, error: insertError } = await supabase
-    .from("fiscal_received_documents")
-    .insert({
-      clave: parsedXml.clave,
-      consecutivo: parsedXml.consecutivo,
-      currency_code: parsedXml.currencyCode ?? "CRC",
-      empresa_id: access.tenant.empresaId,
-      hacienda_status: parsedXml.haciendaStatus,
-      issuer_identification: parsedXml.issuerIdentification,
-      issuer_name: parsedXml.issuerName,
-      issue_datetime: parsedXml.issueDatetime,
-      parsed_data: {
-        ...parsedXml.parsedData,
-        sha256: xmlHash,
-        xmlStoragePath: storagePath,
-      },
-      receiver_response_status: status,
-      total_amount: parsedXml.totalAmount,
-      validation_errors: parsedXml.validationErrors,
-      xml_storage_path: storagePath,
-    })
-    .select("id")
-    .maybeSingle<{ id: string }>();
 
-  if (insertError || !receivedDocument) {
+  let xsdErrors: string[] = [];
+  let xsdValid = false;
+  try {
+    const result = await validateFiscalXmlAgainstOfficialXsd(xmlText);
+    xsdErrors = result.errors;
+    xsdValid = result.ok;
+  } catch (error) {
+    xsdErrors = [
+      error instanceof Error ? error.message : "No se pudo validar el XML contra el XSD oficial.",
+    ];
+  }
+
+  const { data: companyFiscalSettings, error: settingsError } = await supabase
+    .from("company_fiscal_settings")
+    .select("identificacion")
+    .eq("empresa_id", access.tenant.empresaId)
+    .maybeSingle<{ identificacion: string | null }>();
+
+  if (settingsError) {
     redirectWithError(
       "/facturacion/recepcion",
-      "No se pudo registrar el XML recibido. Verifica si la clave ya existe.",
+      "No se pudo comprobar la identidad fiscal de la empresa.",
     );
   }
 
-  const { error: artifactError } = await supabase
-    .from("fiscal_received_document_artifacts")
-    .insert({
-      artifact_type: "xml_received",
-      content_mime_type: "application/xml",
-      content_text: xmlText,
-      empresa_id: access.tenant.empresaId,
-      fiscal_received_document_id: receivedDocument.id,
-      metadata: {
-        registeredAt: new Date().toISOString(),
-        registeredBy: "registerReceivedFiscalXmlAction",
-        pendingReceiverMessage: true,
-        pendingXsdValidation: true,
-      },
-      sha256: xmlHash,
-      status: "stored",
-      storage_path: storagePath,
+  const normalizeIdentification = (value: string | null | undefined) =>
+    value?.replace(/[^0-9A-Za-z]/g, "").toUpperCase() ?? "";
+  const companyIdentification = normalizeIdentification(companyFiscalSettings?.identificacion);
+  const validationErrors = [...parsedXml.validationErrors];
+
+  if (!companyIdentification) {
+    validationErrors.push({
+      code: "missing_company_fiscal_identity",
+      group: "Empresa",
+      message: "Configura la identificacion fiscal de la empresa antes de importar XML.",
     });
+  } else if (parsed.data.documentDirection === "incoming") {
+    if (!parsedXml.receiverIdentification) {
+      validationErrors.push({
+        code: "missing_receiver_identification",
+        group: "Receptor",
+        message: "El XML entrante no identifica a la empresa receptora.",
+      });
+    } else if (
+      normalizeIdentification(parsedXml.receiverIdentification) !== companyIdentification
+    ) {
+      validationErrors.push({
+        code: "receiver_company_mismatch",
+        group: "Receptor",
+        message: "La identificacion del receptor no coincide con esta empresa.",
+      });
+    }
+  } else if (normalizeIdentification(parsedXml.issuerIdentification) !== companyIdentification) {
+    validationErrors.push({
+      code: "issuer_company_mismatch",
+      group: "Emisor",
+      message: "La identificacion del emisor no coincide con esta empresa.",
+    });
+  }
 
-  if (artifactError) {
-    redirectWithError(
+  const findExistingDocument = async () => {
+    const byHash = await supabase
+      .from("fiscal_received_documents")
+      .select("id")
+      .eq("empresa_id", access.tenant.empresaId)
+      .eq("xml_sha256", xmlHash)
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    if (byHash.error) throw byHash.error;
+    if (byHash.data) return byHash.data.id;
+    if (!parsedXml.clave) return null;
+    const byKey = await supabase
+      .from("fiscal_received_documents")
+      .select("id")
+      .eq("empresa_id", access.tenant.empresaId)
+      .eq("clave", parsedXml.clave)
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    if (byKey.error) throw byKey.error;
+    return byKey.data?.id ?? null;
+  };
+
+  let existingDocumentId: string | null = null;
+  try {
+    existingDocumentId = await findExistingDocument();
+  } catch {
+    redirectWithError("/facturacion/recepcion", "No se pudo comprobar si el XML ya existe.");
+  }
+
+  let suggestedSaleId: string | null = null;
+  if (
+    parsed.data.documentDirection === "outgoing" &&
+    parsedXml.issueDatetime &&
+    parsedXml.currencyCode &&
+    parsedXml.totalAmount !== null
+  ) {
+    const { data: sales } = await supabase
+      .from("ventas")
+      .select("id")
+      .eq("empresa_id", access.tenant.empresaId)
+      .eq("fecha_venta", parsedXml.issueDatetime.slice(0, 10))
+      .eq("moneda", parsedXml.currencyCode)
+      .eq("total", parsedXml.totalAmount)
+      .limit(2);
+    if (sales?.length === 1) suggestedSaleId = (sales[0] as { id: string }).id;
+  }
+
+  const batchRecord = {
+    clave: parsedXml.clave,
+    consecutivo: parsedXml.consecutivo,
+    created_by: access.tenant.profileId,
+    currency_code: parsedXml.currencyCode,
+    document_direction: parsed.data.documentDirection,
+    document_root: parsedXml.documentRoot,
+    document_type_code: parsedXml.documentTypeCode,
+    duplicate_document_id: existingDocumentId,
+    empresa_id: access.tenant.empresaId,
+    import_source: parsed.data.importSource,
+    issue_datetime: parsedXml.issueDatetime,
+    issuer_identification: parsedXml.issuerIdentification,
+    issuer_name: parsedXml.issuerName,
+    receiver_identification: parsedXml.receiverIdentification,
+    receiver_name: parsedXml.receiverName,
+    source_name: parsed.data.sourceName || null,
+    suggested_sale_id: suggestedSaleId,
+    total_amount: parsedXml.totalAmount,
+    validation_errors: validationErrors,
+    xml_sha256: xmlHash,
+    xsd_errors: xsdErrors,
+    xsd_valid: xsdValid,
+  };
+  const adminSupabase = createServiceRoleClient();
+
+  if (existingDocumentId) {
+    const { error: duplicateBatchError } = await adminSupabase
+      .from("fiscal_xml_import_batches")
+      .insert({ ...batchRecord, status: "duplicate" });
+    if (duplicateBatchError) {
+      redirectWithError("/facturacion/recepcion", "El XML ya existe y no se pudo registrar el intento.");
+    }
+    revalidatePath("/facturacion/recepcion");
+    redirectWithSuccess(
       "/facturacion/recepcion",
-      "El XML recibido se registro, pero no se pudo archivar el artefacto.",
+      "XML duplicado detectado por clave o huella. No se creo otro documento.",
     );
   }
 
+  if (parsed.data.importMode === "preview" || validationErrors.length > 0 || !xsdValid) {
+    const { error: batchError } = await adminSupabase.from("fiscal_xml_import_batches").insert({
+      ...batchRecord,
+      status: validationErrors.length > 0 || !xsdValid ? "rejected" : "previewed",
+    });
+    if (batchError) {
+      redirectWithError("/facturacion/recepcion", "No se pudo guardar la vista previa del XML.");
+    }
+    revalidatePath("/facturacion/recepcion");
+    redirectWithSuccess(
+      "/facturacion/recepcion",
+      validationErrors.length > 0 || !xsdValid
+        ? `Vista previa rechazada: ${validationErrors.length + xsdErrors.length} error(es).`
+        : suggestedSaleId
+          ? "Vista previa valida. Se encontro una venta candidata; revisala y confirma la vinculacion."
+          : "Vista previa valida. Ya puedes importar el XML.",
+    );
+  }
+
+  const documentPayload = {
+    clave: parsedXml.clave,
+    consecutivo: parsedXml.consecutivo,
+    currencyCode: parsedXml.currencyCode,
+    documentRoot: parsedXml.documentRoot,
+    documentTypeCode: parsedXml.documentTypeCode,
+    issueDatetime: parsedXml.issueDatetime,
+    issuerIdentification: parsedXml.issuerIdentification,
+    issuerName: parsedXml.issuerName,
+    parsedData: parsedXml.parsedData,
+    receiverIdentification: parsedXml.receiverIdentification,
+    receiverName: parsedXml.receiverName,
+    totalAmount: parsedXml.totalAmount,
+  };
+  const { data: importResult, error: importError } = await adminSupabase.rpc(
+    "import_fiscal_external_xml",
+    {
+      p_actor_id: access.tenant.profileId,
+      p_document: documentPayload,
+      p_document_direction: parsed.data.documentDirection,
+      p_empresa_id: access.tenant.empresaId,
+      p_import_source: parsed.data.importSource,
+      p_linked_sale_id: parsed.data.linkedSaleId || null,
+      p_source_name: parsed.data.sourceName || null,
+      p_suggested_sale_id: suggestedSaleId,
+      p_validation_errors: validationErrors,
+      p_xml_content: xmlText,
+      p_xml_sha256: xmlHash,
+      p_xsd_errors: xsdErrors,
+    },
+  );
+
+  if (importError) {
+    redirectWithError(
+      "/facturacion/recepcion",
+      `No se pudo importar el XML: ${safeErrorMessage(importError)}.`,
+    );
+  }
+
+  const result = importResult as { status?: string } | null;
   revalidatePath("/facturacion");
   revalidatePath("/facturacion/recepcion");
   redirectWithSuccess(
     "/facturacion/recepcion",
-    status === "pending"
-      ? "XML recibido registrado. Mensaje receptor a Hacienda queda pendiente."
-      : "XML recibido registrado con errores de validacion.",
+    result?.status === "duplicate"
+      ? "XML duplicado detectado durante la importacion. No se reprodujo ningun efecto."
+      : parsed.data.documentDirection === "incoming"
+        ? "XML entrante validado e importado. El mensaje receptor sigue pendiente."
+        : parsed.data.linkedSaleId
+          ? "XML externo validado, importado y vinculado con la venta seleccionada."
+          : "XML externo validado e importado sin vincularlo automaticamente.",
   );
 }
 
@@ -1377,22 +1667,31 @@ export async function prepareReceiverMessageAction(formData: FormData) {
   const supabase = await createClient();
   const { data: receivedDocument, error: documentError } = await supabase
     .from("fiscal_received_documents")
-    .select("id, clave, consecutivo, issuer_identification, parsed_data, total_amount, receiver_response_status, validation_errors")
+    .select("id, clave, consecutivo, document_direction, issuer_identification, parsed_data, total_amount, receiver_response_status, validation_errors, xsd_valid")
     .eq("empresa_id", access.tenant.empresaId)
     .eq("id", parsed.data.receivedDocumentId)
     .maybeSingle<{
       clave: string | null;
       consecutivo: string | null;
+      document_direction: string;
       id: string;
       issuer_identification: string | null;
       parsed_data: JsonRecord | null;
       receiver_response_status: string;
       total_amount: number | null;
       validation_errors: unknown[] | null;
+      xsd_valid: boolean | null;
     }>();
 
   if (documentError || !receivedDocument) {
     redirectWithError("/facturacion/recepcion", "Documento recibido no encontrado.");
+  }
+
+  if (receivedDocument.document_direction !== "incoming") {
+    redirectWithError(
+      "/facturacion/recepcion",
+      "Los comprobantes salientes importados no generan mensaje receptor.",
+    );
   }
 
   if (!receivedDocument.clave || !/^\d{50}$/.test(receivedDocument.clave)) {
@@ -1403,6 +1702,13 @@ export async function prepareReceiverMessageAction(formData: FormData) {
     redirectWithError(
       "/facturacion/recepcion",
       "No se prepara mensaje receptor para XML recibido con errores de validacion.",
+    );
+  }
+
+  if (receivedDocument.xsd_valid !== true) {
+    redirectWithError(
+      "/facturacion/recepcion",
+      "El XML debe superar el XSD oficial antes de preparar el mensaje receptor.",
     );
   }
 

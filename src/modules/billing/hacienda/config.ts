@@ -5,11 +5,25 @@ type HaciendaEnvValue = "production" | "produccion" | "pruebas" | "testing";
 export type HaciendaRuntimeConfig = {
   apiUrl: string | null;
   authUrl: string | null;
+  clientId: "api-prod" | "api-stag";
   environment: HaciendaEnvironment;
   missingKeys: string[];
   sendEnabled: boolean;
   statusEnabled: boolean;
 };
+
+const OFFICIAL_ENDPOINTS = {
+  production: {
+    api: "https://api.comprobanteselectronicos.go.cr/recepcion/v1",
+    auth: "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token",
+    clientId: "api-prod",
+  },
+  testing: {
+    api: "https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1",
+    auth: "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token",
+    clientId: "api-stag",
+  },
+} as const;
 
 function envText(key: string) {
   const value = process.env[key];
@@ -25,22 +39,20 @@ function normalizeEnvironment(value: string | null): HaciendaEnvironment {
   return normalized === "production" || normalized === "produccion" ? "production" : "testing";
 }
 
-export function getHaciendaRuntimeConfig(): HaciendaRuntimeConfig {
-  const environment = normalizeEnvironment(envText("HACIENDA_ENVIRONMENT"));
+export function getHaciendaRuntimeConfig(requestedEnvironment?: HaciendaEnvironment): HaciendaRuntimeConfig {
+  const environment = requestedEnvironment ?? normalizeEnvironment(envText("HACIENDA_ENVIRONMENT"));
+  const official = OFFICIAL_ENDPOINTS[environment];
   const authKey = environment === "production" ? "HACIENDA_PROD_AUTH_URL" : "HACIENDA_TEST_AUTH_URL";
   const apiKey = environment === "production" ? "HACIENDA_PROD_API_URL" : "HACIENDA_TEST_API_URL";
-  const authUrl = envText(authKey);
-  const apiUrl = envText(apiKey);
-  const missingKeys = [
-    !authUrl ? authKey : null,
-    !apiUrl ? apiKey : null,
-  ].filter((key): key is string => Boolean(key));
+  const authUrl = envText(authKey) ?? official.auth;
+  const apiUrl = envText(apiKey) ?? official.api;
 
   return {
     apiUrl,
     authUrl,
+    clientId: official.clientId,
     environment,
-    missingKeys,
+    missingKeys: [],
     sendEnabled: envFlag("BILLING_HACIENDA_SEND_ENABLED"),
     statusEnabled: envFlag("BILLING_HACIENDA_STATUS_ENABLED"),
   };
@@ -51,9 +63,20 @@ export function describeHaciendaReadiness(config = getHaciendaRuntimeConfig()) {
     return "Hacienda deshabilitado por flags BILLING_HACIENDA_SEND_ENABLED/BILLING_HACIENDA_STATUS_ENABLED.";
   }
 
-  if (config.missingKeys.length) {
-    return `Configuracion Hacienda incompleta: faltan ${config.missingKeys.join(", ")}.`;
-  }
+  return `Cliente Hacienda directo habilitado para ${config.environment}.`;
+}
 
-  return "Configuracion Hacienda presente; falta adaptador OAuth/payload validado contra endpoints oficiales.";
+export function assertHaciendaOperationEnabled(
+  operation: "send" | "status",
+  environment?: HaciendaEnvironment,
+) {
+  const config = getHaciendaRuntimeConfig(environment);
+  const enabled = operation === "send" ? config.sendEnabled : config.statusEnabled;
+  if (!enabled) {
+    const flag = operation === "send"
+      ? "BILLING_HACIENDA_SEND_ENABLED"
+      : "BILLING_HACIENDA_STATUS_ENABLED";
+    throw new Error(`La operacion con Hacienda esta deshabilitada por ${flag}.`);
+  }
+  return config;
 }

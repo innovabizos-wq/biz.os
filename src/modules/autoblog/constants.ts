@@ -28,10 +28,10 @@ export const AUTOBLOG_SOURCE_MODES = [
 ] as const satisfies readonly AutoblogSourceMode[];
 
 export const AUTOBLOG_SOURCE_MODE_LABELS: Record<AutoblogSourceMode, string> = {
-  internal_context: "Contexto interno",
+  internal_context: "Contexto + web",
   manual: "Tema manual",
-  news: "Fuente/noticia manual",
-  trend: "Tendencia manual",
+  news: "Noticia / referencias web",
+  trend: "Tendencia web",
 };
 
 export const AUTOBLOG_TOPIC_STATUSES = [

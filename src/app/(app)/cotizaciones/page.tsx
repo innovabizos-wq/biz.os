@@ -25,13 +25,6 @@ type DonutSegment = {
   value: number;
 };
 
-type MonthPoint = {
-  acceptedRate: number;
-  label: string;
-  openAmount: number;
-  totalAmount: number;
-};
-
 type DailyQuotePoint = {
   acceptedRate: number;
   day: number;
@@ -98,40 +91,6 @@ function getStatusSegments(quotes: Quote[]): DonutSegment[] {
       value: quotes.filter((quote) => quote.estado === status).length,
     }))
     .filter((segment) => segment.value > 0);
-}
-
-function getLastMonths(count = 12) {
-  const now = new Date();
-
-  return Array.from({ length: count }).map((_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (count - 1 - index), 1);
-
-    return {
-      key: `${date.getFullYear()}-${date.getMonth()}`,
-      label: date.toLocaleString("es", { month: "short" }).replace(".", ""),
-      month: date.getMonth(),
-      year: date.getFullYear(),
-    };
-  });
-}
-
-function getMonthlyPoints(quotes: Quote[]): MonthPoint[] {
-  return getLastMonths().map((month) => {
-    const rows = quotes.filter((quote) => {
-      const date = new Date(quote.fechaEmision);
-
-      return date.getFullYear() === month.year && date.getMonth() === month.month;
-    });
-    const accepted = rows.filter((quote) => quote.estado === "aceptada");
-    const open = rows.filter((quote) => ["borrador", "enviada"].includes(quote.estado));
-
-    return {
-      acceptedRate: rows.length > 0 ? Math.round((accepted.length / rows.length) * 100) : 0,
-      label: month.label.toUpperCase(),
-      openAmount: open.reduce((sum, quote) => sum + quote.total, 0),
-      totalAmount: rows.reduce((sum, quote) => sum + quote.total, 0),
-    };
-  });
 }
 
 function getCurrentMonthDailyPoints(quotes: Quote[]): DailyQuotePoint[] {
@@ -377,30 +336,6 @@ function DailyQuoteAmountChart({ points }: { points: DailyQuotePoint[] }) {
   );
 }
 
-function AgingGaugeCard({
-  quotes,
-}: {
-  quotes: Quote[];
-}) {
-  const openQuotes = quotes.filter((quote) =>
-    ["borrador", "enviada", "vencida"].includes(quote.estado),
-  );
-  const late = openQuotes.filter((quote) => quote.estado === "vencida").length;
-
-  return (
-    <section className="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
-      <h2 className="text-center text-sm font-black text-slate-600">
-        Riesgo vencido
-      </h2>
-      <Gauge
-        label={`${late} vencidas`}
-        percent={Math.round((late / Math.max(openQuotes.length, 1)) * 100)}
-        value={formatPercent(late, openQuotes.length)}
-      />
-    </section>
-  );
-}
-
 function AgingBarsCard({
   openAmount,
   quotes,
@@ -461,55 +396,6 @@ function TrendGaugeCard({ quotes }: { quotes: Quote[] }) {
   );
 }
 
-function TrendLineCard({ points }: { points: MonthPoint[] }) {
-  const maxValue = Math.max(...points.map((point) => point.totalAmount), 1);
-  const polyline = points
-    .map((point, index) => {
-      const x = 16 + index * 20;
-      const y = 115 - (point.totalAmount / maxValue) * 72;
-
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <section className="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
-      <p className="text-sm font-black text-slate-700">Tendencia cotizada</p>
-      <svg className="mt-1 h-32 w-full" viewBox="0 0 240 135">
-        {[0, 1, 2].map((line) => (
-          <line
-            key={line}
-            stroke="#e5e7eb"
-            strokeWidth="1"
-            x1="10"
-            x2="230"
-            y1={38 + line * 34}
-            y2={38 + line * 34}
-          />
-        ))}
-        <polyline
-          fill="none"
-          points={polyline}
-          stroke="#26364a"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
-        {points.map((point, index) => (
-          <text
-            className="fill-slate-400 text-[9px] font-bold"
-            key={point.label}
-            textAnchor="middle"
-            x={16 + index * 20}
-            y="130"
-          >
-            {point.label.slice(0, 1)}
-          </text>
-        ))}
-      </svg>
-    </section>
-  );
-}
-
 function QuoteAnalyticsCharts({
   acceptedQuotes,
   draftAndSentQuotes,
@@ -522,14 +408,13 @@ function QuoteAnalyticsCharts({
   quotes: Quote[];
 }) {
   const total = quotes.length;
-  const points = getMonthlyPoints(quotes);
   const dailyPoints = getCurrentMonthDailyPoints(quotes);
   const acceptedPercent = formatPercent(acceptedQuotes.length, total);
   const openPercent = formatPercent(draftAndSentQuotes.length, total);
   const statusSegments = getStatusSegments(quotes);
 
   return (
-    <div className="grid gap-3 xl:grid-cols-[1.35fr_0.8fr_1.8fr]">
+    <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(220px,0.95fr)_minmax(240px,1.25fr)_minmax(220px,1.05fr)]">
       <DailyQuoteAmountChart points={dailyPoints} />
 
       <section className="rounded-sm border border-slate-200 bg-white p-4 shadow-sm">
@@ -558,12 +443,9 @@ function QuoteAnalyticsCharts({
         </div>
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <AgingGaugeCard quotes={quotes} />
-        <TrendGaugeCard quotes={quotes} />
-        <AgingBarsCard openAmount={openAmount} quotes={quotes} />
-        <TrendLineCard points={points} />
-      </div>
+      <AgingBarsCard openAmount={openAmount} quotes={quotes} />
+
+      <TrendGaugeCard quotes={quotes} />
     </div>
   );
 }
@@ -624,7 +506,7 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
   const openAmount = draftAndSentQuotes.reduce((sum, quote) => sum + quote.total, 0);
 
   return (
-    <section className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
+    <section className="relative flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
       <SectionHeader
         actions={
           canCreate ? (
@@ -640,12 +522,14 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
 
       <EphemeralPageAlert error={params?.error} success={params?.success} />
 
-      <QuoteAnalyticsCharts
-        acceptedQuotes={acceptedQuotes}
-        draftAndSentQuotes={draftAndSentQuotes}
-        openAmount={openAmount}
-        quotes={quoteRows}
-      />
+      <div className="-mt-2" data-quotes-charts-region>
+        <QuoteAnalyticsCharts
+          acceptedQuotes={acceptedQuotes}
+          draftAndSentQuotes={draftAndSentQuotes}
+          openAmount={openAmount}
+          quotes={quoteRows}
+        />
+      </div>
 
       {!quotes.ok ? (
         <EmptyState description={quotes.error.message} title="No se pudo cargar" />

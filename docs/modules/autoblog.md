@@ -4,6 +4,13 @@ Autoblog es un modulo principal de biz.os, visible directamente en la barra
 lateral cuando el modulo esta activo para la empresa y el usuario tiene permisos.
 No vive dentro de Marketing y no existe ruta `/marketing`.
 
+## Agente Responsable
+
+El agente responsable de Autoblog dentro de Biz.Brain es el Agente de Marketing.
+Autoblog se mantiene como modulo independiente, pero Marketing es el encargado
+de operar sus capacidades inteligentes: temas, briefs, borradores, SEO, calidad
+editorial, reutilizacion, calendario, rendimiento y preparacion de publicacion.
+
 ## Rutas
 
 ```text
@@ -43,18 +50,29 @@ archived = Archivado
 `ready_to_publish` significa que el contenido quedo listo dentro de biz.os para
 copiar, compartir o publicar manualmente. No significa publicacion externa.
 
-## IA Y Noticias
+## IA E Investigacion Web
 
-La estructura de generacion IA existe, pero no llama a ningun proveedor todavia.
+Autoblog usa el proveedor IA compartido de Biz.Brain cuando la capa de IA esta
+activa y tiene una credencial valida en Administracion / IA. Antes de redactar,
+el flujo de generacion intenta construir referencias reales:
+
+- Si el usuario pega URLs, Autoblog intenta leer esas paginas.
+- Si no hay URLs y el origen es `internal_context`, `news` o `trend`, Autoblog
+  intenta buscar referencias web publicas y leer las fuentes accesibles.
+- Las fuentes leidas se guardan en el articulo como `source_urls`.
+- Los hallazgos extraidos se agregan a `source_notes` para que el modelo redacte
+  con evidencia y no invente referencias.
+
 Si no hay proveedor configurado, el sistema muestra:
 
 ```text
 La generacion IA todavia no esta configurada. Puedes crear el articulo manualmente.
 ```
 
-La funcion de noticias esta preparada como placeholder. En esta fase no hay cron,
-scraping, busqueda web desde frontend ni integracion con News API. Las fuentes se
-pegan manualmente como URLs y notas.
+La busqueda web se ejecuta desde servidor y bloquea URLs locales o privadas para
+evitar lecturas internas no autorizadas. Si la red externa no responde o ninguna
+fuente es legible, el borrador puede generarse solo con contexto interno y notas
+manuales, pero no debe inventar fuentes.
 
 ## Futuro
 

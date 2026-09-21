@@ -1,11 +1,15 @@
 import {
   Activity,
+  Bot,
   Brain,
   ClipboardCheck,
+  Cpu,
+  Gauge,
   Lightbulb,
   ListChecks,
   ShieldAlert,
   Sparkles,
+  Timer,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 
@@ -19,6 +23,12 @@ import {
   executeBrainActionPlanAction,
   runBrainAnalysisAction,
 } from "@/modules/brain/actions";
+import { listBrainAgentsForTenant } from "@/modules/brain/agent-service";
+import { getBrainCoreConfiguration } from "@/modules/brain/core";
+import { getBrainTaskMetrics } from "@/modules/brain/metrics-service";
+import { listBrainAutomationJobs } from "@/modules/brain/automation-service";
+import { BrainChat } from "@/modules/brain/components/brain-chat";
+import { businessSkillRegistry } from "@/modules/brain/runtime";
 import {
   canManageBrain,
   getBrainActionPlans,
@@ -141,6 +151,103 @@ function SignalsPanel({ signals }: { signals: BrainSignal[] }) {
   );
 }
 
+function RuntimePanel({
+  agents,
+  jobs,
+  taskMetrics,
+}: {
+  agents: ReturnType<typeof listBrainAgentsForTenant>;
+  jobs: ReturnType<typeof listBrainAutomationJobs>;
+  taskMetrics: Awaited<ReturnType<typeof getBrainTaskMetrics>>["data"] | null;
+}) {
+  const availableAgents = agents.filter((agent) => agent.available).length;
+  const executableCapabilities = agents.reduce(
+    (total, agent) => total + agent.executableCapabilityCount,
+    0,
+  );
+  const activeJobs = jobs.filter((job) => job.available).length;
+  const cards = [
+    ["Tareas completadas", taskMetrics?.taskCompleted.toLocaleString("es-CR") ?? "0"],
+    ["Fallidas", taskMetrics?.taskFailed.toLocaleString("es-CR") ?? "0"],
+    ["Pendientes de aprobacion", taskMetrics?.pendingApproval.toLocaleString("es-CR") ?? "0"],
+    ["Eventos auditados", taskMetrics?.totalEvents.toLocaleString("es-CR") ?? "0"],
+  ];
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-3">
+      <div className="rounded-lg border bg-background p-5 xl:col-span-2">
+        <div className="flex items-center gap-2">
+          <Bot aria-hidden="true" size={20} />
+          <h2 className="text-base font-semibold">Agentes especializados</h2>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {availableAgents} de {agents.length} agentes disponibles con{" "}
+          {executableCapabilities} capabilities ejecutables para esta empresa.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {agents.map((agent) => (
+            <article className="rounded-md border p-3" key={agent.id}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">{agent.name}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {agent.executableCapabilityCount}/{agent.capabilityCount} capabilities listas
+                  </p>
+                </div>
+                <span className="rounded-md border px-2 py-1 text-xs">
+                  {agent.available ? "Activo" : "Limitado"}
+                </span>
+              </div>
+              {agent.reason ? (
+                <p className="mt-2 text-xs text-muted-foreground">{agent.reason}</p>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="rounded-lg border bg-background p-5">
+          <div className="flex items-center gap-2">
+            <Timer aria-hidden="true" size={20} />
+            <h2 className="text-base font-semibold">Automatizaciones</h2>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {activeJobs} de {jobs.length} jobs automaticos disponibles.
+          </p>
+          <div className="mt-4 grid gap-2">
+            {jobs.map((job) => (
+              <div className="rounded-md border p-3" key={job.id}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">{job.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {job.available ? job.schedule : "No disponible"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-background p-5">
+          <div className="flex items-center gap-2">
+            <Gauge aria-hidden="true" size={20} />
+            <h2 className="text-base font-semibold">Exito por tareas</h2>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {cards.map(([label, value]) => (
+              <div className="rounded-md border p-3" key={label}>
+                <p className="text-xs uppercase text-muted-foreground">{label}</p>
+                <strong className="mt-1 block text-sm">{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PlansPanel({
   canAnalyze,
   plans,
@@ -216,6 +323,8 @@ export default async function BrainPage({ searchParams }: BrainPageProps) {
     signalsResult,
     actionPlansResult,
     memoryResult,
+    coreConfigurationResult,
+    taskMetricsResult,
   ] = await Promise.all([
     getLatestBrainDailyMetrics(tenant),
     getBrainInsights(tenant),
@@ -223,6 +332,8 @@ export default async function BrainPage({ searchParams }: BrainPageProps) {
     getBrainSignals(tenant),
     getBrainActionPlans(tenant),
     getBrainMemory(tenant),
+    getBrainCoreConfiguration(tenant),
+    getBrainTaskMetrics(tenant),
   ]);
 
   if (!metricsResult.ok) {
@@ -243,7 +354,12 @@ export default async function BrainPage({ searchParams }: BrainPageProps) {
   const signals = signalsResult.ok ? signalsResult.data : [];
   const actionPlans = actionPlansResult.ok ? actionPlansResult.data : [];
   const memories = memoryResult.ok ? memoryResult.data : [];
+  const coreConfiguration = coreConfigurationResult.ok ? coreConfigurationResult.data : null;
+  const taskMetrics = taskMetricsResult.ok ? taskMetricsResult.data : null;
   const canAnalyze = canManageBrain(tenant);
+  const registeredSkillsCount = businessSkillRegistry.list().length;
+  const runtimeAgents = listBrainAgentsForTenant(tenant);
+  const automationJobs = listBrainAutomationJobs(tenant);
   const healthItems = [
     ["Senales activas", signals.length.toLocaleString("es-CR")],
     ["Insights activos", insights.length.toLocaleString("es-CR")],
@@ -275,6 +391,8 @@ export default async function BrainPage({ searchParams }: BrainPageProps) {
         <EphemeralPageAlert error={params.error} success={params.success} />
       ) : null}
 
+      <BrainChat variant="page" />
+
       <div className="rounded-lg border bg-background p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -294,6 +412,45 @@ export default async function BrainPage({ searchParams }: BrainPageProps) {
           <MetricGrid metrics={metrics} />
         </div>
       </div>
+
+      <div className="rounded-lg border bg-background p-5">
+        <div className="flex items-center gap-2">
+          <Cpu aria-hidden="true" size={20} />
+          <h2 className="text-base font-semibold">AI Core</h2>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-md border p-3">
+            <p className="text-xs uppercase text-muted-foreground">Proveedor activo</p>
+            <strong className="mt-1 block text-sm">
+              {coreConfiguration?.activeProvider ?? "No configurado"}
+            </strong>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-xs uppercase text-muted-foreground">Modelo</p>
+            <strong className="mt-1 block break-words text-sm">
+              {coreConfiguration?.model ?? "No configurado"}
+            </strong>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-xs uppercase text-muted-foreground">Credenciales</p>
+            <strong className="mt-1 block text-sm">
+              {coreConfiguration?.hasApiKey ? "Configuradas" : "Pendientes"}
+            </strong>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-xs uppercase text-muted-foreground">Business Skills</p>
+            <strong className="mt-1 block text-sm">
+              {registeredSkillsCount.toLocaleString("es-CR")} capacidades registradas
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      <RuntimePanel
+        agents={runtimeAgents}
+        jobs={automationJobs}
+        taskMetrics={taskMetrics}
+      />
 
       <div className="rounded-lg border bg-background p-5">
         <div className="flex items-center gap-2">

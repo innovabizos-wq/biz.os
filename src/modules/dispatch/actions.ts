@@ -194,6 +194,6 @@ export async function changeDispatchStatusAction(formData: FormData) {
     );
   }
 
-  revalidateDispatchPaths(parsed.data.despachoId);
+  revalidateDispatchPaths(parsed.data.despachoId, parsed.data.ventaId);
   redirect(`/despacho/${parsed.data.despachoId}`);
 }

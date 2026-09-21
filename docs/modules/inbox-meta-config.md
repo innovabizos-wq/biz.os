@@ -21,13 +21,11 @@ provisionar los datos tecnicos del canal.
 - Envio manual WhatsApp cuando el canal esta activo, configurado y con
   credenciales completas.
 
-## No incluye todavia
+## Conexion administrada
 
-- OAuth completo.
-- Meta Embedded Signup.
-- Bots, IA o automatizaciones.
-- Plantillas oficiales fuera de ventana de 24 horas.
-- Envio real por Facebook Messenger o Instagram.
+Facebook e Instagram usan OAuth/Login for Business. El cliente autoriza y el
+servidor guarda tokens, suscribe campos webhook y registra la identidad Meta
+para revocacion o eliminacion. WhatsApp continua como provision administrada.
 
 ## Modelo multiempresa y provision
 
@@ -107,9 +105,10 @@ Inbox que validan usuario, empresa y permiso antes de llamar RPCs reservadas a
 - `/inbox/canales/nuevo`
 - `/inbox/canales/[canalId]`
 
-## Proximos pasos
+## Operacion actual
 
-- Plantillas oficiales.
-- OAuth / Embedded Signup para reducir copia manual de IDs y tokens.
-- Platform Console para provision y soporte Whapp.
-- Estados delivered/read.
+- Plantillas oficiales sincronizadas por WABA.
+- Estados sent/delivered/read para WhatsApp, Messenger e Instagram.
+- Platform Console con canales, salud y tarifas.
+- Endpoints de privacidad, eliminacion y desautorizacion Meta.
+- Guia completa: `docs/whapp-meta-production.md`.

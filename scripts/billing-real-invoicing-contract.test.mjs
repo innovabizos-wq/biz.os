@@ -13,6 +13,9 @@ function exists(path) {
 }
 
 const migration = source("database/migrations/0061_billing_fiscal_foundation.sql");
+const fiscalV44ProfileMigration = source(
+  "supabase/migrations/20260914120000_fiscal_v44_required_profile.sql",
+);
 
 test("billing routes exist and are protected by module and permission guards", () => {
   for (const route of [
@@ -88,6 +91,29 @@ test("billing migration creates fiscal foundation without destructive operations
   assert.doesNotMatch(migration, /delete\s+from\s+public\.(ventas|venta_items|facturas_electronicas)/i);
 });
 
+test("fiscal 4.4 profile migration enriches documents and keeps customer writes tenant guarded", () => {
+  assert.match(fiscalV44ProfileMigration, /software_provider_identification/);
+  assert.match(fiscalV44ProfileMigration, /fiscal_identification_type/);
+  assert.match(fiscalV44ProfileMigration, /create or replace function public\.enrich_new_fiscal_document_v44/);
+  assert.match(fiscalV44ProfileMigration, /before insert on public\.fiscal_documents/);
+  assert.match(fiscalV44ProfileMigration, /missing_software_provider_identification/);
+  assert.match(fiscalV44ProfileMigration, /missing_issuer_address/);
+  assert.match(fiscalV44ProfileMigration, /missing_receiver_identification_type/);
+  assert.match(fiscalV44ProfileMigration, /create or replace function public\.set_crm_customer_fiscal_identification_type/);
+  assert.match(fiscalV44ProfileMigration, /public\.current_empresa_id\(\)/);
+  assert.match(fiscalV44ProfileMigration, /public\.current_user_has_permission\('crm\.customers\.edit'\)/);
+  assert.match(
+    fiscalV44ProfileMigration,
+    /revoke all on function public\.set_crm_customer_fiscal_identification_type\(uuid, text\) from anon/,
+  );
+  assert.match(
+    fiscalV44ProfileMigration,
+    /grant execute on function public\.set_crm_customer_fiscal_identification_type\(uuid, text\) to authenticated/,
+  );
+  assert.doesNotMatch(fiscalV44ProfileMigration, /drop\s+(table|column)\b/i);
+  assert.doesNotMatch(fiscalV44ProfileMigration, /delete\s+from\b/i);
+});
+
 test("billing does not expose service role or secrets in user-facing code", () => {
   const actions = source("src/modules/billing/actions.ts");
   const fiscalPage = source("src/app/(app)/admin/fiscal/page.tsx");
@@ -125,7 +151,7 @@ test("billing does not expose service role or secrets in user-facing code", () =
   assert.match(actions, /billing\.issue/);
 });
 
-test("billing XML, signing and Hacienda interfaces fail explicitly when not real", () => {
+test("billing XML, XAdES and Hacienda transport fail closed on real contracts", () => {
   const sequences = source("src/modules/billing/sequences.ts");
 
   assert.match(sequences, /generateFiscalClave/);
@@ -136,8 +162,22 @@ test("billing XML, signing and Hacienda interfaces fail explicitly when not real
   assert.match(source("src/modules/billing/xml/builders.ts"), /DetalleServicio/);
   assert.match(source("src/modules/billing/xml/builders.ts"), /CodigoCABYS/);
   assert.match(source("src/modules/billing/xml/builders.ts"), /ResumenFactura/);
-  assert.match(source("src/modules/billing/xml/validation.ts"), /BILLING_XML_VALIDATION_ENABLED/);
-  assert.match(source("src/modules/billing/xml/validation.ts"), /Validacion XSD XML 4\.4 no configurada/);
+  assert.match(source("src/modules/billing/xml/builders.ts"), /ProveedorSistemas/);
+  assert.match(source("src/modules/billing/xml/builders.ts"), /BaseImponible/);
+  assert.match(source("src/modules/billing/xml/builders.ts"), /CodigoTipoMoneda/);
+  assert.match(source("src/modules/billing/xml/builders.ts"), /ImpuestoAsumidoEmisorFabrica/);
+  assert.match(source("src/modules/billing/xml/validation.ts"), /xmllint-wasm/);
+  assert.match(source("src/modules/billing/xml/validation.ts"), /OfficialHaciendaXsdValidator/);
+  assert.match(source("src/modules/billing/xml/validation.ts"), /xmldsig-core-schema\.xsd/);
+  assert.doesNotMatch(source("src/modules/billing/xml/validation.ts"), /BILLING_XML_VALIDATION_ENABLED/);
+  for (const xsd of [
+    "FacturaElectronica_V4.4.xsd",
+    "NotaCreditoElectronica_V4.4.xsd",
+    "NotaDebitoElectronica_V4.4.xsd",
+    "TiqueteElectronico_V4.4.xsd",
+  ]) {
+    assert.ok(exists(`src/modules/billing/xml/schemas/2024/v4.4/${xsd}`));
+  }
   assert.match(source("src/modules/billing/queries.ts"), /fiscal_document_line_taxes/);
   assert.match(source("src/modules/billing/actions.ts"), /fiscal_document_artifacts/);
   assert.match(source("src/modules/billing/actions.ts"), /reserve_fiscal_sequence_for_current_company/);
@@ -176,7 +216,24 @@ test("billing XML, signing and Hacienda interfaces fail explicitly when not real
   assert.match(source("src/modules/billing/actions.ts"), /No se marca como aceptado/);
   assert.match(source("src/modules/billing/hacienda/config.ts"), /BILLING_HACIENDA_SEND_ENABLED/);
   assert.match(source("src/modules/billing/hacienda/config.ts"), /BILLING_HACIENDA_STATUS_ENABLED/);
-  assert.match(source("src/modules/billing/hacienda/client.ts"), /describeHaciendaReadiness/);
+  const haciendaClient = source("src/modules/billing/hacienda/client.ts");
+  const haciendaConfig = source("src/modules/billing/hacienda/config.ts");
+  assert.match(haciendaConfig, /api\.comprobanteselectronicos\.go\.cr\/recepcion\/v1/);
+  assert.match(haciendaConfig, /api\.comprobanteselectronicos\.go\.cr\/recepcion-sandbox\/v1/);
+  assert.match(haciendaConfig, /idp\.comprobanteselectronicos\.go\.cr\/auth\/realms\/rut/);
+  assert.match(haciendaConfig, /clientId: "api-prod"/);
+  assert.match(haciendaConfig, /clientId: "api-stag"/);
+  assert.match(haciendaClient, /grant_type: "password"/);
+  assert.match(haciendaClient, /comprobanteXml/);
+  assert.match(haciendaClient, /Buffer\.from\(params\.signedXml, "utf8"\)\.toString\("base64"\)/);
+  assert.match(haciendaClient, /getHaciendaClientForCompany/);
+  assert.match(haciendaClient, /\.eq\("provider_code", "hacienda"\)/);
+  assert.match(haciendaClient, /\.eq\("status", "active"\)/);
+  assert.match(haciendaClient, /ya fue recibido/);
+  assert.match(haciendaClient, /await this\.queryStatus\(params\.clave\)/);
+  assert.match(haciendaClient, /status === "recibido"/);
+  assert.match(haciendaClient, /assertHaciendaOperationEnabled\("send", this\.environment\)/);
+  assert.match(haciendaClient, /assertHaciendaOperationEnabled\("status", this\.environment\)/);
   assert.match(source("src/app/(app)/facturacion/documentos/[documentoId]/page.tsx"), /Consultar estado/);
   assert.match(source("src/app/(app)/facturacion/documentos/[documentoId]/page.tsx"), /Emitir ahora/);
   assert.match(source("src/modules/billing/actions.ts"), /generateFiscalPdfRepresentationAction/);
@@ -200,11 +257,12 @@ test("billing XML, signing and Hacienda interfaces fail explicitly when not real
   assert.match(source("src/app/(app)/facturacion/cabys/page.tsx"), /no se crean codigos falsos/);
   assert.match(migration, /cabys_catalog_write_billing/);
   assert.match(source("src/modules/billing/pdf/representation.ts"), /La factura electronica real es el XML firmado y aceptado/);
-  assert.match(source("src/modules/billing/received/xml.ts"), /pendingXsdValidation/);
-  assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /Registrar XML recibido/);
+  assert.match(source("src/modules/billing/received/xml.ts"), /secure-dom-v1/);
+  assert.match(source("src/modules/billing/received/xml.ts"), /unsafe_xml_declaration/);
+  assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /Revisar e importar XML 4\.4/);
   assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /prepareReceiverMessageAction/);
-  assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /No envia a Hacienda/);
-  assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /mensaje receptor a Hacienda queda pendiente/);
+  assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /Preparar no envia a Hacienda/);
+  assert.match(source("src/app/(app)/facturacion/recepcion/page.tsx"), /estado de Hacienda sin una respuesta oficial/);
   assert.match(source("src/app/(app)/facturacion/documentos/[documentoId]/page.tsx"), /Archivo documental/);
   assert.match(source("src/app/api/facturacion/documentos/[documentoId]/artefactos/[artifactId]/route.ts"), /Content-Disposition/);
   assert.match(source("src/app/api/facturacion/documentos/[documentoId]/artefactos/[artifactId]/route.ts"), /canUseBilling/);
@@ -214,8 +272,17 @@ test("billing XML, signing and Hacienda interfaces fail explicitly when not real
   assert.match(source("src/app/(app)/facturacion/reportes/page.tsx"), /Recuperacion fiscal manual/);
   assert.match(source("src/modules/platform-console/queries.ts"), /get_platform_billing_health/);
   assert.match(source("src/app/platform/empresas/[empresaId]/page.tsx"), /Diagnostico fiscal seguro/);
-  assert.match(source("src/modules/billing/signing/signer.ts"), /no se puede marcar XML como firmado/);
-  assert.match(source("src/modules/billing/hacienda/client.ts"), /no se puede enviar XML sin OAuth/);
+  const signer = source("src/modules/billing/signing/signer.ts");
+  const pkcs12Signer = source("src/modules/billing/signing/pkcs12.ts");
+  assert.match(signer, /HaciendaPkcs12BillingXmlSigner/);
+  assert.match(signer, /company_fiscal_connections/);
+  assert.match(signer, /signXmlWithPkcs12/);
+  assert.match(pkcs12Signer, /XAdES-EPES\/RSA-SHA256/);
+  assert.match(pkcs12Signer, /RSASSA-PKCS1-v1_5/);
+  assert.match(pkcs12Signer, /MH-DGT-RES-0027-2024/);
+  assert.match(pkcs12Signer, /signatures\.length !== 1/);
+  assert.match(pkcs12Signer, /await verifier\.Verify\(\)/);
+  assert.match(source("src/modules/billing/hacienda/client.ts"), /Authorization: `Bearer \$\{await this\.token\(\)\}`/);
   assert.match(source("src/modules/billing/xml/builders.ts"), /Tipo documental preparado pero no implementado todavia/);
 });
 

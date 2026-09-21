@@ -4,6 +4,18 @@ import type { FiscalXmlBuildResult, FiscalXmlDocumentType } from "@/modules/bill
 
 const SUPPORTED_DOCUMENT_TYPES: FiscalXmlDocumentType[] = ["01", "02", "03", "04"];
 
+function text(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function nestedRecord(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function normalizeDocumentType(value: string): FiscalXmlDocumentType {
   if (SUPPORTED_DOCUMENT_TYPES.includes(value as FiscalXmlDocumentType)) {
     return value as FiscalXmlDocumentType;
@@ -25,6 +37,18 @@ export function buildUnsignedXmlFromFiscalDocument(
     );
   }
 
+  const issuerAddress = nestedRecord(document.issuerSnapshot, "address");
+  const totalComprobante =
+    typeof document.totals.totalComprobante === "number"
+      ? document.totals.totalComprobante
+      : null;
+  const defaultPaymentMethod =
+    text(document.issuerSnapshot, "defaultPaymentMethodCode") ?? "01";
+  const exchangeRate = document.exchangeRate ?? (document.currencyCode === "CRC" ? 1 : 0);
+  if (exchangeRate <= 0) {
+    throw new Error("Falta el tipo de cambio utilizado por el documento fiscal.");
+  }
+
   return buildBasicFiscalXml({
     activityCode:
       typeof document.issuerSnapshot.activityCode === "string"
@@ -32,35 +56,52 @@ export function buildUnsignedXmlFromFiscalDocument(
         : null,
     clave: document.clave,
     consecutivo: document.consecutivo,
+    creditTermDays: document.creditTermDays,
+    currencyCode: document.currencyCode,
     documentTypeCode: normalizeDocumentType(document.documentTypeCode),
+    exchangeRate,
     issuer: {
-      email: typeof document.issuerSnapshot.email === "string" ? document.issuerSnapshot.email : null,
-      identificationNumber:
-        typeof document.issuerSnapshot.identificationNumber === "string"
-          ? document.issuerSnapshot.identificationNumber
-          : null,
-      identificationType:
-        typeof document.issuerSnapshot.identificationType === "string"
-          ? document.issuerSnapshot.identificationType
-          : null,
-      legalName:
-        typeof document.issuerSnapshot.legalName === "string" ? document.issuerSnapshot.legalName : null,
+      address: {
+        addressLine: text(issuerAddress, "addressLine"),
+        cantonCode: text(issuerAddress, "cantonCode"),
+        districtCode: text(issuerAddress, "districtCode"),
+        neighborhood: text(issuerAddress, "neighborhood"),
+        provinceCode: text(issuerAddress, "provinceCode"),
+      },
+      email: text(document.issuerSnapshot, "email"),
+      identificationNumber: text(document.issuerSnapshot, "identificationNumber"),
+      identificationType: text(document.issuerSnapshot, "identificationType"),
+      legalName: text(document.issuerSnapshot, "legalName"),
+      softwareProviderIdentification: text(
+        document.issuerSnapshot,
+        "softwareProviderIdentification",
+      ),
     },
     issueDate: document.issueDatetime ?? document.createdAt,
     lines: document.lines.map((line) => ({
       cabysCode: line.cabysCode,
+      commercialCode: line.commercialCode,
       detail: line.detail,
       discountAmount: line.discountAmount,
       grossAmount: line.grossAmount,
       lineNumber: line.lineNumber,
       quantity: line.quantity,
       subtotal: line.subtotal,
+      taxableBase: line.taxableBase,
       taxAmount: line.taxAmount,
       taxes: line.taxes,
       totalLineAmount: line.totalLineAmount,
       unitCode: line.unitCode,
       unitPrice: line.unitPrice,
     })),
+    paymentMethods: document.payments.length
+      ? document.payments.map((payment) => ({
+          amount: payment.amount,
+          code: payment.paymentMethodCode,
+        }))
+      : totalComprobante !== null
+        ? [{ amount: totalComprobante, code: defaultPaymentMethod }]
+        : [],
     receiver: {
       email: document.receiverEmail,
       identificationNumber:
@@ -70,9 +111,19 @@ export function buildUnsignedXmlFromFiscalDocument(
       identificationType: document.receiverIdentificationType,
       name: document.receiverName,
     },
+    references: document.references.map((reference) => ({
+      code: reference.referenceCode,
+      documentTypeCode: reference.referenceDocumentTypeCode,
+      issueDate: reference.referenceIssueDate,
+      reason: reference.reason,
+      reference: reference.referenceClave,
+    })),
+    saleConditionCode:
+      document.saleConditionCode ??
+      text(document.issuerSnapshot, "defaultSaleConditionCode") ??
+      "01",
     totals: {
-      totalComprobante:
-        typeof document.totals.totalComprobante === "number" ? document.totals.totalComprobante : null,
+      totalComprobante,
       totalDescuentos:
         typeof document.totals.totalDescuentos === "number" ? document.totals.totalDescuentos : null,
       totalImpuestos:

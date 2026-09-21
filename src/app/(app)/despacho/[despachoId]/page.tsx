@@ -3,11 +3,15 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { DispatchForm } from "@/modules/dispatch/components/dispatch-form";
+import { DispatchEvidenceList } from "@/modules/dispatch/components/dispatch-evidence-list";
+import { DispatchMobileProofPanel } from "@/modules/dispatch/components/dispatch-mobile-proof-panel";
 import { DispatchStatusActions } from "@/modules/dispatch/components/dispatch-status-actions";
 import { DispatchSummaryCard } from "@/modules/dispatch/components/dispatch-summary-card";
 import {
   getAssignableUsersForDispatch,
+  getDispatchDeliveryEvidence,
   getDispatchDetail,
 } from "@/modules/dispatch/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
@@ -32,6 +36,9 @@ export default async function DispatchDetailPage({
     access.tenant.permissions,
     "dispatch.orders.status.change",
   );
+  const canUseMobile = canChangeStatus
+    && isModuleActive(access.tenant.activeModules, "mobile")
+    && hasPermission(access.tenant.permissions, "mobile.access");
 
   if (!canView) {
     return (
@@ -49,9 +56,10 @@ export default async function DispatchDetailPage({
     );
   }
 
-  const [dispatch, users] = await Promise.all([
+  const [dispatch, users, evidence] = await Promise.all([
     getDispatchDetail(access.tenant, despachoId),
     getAssignableUsersForDispatch(access.tenant),
+    getDispatchDeliveryEvidence(access.tenant, despachoId),
   ]);
 
   if (!dispatch.ok || !dispatch.data) {
@@ -92,6 +100,13 @@ export default async function DispatchDetailPage({
 
       <DispatchSummaryCard dispatch={dispatch.data} />
 
+      <DispatchMobileProofPanel
+        canChangeStatus={canUseMobile}
+        dispatch={dispatch.data}
+      />
+
+      <DispatchEvidenceList evidence={evidence.ok ? evidence.data : []} />
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border bg-background p-5">
           <p className="font-semibold">Datos de entrega</p>
@@ -124,10 +139,6 @@ export default async function DispatchDetailPage({
         />
       ) : null}
 
-      <div className="rounded-lg border border-dashed bg-background p-5 text-sm text-muted-foreground">
-        Rutas, mapas, tracking y pruebas de entrega se implementarán en fases
-        posteriores.
-      </div>
     </section>
   );
 }

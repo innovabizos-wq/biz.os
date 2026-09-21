@@ -1,14 +1,18 @@
 import { createHash } from "node:crypto";
 
 import { createClient } from "@/lib/supabase/server";
-import { getHaciendaClient } from "@/modules/billing/hacienda/client";
+import { getHaciendaClientForConnection } from "@/modules/billing/hacienda/client";
+import { archiveOfficialHaciendaResponseXml } from "@/modules/billing/hacienda/artifacts";
 import type { HaciendaStatusResult } from "@/modules/billing/hacienda/types";
 import type { TenantContext } from "@/types/core";
 
 type RecoverableFiscalDocumentRow = {
   clave: string | null;
+  fiscal_connection_id: string | null;
   hacienda_status: string;
   id: string;
+  provider_code: string | null;
+  provider_environment: "testing" | "production" | null;
   status: string;
 };
 
@@ -91,13 +95,22 @@ async function archiveHaciendaRecoveryResponse(
     throw new Error("Hacienda respondio, pero no se pudo archivar la respuesta de recuperacion.");
   }
 
+  const officialResponsePath = await archiveOfficialHaciendaResponseXml({
+    empresaId: tenant.empresaId,
+    fiscalDocumentId: document.id,
+    generatedBy: "recoverPendingFiscalDocuments",
+    responseXmlBase64: result.responseXmlBase64,
+  });
+
   const { error: updateError } = await supabase
     .from("fiscal_documents")
     .update({
       accepted_at: result.status === "aceptado" ? now : null,
-      hacienda_response_storage_path: responseStoragePath,
+      hacienda_response_storage_path: officialResponsePath ?? responseStoragePath,
       hacienda_status: result.status,
       last_error: result.status === "error" ? "Hacienda retorno error en recuperacion." : null,
+      provider_last_response_at: now,
+      provider_status: result.status,
       rejected_at: result.status === "rechazado" ? now : null,
       status: nextDocumentStatus(result.status),
     })
@@ -118,7 +131,7 @@ export async function recoverPendingFiscalDocuments(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("fiscal_documents")
-    .select("id, clave, status, hacienda_status")
+    .select("id, clave, status, hacienda_status, fiscal_connection_id, provider_code, provider_environment")
     .eq("empresa_id", tenant.empresaId)
     .in("status", RECOVERABLE_STATUSES)
     .order("updated_at", { ascending: true })
@@ -142,6 +155,10 @@ export async function recoverPendingFiscalDocuments(
     skipped: 0,
     updated: 0,
   };
+  const haciendaClients = new Map<
+    string,
+    Awaited<ReturnType<typeof getHaciendaClientForConnection>>
+  >();
 
   for (const document of documents) {
     if (!shouldQueryHacienda(document)) {
@@ -149,9 +166,29 @@ export async function recoverPendingFiscalDocuments(
       continue;
     }
 
+    if (
+      !document.fiscal_connection_id ||
+      document.provider_code !== "hacienda" ||
+      !document.provider_environment
+    ) {
+      summary.errors.push(
+        `El documento ${document.id} no conserva una conexión Hacienda válida; requiere conciliación manual.`,
+      );
+      continue;
+    }
+
     try {
       summary.queriedHacienda += 1;
-      const result = await getHaciendaClient().queryStatus(document.clave as string);
+      let haciendaClient = haciendaClients.get(document.fiscal_connection_id);
+      if (!haciendaClient) {
+        haciendaClient = await getHaciendaClientForConnection(
+          tenant.empresaId,
+          document.fiscal_connection_id,
+          document.provider_environment,
+        );
+        haciendaClients.set(document.fiscal_connection_id, haciendaClient);
+      }
+      const result = await haciendaClient.queryStatus(document.clave as string);
       await archiveHaciendaRecoveryResponse(tenant, document, result);
       summary.updated += 1;
     } catch (error) {

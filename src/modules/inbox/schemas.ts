@@ -164,11 +164,17 @@ export const addInboxCampaignRecipientSchema = z.object({
   clienteId: optionalFormUuidSchema,
   conversacionId: optionalFormUuidSchema,
   externalRecipientId: optionalTextSchema,
+  marketCode: z.union([
+    z.string().trim().toUpperCase().regex(/^[A-Z0-9_]{2,48}$/),
+    z.literal(""),
+  ]).optional(),
   nombre: optionalTextSchema,
   optIn: z.coerce.boolean().refine((value) => value, {
     message: "El opt-in es obligatorio para cargar destinatarios de campana.",
   }),
+  optInEvidence: nonEmptyTextSchema,
   optInSource: nonEmptyTextSchema.default("manual_whapp"),
+  optInTermsVersion: nonEmptyTextSchema,
   telefono: nonEmptyTextSchema,
   variables: optionalTextSchema,
 });

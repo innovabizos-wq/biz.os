@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getConversationProviderAdapter } from "@/lib/ai/providers";
+import type { AiProviderGenerateResult } from "@/lib/ai/providers/types";
 import { createClient } from "@/lib/supabase/server";
 import {
   conversationLayerIntentSchema,
@@ -69,6 +70,45 @@ export const DEFAULT_CONVERSATION_LAYER_SETTINGS: ConversationLayerSettings = {
   provider: "gemini",
   temperature: 0.2,
 };
+
+export async function recordBrainProviderEvent(input: {
+  errorCode?: string;
+  feature: string;
+  result?: AiProviderGenerateResult;
+  settings: ConversationLayerSettingsForProvider;
+  status: "error" | "logged";
+}) {
+  const metadata = {
+    durationMs: input.result?.durationMs ?? null,
+    errorCode: input.errorCode ?? null,
+    model: input.settings.model,
+    responseId: input.result?.responseId ?? null,
+  } satisfies JsonRecord;
+
+  console.info(
+    "[biz.brain.provider]",
+    JSON.stringify({
+      feature: input.feature,
+      provider: input.settings.provider,
+      status: input.status,
+      ...metadata,
+    }),
+  );
+
+  try {
+    const supabase = await createClient();
+    await supabase.rpc("registrar_ai_usage_event", {
+      p_completion_tokens: input.result?.usage?.completionTokens ?? 0,
+      p_feature: input.feature,
+      p_metadata: metadata,
+      p_prompt_tokens: input.result?.usage?.promptTokens ?? 0,
+      p_provider: input.settings.provider,
+      p_status: input.status,
+    });
+  } catch {
+    // Structured server logs remain available when the usage RPC is not authorized.
+  }
+}
 
 function conversationLayerFail<T>(
   code: ConversationLayerErrorCode,
@@ -316,9 +356,21 @@ export async function testConversationProvider(
 
   try {
     const adapter = getConversationProviderAdapter(settings.data.provider);
-    await adapter.test(settings.data);
+    const result = await adapter.test(settings.data);
+    await recordBrainProviderEvent({
+      feature: "brain.provider.test",
+      result,
+      settings: settings.data,
+      status: "logged",
+    });
     return updateTestStatus("success", "Conexion correcta con el proveedor.");
-  } catch {
+  } catch (error) {
+    await recordBrainProviderEvent({
+      errorCode: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      feature: "brain.provider.test",
+      settings: settings.data,
+      status: "error",
+    });
     const message =
       "No se pudo conectar con el proveedor de IA. Revise la API Key, el modelo seleccionado o la URL base.";
     await updateTestStatus("error", message);
@@ -360,14 +412,33 @@ export async function interpretUserMessage(
     );
 
     if (!parsed.success) {
+      await recordBrainProviderEvent({
+        errorCode: "INVALID_AI_RESPONSE",
+        feature: "brain.intent.route",
+        result,
+        settings: settings.data,
+        status: "error",
+      });
       return conversationLayerFail(
         "INVALID_AI_RESPONSE",
         "El proveedor no devolvio una intencion valida.",
       );
     }
 
+    await recordBrainProviderEvent({
+      feature: "brain.intent.route",
+      result,
+      settings: settings.data,
+      status: "logged",
+    });
     return ok(parsed.data);
   } catch (error) {
+    await recordBrainProviderEvent({
+      errorCode: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      feature: "brain.intent.route",
+      settings: settings.data,
+      status: "error",
+    });
     if (error instanceof Error && error.message === "JSON_PARSE_FAILED") {
       return conversationLayerFail(
         "JSON_PARSE_FAILED",
@@ -416,14 +487,33 @@ export async function naturalizeSystemResponse(
     );
 
     if (!parsed.success) {
+      await recordBrainProviderEvent({
+        errorCode: "INVALID_AI_RESPONSE",
+        feature: "brain.response.naturalize",
+        result,
+        settings: settings.data,
+        status: "error",
+      });
       return conversationLayerFail(
         "INVALID_AI_RESPONSE",
         "El proveedor no devolvio un mensaje valido.",
       );
     }
 
+    await recordBrainProviderEvent({
+      feature: "brain.response.naturalize",
+      result,
+      settings: settings.data,
+      status: "logged",
+    });
     return ok(parsed.data);
   } catch (error) {
+    await recordBrainProviderEvent({
+      errorCode: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      feature: "brain.response.naturalize",
+      settings: settings.data,
+      status: "error",
+    });
     if (error instanceof Error && error.message === "JSON_PARSE_FAILED") {
       return conversationLayerFail(
         "JSON_PARSE_FAILED",

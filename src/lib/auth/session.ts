@@ -23,6 +23,7 @@ type ProfileRow = {
   estado: Profile["estado"];
   id: string;
   nombre: string;
+  requiere_cambio_contrasena: boolean;
   rol_id: string | null;
   sucursal_id: string | null;
   telefono: string | null;
@@ -42,6 +43,7 @@ function mapProfile(row: ProfileRow): Profile {
     estado: row.estado,
     id: row.id,
     nombre: row.nombre,
+    requiereCambioContrasena: row.requiere_cambio_contrasena,
     rolId: row.rol_id,
     sucursalId: row.sucursal_id,
     telefono: row.telefono,
@@ -164,7 +166,7 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, empresa_id, sucursal_id, rol_id, nombre, correo, telefono, estado, ultimo_acceso, created_at, updated_at",
+      "id, empresa_id, sucursal_id, rol_id, nombre, correo, telefono, requiere_cambio_contrasena, estado, ultimo_acceso, created_at, updated_at",
     )
     .eq("id", userResult.data.id)
     .maybeSingle<ProfileRow>();

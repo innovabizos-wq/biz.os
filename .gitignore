@@ -31,6 +31,15 @@ yarn-error.log*
 .pnpm-debug.log*
 .codex-*.log
 *.log
+.codex-dev-*
+.codex-npm-cache/
+.codex-vercel-cli/
+.codex-whatsapp-*
+.codex-whatsapp-test-runner/
+.tmp-*
+tmp-*
+*.tar.gz
+dashboard2-static-browser.png
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -47,3 +56,4 @@ biz.os_revision_*.tar.gz
 next-env.d.ts
 
 .vercel
+/.swc

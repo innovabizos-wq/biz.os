@@ -6,6 +6,7 @@ import type {
 import type { ConversationLayerSettingsForProvider } from "@/modules/ai/types";
 
 const DEFAULT_OPENAI_COMPATIBLE_BASE_URL = "https://api.openai.com/v1";
+const PROVIDER_TIMEOUT_MS = 30_000;
 
 function getDefaultBaseUrl(provider: ConversationLayerSettingsForProvider["provider"]) {
   if (provider === "groq-compatible") return "https://api.groq.com/openai/v1";
@@ -36,20 +37,35 @@ async function generateJson(
     headers.Authorization = `Bearer ${input.settings.apiKey}`;
   }
 
-  const response = await fetch(getChatCompletionsUrl(input.settings), {
-    body: JSON.stringify({
-      max_tokens: input.settings.maxTokens,
-      messages: input.messages,
-      model: input.settings.model,
-      response_format:
-        input.settings.outputMode === "strict_json"
-          ? { type: "json_object" }
-          : undefined,
-      temperature: input.settings.temperature,
-    }),
-    headers,
-    method: "POST",
-  });
+  const startedAt = performance.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  let response: Response;
+
+  try {
+    response = await fetch(getChatCompletionsUrl(input.settings), {
+      body: JSON.stringify({
+        max_tokens: input.settings.maxTokens,
+        messages: input.messages,
+        model: input.settings.model,
+        response_format:
+          input.settings.outputMode === "strict_json"
+            ? { type: "json_object" }
+            : undefined,
+        temperature: input.settings.temperature,
+      }),
+      headers,
+      method: "POST",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("PROVIDER_TIMEOUT");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const details = await response.text().catch(() => "");
@@ -60,6 +76,12 @@ async function generateJson(
 
   const payload = await response.json() as {
     choices?: Array<{ message?: { content?: string } }>;
+    id?: string;
+    usage?: {
+      completion_tokens?: number;
+      prompt_tokens?: number;
+      total_tokens?: number;
+    };
   };
   const content = payload.choices?.[0]?.message?.content;
 
@@ -67,7 +89,18 @@ async function generateJson(
     throw new Error("INVALID_AI_RESPONSE");
   }
 
-  return { content };
+  return {
+    content,
+    durationMs: Math.round(performance.now() - startedAt),
+    responseId: payload.id,
+    usage: payload.usage
+      ? {
+          completionTokens: Number(payload.usage.completion_tokens ?? 0),
+          promptTokens: Number(payload.usage.prompt_tokens ?? 0),
+          totalTokens: Number(payload.usage.total_tokens ?? 0),
+        }
+      : undefined,
+  };
 }
 
 async function test(settings: ConversationLayerSettingsForProvider) {

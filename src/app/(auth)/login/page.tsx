@@ -24,6 +24,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const invitationToken = params?.invitation_token ?? pendingInvitationToken;
 
   if (userResult.ok && userResult.data && profileResult.ok && profileResult.data) {
+    if (profileResult.data.requiereCambioContrasena) {
+      redirect("/cambiar-contrasena");
+    }
+
     if (process.env.NODE_ENV !== "production") {
       console.info("[loginPage] active session found; redirect dashboard");
     }
@@ -41,6 +45,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       console.info("[loginPage] session without profile; redirect invitation");
     }
     redirect(`/invitation?token=${encodeURIComponent(invitationToken)}`);
+  }
+
+  if (userResult.ok && userResult.data && profileResult.ok && !profileResult.data) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[loginPage] session without profile; redirect onboarding");
+    }
+    redirect("/onboarding");
   }
 
   const signupHref = invitationToken

@@ -25,6 +25,7 @@ export function SaleInventoryItemsTable({ items }: SaleInventoryItemsTableProps)
             <th className="px-4 py-3">Descripcion</th>
             <th className="px-4 py-3">Requerido</th>
             <th className="px-4 py-3">Inventario</th>
+            <th className="px-4 py-3">Bodega reservada</th>
             <th className="px-4 py-3">Stock disponible</th>
             <th className="px-4 py-3">Estado stock</th>
           </tr>
@@ -49,6 +50,7 @@ export function SaleInventoryItemsTable({ items }: SaleInventoryItemsTableProps)
               <td className="px-4 py-3">
                 {getInventoryLabel(item)}
               </td>
+              <td className="px-4 py-3">{item.bodegaNombre ?? "-"}</td>
               <td className="px-4 py-3">
                 {formatQuantity(item.stockDisponible)}
               </td>

@@ -8,6 +8,7 @@ import type {
   PlatformCompanyModule,
   PlatformCompanyUser,
   PlatformHealthItem,
+  PlatformMetaRate,
   PlatformSummary,
   PlatformWhappChannel,
 } from "@/modules/platform-console/types";
@@ -94,6 +95,19 @@ type WhappChannelRow = {
   proveedor: string;
   proveedor_estado: string | null;
   webhook_url: string | null;
+};
+
+type MetaRateRow = {
+  categoria: string;
+  currency: string;
+  effective_from: string;
+  effective_to: string | null;
+  id: string;
+  market_code: string;
+  source_url: string | null;
+  unit_cost: number | string;
+  volume_from: number | string;
+  volume_to: number | string | null;
 };
 
 function relationOne<T>(value: T | T[] | null | undefined): T | null {
@@ -472,5 +486,36 @@ export async function getPlatformWhappChannels(): Promise<
         webhookUrl: channel.webhook_url,
       };
     }),
+  );
+}
+
+export async function getPlatformMetaRates(): Promise<CoreResult<PlatformMetaRate[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_meta_tarifas")
+    .select(
+      "id, market_code, categoria, currency, unit_cost, volume_from, volume_to, effective_from, effective_to, source_url",
+    )
+    .order("effective_from", { ascending: false })
+    .order("volume_from", { ascending: true })
+    .limit(100);
+
+  if (error) {
+    return fail("PERMISSION_DENIED", "No se pudieron cargar las tarifas Meta.", error);
+  }
+
+  return ok(
+    ((data ?? []) as MetaRateRow[]).map((rate) => ({
+      category: rate.categoria,
+      currency: rate.currency,
+      effectiveFrom: rate.effective_from,
+      effectiveTo: rate.effective_to,
+      id: rate.id,
+      marketCode: rate.market_code,
+      sourceUrl: rate.source_url,
+      unitCost: Number(rate.unit_cost),
+      volumeFrom: Number(rate.volume_from),
+      volumeTo: rate.volume_to === null ? null : Number(rate.volume_to),
+    })),
   );
 }

@@ -93,6 +93,10 @@ export function WhappCampaignsTable({
                 <p>env: {campaign.sentCount}</p>
                 <p>resp: {campaign.repliedCount}</p>
                 <p>fall: {campaign.failedCount}</p>
+                <p>
+                  costo: {campaign.costCurrency ?? "-"} {campaign.actualCost.toFixed(4)}
+                </p>
+                <p>cobro: {campaign.billingStatus}</p>
               </td>
               {canManage ? (
                 <td className="min-w-48 px-4 py-3">

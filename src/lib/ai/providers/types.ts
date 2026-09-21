@@ -12,6 +12,13 @@ export type AiProviderGenerateInput = {
 
 export type AiProviderGenerateResult = {
   content: string;
+  durationMs: number;
+  responseId?: string;
+  usage?: {
+    completionTokens: number;
+    promptTokens: number;
+    totalTokens: number;
+  };
 };
 
 export type AiProviderAdapter = {

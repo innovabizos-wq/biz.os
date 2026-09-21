@@ -227,6 +227,7 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   const parsed = receivePurchaseOrderSchema.safeParse({
     ...getFormData(formData),
     items: getReceiptItemsFromForm(formData),
+    operationId: formData.get("operationId"),
   });
 
   if (!parsed.success) {
@@ -236,9 +237,10 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   await assertPurchasesPermission(["purchases.orders.manage"]);
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("recibir_orden_compra_parcial", {
+  const { error } = await supabase.rpc("receive_purchase_order_atomic", {
     p_items: parsed.data.items,
-    p_notas: parsed.data.notas ?? null,
+    p_notes: parsed.data.notas ?? null,
+    p_operation_id: parsed.data.operationId,
     p_order_id: parsed.data.orderId,
   });
 

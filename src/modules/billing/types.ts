@@ -11,13 +11,21 @@ export type ElectronicInvoiceStatus =
 export type FiscalConfiguration = {
   actividadEconomica: string | null;
   ambiente: FiscalEnvironment;
+  barrio: string | null;
+  canton: string | null;
+  condicionVenta: string;
   correoEmisor: string | null;
+  distrito: string | null;
   hasHaciendaPassword: boolean;
   hasHaciendaUsuario: boolean;
   hasP12: boolean;
   hasPin: boolean;
   identificacion: string | null;
+  identificacionProveedorSistema: string | null;
   listoParaEmitir: boolean;
+  medioPago: string;
+  otrasSenas: string | null;
+  provincia: string | null;
   razonSocial: string | null;
   sucursal: string;
   terminal: string;

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { generateAutoblogDraft } from "@/modules/autoblog/ai";
+import { researchAutoblogTopic } from "@/modules/autoblog/research";
 import {
   changeAutoblogArticleStatusSchema,
   createAutoblogArticleSchema,
@@ -297,10 +298,17 @@ export async function generateAutoblogDraftAction(formData: FormData) {
   }
 
   const context = await getBusinessContext(access.tenant);
+  const sourceUrls = parseSourceUrls(parsed.data.sourceUrlsText);
+  const research = await researchAutoblogTopic({
+    sourceMode: parsed.data.sourceMode,
+    sourceNotes: parsed.data.sourceNotes,
+    sourceUrls,
+    topic: parsed.data.topic,
+  });
   const draft = await generateAutoblogDraft({
     businessContext: context.ok ? context.data : null,
-    sourceNotes: parsed.data.sourceNotes,
-    sourceUrls: parseSourceUrls(parsed.data.sourceUrlsText),
+    sourceNotes: research.sourceNotes ?? parsed.data.sourceNotes,
+    sourceUrls: research.sourceUrls,
     topic: parsed.data.topic,
   });
   const fallbackCta = context.ok ? context.data?.preferredCta ?? null : null;
@@ -321,8 +329,8 @@ export async function generateAutoblogDraftAction(formData: FormData) {
     p_social_linkedin: clean(draft.data.socialLinkedin ?? undefined),
     p_social_whatsapp: clean(draft.data.socialWhatsapp ?? undefined),
     p_source_mode: parsed.data.sourceMode,
-    p_source_notes: clean(parsed.data.sourceNotes),
-    p_source_urls: parseSourceUrls(parsed.data.sourceUrlsText),
+    p_source_notes: clean(research.sourceNotes ?? parsed.data.sourceNotes),
+    p_source_urls: research.sourceUrls,
     p_summary: clean(draft.data.summary ?? undefined),
     p_title: draft.data.title,
     p_topic: clean(parsed.data.topic),

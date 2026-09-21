@@ -115,7 +115,12 @@ function normalizeMessagingWebhook(
       const attachments = asArray(message.attachments);
       const attachmentType = asString(asRecord(attachments[0]).type);
 
-      if (!messageExternalId || !senderExternalId || isTrue(message.is_echo)) {
+      if (
+        !messageExternalId ||
+        !senderExternalId ||
+        isTrue(message.is_echo) ||
+        isTrue(message.is_self)
+      ) {
         continue;
       }
 

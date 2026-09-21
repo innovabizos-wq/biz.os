@@ -206,6 +206,7 @@ declare
   v_empresa_id uuid := public.current_empresa_id();
   v_cotizacion public.cotizaciones%rowtype;
   v_item jsonb;
+  v_producto_id uuid;
   v_numero text;
   v_seq integer;
   v_year text := to_char(current_date, 'YYYY');
@@ -272,9 +273,20 @@ begin
 
   for v_item in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
   loop
+    v_producto_id := nullif(v_item->>'producto_id', '')::uuid;
+
+    if v_producto_id is not null and not exists (
+      select 1 from public.catalogo_productos as p
+      where p.id = v_producto_id
+        and p.empresa_id = v_empresa_id
+    ) then
+      raise exception 'Producto de catalogo no encontrado para la empresa.' using errcode = '02000';
+    end if;
+
     insert into public.cotizacion_items (
       empresa_id,
       cotizacion_id,
+      producto_id,
       descripcion,
       cantidad,
       precio_unitario,
@@ -288,6 +300,7 @@ begin
     select
       v_empresa_id,
       v_cotizacion.id,
+      v_producto_id,
       nullif(v_item->>'descripcion', ''),
       coalesce((v_item->>'cantidad')::numeric, 1),
       coalesce((v_item->>'precio_unitario')::numeric, 0),

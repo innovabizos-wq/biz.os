@@ -231,9 +231,9 @@ begin
       on r.empresa_id = v_empresa_id
       and lower(r.nombre) = lower(rp.nombre)
       and r.id = any(v_created_role_ids)
-    join lateral unnest(rp.codigos) as codigo on true
+    join lateral unnest(rp.codigos) as permiso_codigo(codigo) on true
     join public.permisos as p
-      on p.codigo = codigo
+      on p.codigo = permiso_codigo.codigo
       and p.estado = 'activo'
   ),
   inserted_permissions as (
@@ -393,9 +393,9 @@ begin
   join public.roles as r
     on r.empresa_id = v_empresa_id
     and r.nombre = rp.nombre
-  join lateral unnest(rp.codigos) as codigo on true
+  join lateral unnest(rp.codigos) as permiso_codigo(codigo) on true
   join public.permisos as p
-    on p.codigo = codigo
+    on p.codigo = permiso_codigo.codigo
     and p.estado = 'activo'
   on conflict on constraint rol_permisos_empresa_rol_permiso_unique do nothing;
 

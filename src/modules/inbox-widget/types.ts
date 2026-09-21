@@ -17,6 +17,7 @@ export type InboxWidgetCustomer = InboxCustomer & {
 };
 
 export type InboxWidgetOperations = {
+  availableTags: Array<{ color: string; id: string; nombre: string }>;
   canAssign: boolean;
   canChangeStatus: boolean;
   canCreateCustomer: boolean;
@@ -24,6 +25,13 @@ export type InboxWidgetOperations = {
   currentProfileId: string | null;
   currentProfileName: string | null;
   customers: InboxWidgetCustomer[];
+  funnelStages: Array<{
+    color: string;
+    funnelId: string;
+    funnelName: string;
+    id: string;
+    nombre: string;
+  }>;
   users: InboxAssignableUser[];
 };
 

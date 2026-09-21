@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
+import { hasPermission } from "@/lib/permissions/permission-checks";
+import { requireAdminAccess } from "@/modules/tenant/admin-access";
 import {
   changeUserBranchSchema,
   changeUserRoleSchema,
   changeUserStatusSchema,
+  createAdministrativeUserSchema,
   updateUserSchema,
 } from "@/modules/users/schemas";
 
@@ -28,6 +32,121 @@ function revalidateUserPaths(profileId?: string) {
   if (profileId) {
     revalidatePath(`/admin/usuarios/${profileId}`);
   }
+}
+
+function getCreateAdministrativeUserErrorMessage(error: {
+  code?: string;
+  message?: string;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  if (message.includes("already been registered") || message.includes("already registered")) {
+    return "Este correo ya pertenece a una cuenta de acceso.";
+  }
+
+  if (message.includes("duplicate key") || message.includes("already exists")) {
+    return "Este correo ya pertenece a un usuario de la empresa.";
+  }
+
+  return "No se pudo crear el usuario. Intenta de nuevo o revisa sus datos.";
+}
+
+export async function createAdministrativeUserAction(formData: FormData) {
+  const parsed = createAdministrativeUserSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError("/admin/invitaciones", parsed.error.issues[0]?.message ?? "Datos de usuario invalidos.");
+  }
+
+  const access = await requireAdminAccess();
+
+  if (!hasPermission(access.tenant.permissions, "admin.users.manage")) {
+    redirectWithError("/admin/invitaciones", "No tienes permiso para crear usuarios.");
+  }
+
+  const supabase = await createClient();
+  const { data: role, error: roleError } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("id", parsed.data.rolId)
+    .eq("empresa_id", access.tenant.empresaId)
+    .eq("estado", "activo")
+    .maybeSingle();
+
+  if (roleError || !role) {
+    redirectWithError("/admin/invitaciones", "El rol seleccionado no es valido para esta empresa.");
+  }
+
+  if (parsed.data.sucursalId) {
+    const { data: branch, error: branchError } = await supabase
+      .from("sucursales")
+      .select("id")
+      .eq("id", parsed.data.sucursalId)
+      .eq("empresa_id", access.tenant.empresaId)
+      .eq("estado", "activa")
+      .maybeSingle();
+
+    if (branchError || !branch) {
+      redirectWithError("/admin/invitaciones", "La sucursal seleccionada no es valida para esta empresa.");
+    }
+  }
+
+  const admin = createServiceRoleClient();
+  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+    email: parsed.data.correo,
+    email_confirm: true,
+    password: parsed.data.password,
+    user_metadata: {
+      nombre: parsed.data.nombre,
+    },
+  });
+
+  if (authError || !authData.user) {
+    redirectWithError(
+      "/admin/invitaciones",
+      getCreateAdministrativeUserErrorMessage(authError ?? {}),
+    );
+  }
+
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .insert({
+      correo: parsed.data.correo.toLowerCase(),
+      empresa_id: access.tenant.empresaId,
+      id: authData.user.id,
+      nombre: parsed.data.nombre,
+      requiere_cambio_contrasena: true,
+      rol_id: parsed.data.rolId,
+      sucursal_id: parsed.data.sucursalId ?? null,
+      telefono: parsed.data.telefono ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (profileError || !profile) {
+    await admin.auth.admin.deleteUser(authData.user.id);
+    redirectWithError(
+      "/admin/invitaciones",
+      getCreateAdministrativeUserErrorMessage(profileError ?? {}),
+    );
+  }
+
+  await admin.from("auditoria_eventos").insert({
+    accion: "crear_usuario_administrativo",
+    empresa_id: access.tenant.empresaId,
+    entidad: "profiles",
+    entidad_id: profile.id,
+    metadata: {
+      cargo: parsed.data.cargo || null,
+      correo: parsed.data.correo.toLowerCase(),
+      requiereCambioContrasena: true,
+    },
+    usuario_id: access.tenant.profileId,
+  });
+
+  revalidateUserPaths(profile.id);
+  revalidatePath("/admin/invitaciones");
+  redirect("/admin/invitaciones?created=1");
 }
 
 function logUserActionError(

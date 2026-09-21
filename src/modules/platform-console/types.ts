@@ -129,3 +129,16 @@ export type PlatformWhappChannel = {
   wabaId: string | null;
   webhookUrl: string | null;
 };
+
+export type PlatformMetaRate = {
+  category: string;
+  currency: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  id: string;
+  marketCode: string;
+  sourceUrl: string | null;
+  unitCost: number;
+  volumeFrom: number;
+  volumeTo: number | null;
+};

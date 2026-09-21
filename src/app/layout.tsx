@@ -4,8 +4,10 @@ import "./globals.css";
 import { KpiThemeProvider } from "@/components/kpi/kpi-theme-provider";
 
 export const metadata: Metadata = {
+  applicationName: "Biz.OS",
   title: "biz.os",
   description: "Sistema operativo empresarial SaaS multiempresa.",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({

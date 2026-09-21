@@ -356,6 +356,12 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
             >
               Bodegas
             </Link>
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              href="/inventario/conteos"
+            >
+              Conteos
+            </Link>
           </div>
         }
         title="Inventario"

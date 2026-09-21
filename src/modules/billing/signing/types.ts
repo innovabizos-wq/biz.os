@@ -1,11 +1,13 @@
 export type BillingXmlSignerInput = {
-  certificateSecretRef: string;
-  pinSecretRef: string;
+  connectionId: string;
+  empresaId: string;
   unsignedXml: string;
 };
 
 export type BillingXmlSignerResult = {
   algorithm: string;
+  certificateExpiresAt?: string;
+  certificateSerialLast4?: string;
   signedXml: string;
 };
 

@@ -1,79 +1,74 @@
 # XML 4.4
 
-La estructura inicial define tipos y builder basico para documentos emisores
-principales. La validacion XSD oficial sigue pendiente.
+Biz.OS construye documentos emisores con el orden, namespaces y campos del
+anexo XML 4.4 de Costa Rica. La implementación actual cubre los tipos `01`,
+`02`, `03` y `04`:
 
-No se debe afirmar que un XML esta validado contra Hacienda si no se ejecuto
-validacion contra XSD oficial y pruebas del Ministerio de Hacienda.
+- factura electrónica;
+- nota de débito electrónica;
+- nota de crédito electrónica;
+- tiquete electrónico.
 
-Tipos preparados:
+El flujo comercial disponible prepara facturas y tiquetes desde ventas. Los
+builders y esquemas de notas de crédito y débito están implementados, pero la
+liberación comercial de esos documentos todavía requiere cerrar la operación
+completa de devolución, referencia, saldo e inventario y validarla en el
+ambiente de pruebas de Hacienda. Factura de compra, exportación, recibo
+electrónico de pago y mensajes receptores conservan flujos separados y no se
+deben presentar como emisores terminados.
 
-- Factura electronica
-- Tiquete electronico
-- Nota de credito
-- Nota de debito
-- Factura compra, exportacion, recibo electronico y mensaje receptor como
-  placeholders explicitos.
+## Construcción y datos conservados
 
-## Generacion controlada
+`generateFiscalDocumentXmlAction` reserva, cuando hace falta, un consecutivo
+único por empresa, ambiente, sucursal, terminal y tipo documental. Luego genera
+una clave numérica de 50 dígitos con país `506`, fecha, identificación del
+emisor, consecutivo, situación y código de seguridad.
 
-La accion `generateFiscalDocumentXmlAction` solo genera un XML sin firmar cuando
-el documento interno esta en estado `validated`. Si el documento aun no tiene
-`clave` y `consecutivo`, la accion reserva un consecutivo fiscal por empresa,
-ambiente, sucursal, terminal y tipo documental, genera una clave numerica de 50
-digitos y la asigna al documento antes de construir el XML.
+El documento mantiene una instantánea de los datos usados al emitir:
 
-La clave usa:
+- emisor, ubicación e identificación del proveedor del sistema;
+- receptor y tipo de identificación fiscal;
+- condición de venta y plazo de crédito;
+- moneda y tipo de cambio;
+- CABYS, códigos comerciales, cantidades, precios y descuentos;
+- impuestos, base imponible y totales;
+- formas de pago y referencias.
 
-- codigo pais `506`
-- fecha de emision `ddmmyy`
-- identificacion del emisor normalizada a 12 digitos
-- consecutivo fiscal de 20 digitos
-- situacion normal `1`
-- codigo de seguridad numerico de 8 digitos
+Los cambios posteriores al catálogo, al cliente o a la empresa no reescriben
+el documento histórico.
 
-El XML generado incluye encabezado fiscal, emisor, receptor cuando aplica,
-detalle de servicio, impuestos por linea y resumen de factura desde las tablas
-`fiscal_document_lines` y `fiscal_document_line_taxes`.
+## Validación oficial incorporada
 
-El XML generado se guarda como artefacto interno en
-`fiscal_document_artifacts` con tipo `xml_unsigned`, hash SHA-256, ruta logica y
-metadata `pendingXsdValidation=true`. Este artefacto no implica firma, envio ni
-aceptacion por Hacienda.
+Los XSD 4.4 de factura, tiquete, nota de crédito y nota de débito están
+versionados en `src/modules/billing/xml/schemas/2024/v4.4`. La firma XML usa el
+esquema W3C incluido en `src/modules/billing/xml/schemas/2024`.
 
-La validacion XSD queda conectada mediante
-`validateFiscalXmlAgainstOfficialXsd`. Con
-`BILLING_XML_VALIDATION_ENABLED=false`, la generacion continua pero el artefacto
-queda con `pendingXsdValidation=true`. Con el flag en `true`, la accion exige un
-validador real contra XSD oficial 4.4; si no existe o retorna errores, el
-documento pasa a `error_xml`, guarda `validation_errors` y no archiva XML como
-generado.
+`validateFiscalXmlAgainstOfficialXsd` ejecuta libxml2 mediante `xmllint-wasm`.
+La validación es obligatoria y no se puede desactivar con una variable de
+entorno. El validador:
 
-Antes de generar el XML, `validateFiscalDocumentReadyForXml` vuelve a validar
-server-side:
+- limita el XML a 2 MB;
+- rechaza declaraciones DTD y ENTITY;
+- comprueba raíz y namespace 4.4;
+- devuelve hasta 20 errores con número de línea;
+- impide archivar o enviar un XML firmado que no cumpla el XSD.
 
-- clave y consecutivo fiscal
-- sucursal, terminal y datos fiscales del emisor
-- receptor cuando corresponde a factura electronica
-- total del comprobante
-- consistencia entre totales del documento y suma de lineas/impuestos
-- lineas fiscales existentes
-- CABYS por linea
-- montos de linea
-- detalle de impuestos para lineas gravadas
+El XML sin firmar se conserva como `xml_unsigned` y queda pendiente de firma.
+Después de crear la firma XAdES, el XML completo se valida contra el XSD. Solo
+entonces se archiva como `xml_signed` y el documento pasa a `signed`. Antes de
+enviar se repite la validación para detectar corrupción o sustitución del
+artefacto.
 
-Si alguna validacion falla, el documento vuelve a `error_validation`, se guardan
-`validation_errors` y no se genera artefacto XML.
+Las pruebas automatizadas generan una factura con el builder real de Biz.OS,
+la firman con un certificado PKCS#12 de prueba, verifican criptográficamente la
+firma y la validan contra el XSD incluido. Esta prueba técnica no reemplaza la
+aceptación de documentos con una cuenta real en el ambiente de pruebas de
+Hacienda.
 
-Estados permitidos despues de esta accion:
+## Requisitos para emitir
 
-- `fiscal_documents.status = xml_generated`
-- `fiscal_documents.hacienda_status` permanece `no_enviado`
-
-Pendiente para emision real:
-
-- estructura XML 4.4 completa validada contra XSD oficial
-- adaptador de validacion XSD oficial para `BillingXmlValidator`
-- firma XAdES-EPES
-- envio y consulta contra API Hacienda
-- registro de respuesta oficial
+Antes de construir el XML, el servidor verifica datos fiscales del emisor,
+ubicación, proveedor del sistema, receptor cuando corresponde, CABYS, detalle
+de impuestos, moneda, pagos, líneas y consistencia de totales. Un documento
+incompleto queda en `error_validation`; un XML inválido queda en `error_xml`.
+Ninguno puede firmarse o enviarse.

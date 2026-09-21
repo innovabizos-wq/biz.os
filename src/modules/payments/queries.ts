@@ -213,8 +213,15 @@ export async function getPaymentAccounts(
 export async function getPaymentTransactions(
   tenant: TenantContext,
 ): Promise<CoreResult<PaymentTransaction[]>> {
-  if (!canAccessPayments(tenant)) {
-    return ok([]);
+  if (!isModuleActive(tenant.activeModules, "payments")) {
+    return fail("MODULE_INACTIVE", "El modulo Pagos no esta activo.");
+  }
+
+  if (!hasAnyPermission(tenant.permissions, [
+    "payments.accounts.view",
+    "payments.accounts.manage",
+  ])) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver movimientos.");
   }
 
   const supabase = await createClient();
@@ -226,7 +233,11 @@ export async function getPaymentTransactions(
     .limit(30);
 
   if (error) {
-    return ok([]);
+    return fail(
+      "PERMISSION_DENIED",
+      "No se pudieron cargar los movimientos de pagos.",
+      error,
+    );
   }
 
   const rows = (data ?? []) as TransactionRow[];
@@ -254,8 +265,20 @@ export async function getPaymentsSummary(
     getPaymentTransactions(tenant),
   ]);
 
-  const accountRows = accounts.ok ? accounts.data : [];
-  const transactionRows = transactions.ok ? transactions.data : [];
+  if (!accounts.ok) {
+    return fail(accounts.error.code, accounts.error.message, accounts.error.cause);
+  }
+
+  if (!transactions.ok) {
+    return fail(
+      transactions.error.code,
+      transactions.error.message,
+      transactions.error.cause,
+    );
+  }
+
+  const accountRows = accounts.data;
+  const transactionRows = transactions.data;
   const openAccounts = accountRows.filter((account) =>
     ["pendiente", "parcial", "vencida"].includes(account.estado),
   );

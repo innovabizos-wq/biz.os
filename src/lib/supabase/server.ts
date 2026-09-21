@@ -1,5 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+
+import { getDelegatedSupabaseAccessToken } from "@/lib/supabase/delegated-auth";
+import { getServiceRoleSupabaseContext } from "@/lib/supabase/service-role-context";
 
 function getSupabaseServerConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,8 +17,19 @@ function getSupabaseServerConfig() {
 }
 
 export async function createClient() {
-  const cookieStore = await cookies();
+  const serviceRoleClient = getServiceRoleSupabaseContext();
+  if (serviceRoleClient) return serviceRoleClient;
+
   const { publishableKey, url } = getSupabaseServerConfig();
+  const delegatedToken = getDelegatedSupabaseAccessToken();
+  if (delegatedToken) {
+    return createSupabaseClient(url, publishableKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: `Bearer ${delegatedToken}` } },
+    });
+  }
+
+  const cookieStore = await cookies();
 
   return createServerClient(url, publishableKey, {
     cookies: {

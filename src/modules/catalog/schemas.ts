@@ -21,6 +21,11 @@ const optionalFormUuidSchema = uuidSchema
   .or(z.literal("").transform(() => undefined));
 
 const nonNegativeNumberSchema = z.coerce.number().min(0);
+const optionalNonNegativeNumberSchema = z.coerce
+  .number()
+  .nonnegative()
+  .optional()
+  .or(z.literal("").transform(() => undefined));
 
 export const catalogCategoryStatusSchema = z.enum(CATALOG_CATEGORY_STATUSES);
 export const catalogProductStatusSchema = z.enum(CATALOG_PRODUCT_STATUSES);
@@ -45,17 +50,28 @@ export const changeCategoryStatusSchema = z.object({
   estado: catalogCategoryStatusSchema,
 });
 
-export const createProductSchema = z.object({
-  categoriaId: optionalFormUuidSchema,
-  codigo: optionalTextSchema,
-  descripcion: optionalTextSchema,
-  impuestoPorcentaje: nonNegativeNumberSchema.max(100).default(0),
-  moneda: catalogMonedaSchema.default(DEFAULT_CATALOG_MONEDA),
-  nombre: nonEmptyTextSchema,
-  precioBase: nonNegativeNumberSchema.default(0),
-  tipo: catalogProductTypeSchema,
-  unidadMedida: nonEmptyTextSchema.default(DEFAULT_UNIDAD_MEDIDA),
-});
+export const createProductSchema = z
+  .object({
+    bodegaId: optionalFormUuidSchema,
+    cantidadInicial: optionalNonNegativeNumberSchema,
+    categoriaId: optionalFormUuidSchema,
+    codigo: optionalTextSchema,
+    descripcion: optionalTextSchema,
+    impuestoPorcentaje: nonNegativeNumberSchema.max(100).default(0),
+    moneda: catalogMonedaSchema.default(DEFAULT_CATALOG_MONEDA),
+    nombre: nonEmptyTextSchema,
+    precioBase: nonNegativeNumberSchema.default(0),
+    tipo: catalogProductTypeSchema,
+    unidadMedida: nonEmptyTextSchema.default(DEFAULT_UNIDAD_MEDIDA),
+  })
+  .refine(
+    (input) =>
+      !input.cantidadInicial || input.cantidadInicial === 0 || Boolean(input.bodegaId),
+    {
+      message: "La bodega es requerida cuando hay cantidad inicial.",
+      path: ["bodegaId"],
+    },
+  );
 
 export const updateProductSchema = createProductSchema.extend({
   productoId: uuidSchema,

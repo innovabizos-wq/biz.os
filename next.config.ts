@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingIncludes: {
+    "/*": ["src/modules/billing/xml/schemas/**/*"],
+  },
+  serverExternalPackages: ["xmllint-wasm"],
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);

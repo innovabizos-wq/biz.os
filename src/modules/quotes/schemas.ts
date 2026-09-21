@@ -12,19 +12,25 @@ import {
   uuidSchema,
 } from "@/lib/validation/shared-schemas";
 
-const optionalFormUuidSchema = uuidSchema
-  .optional()
-  .or(z.literal("").transform(() => undefined));
+const emptyStringToUndefined = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+
+// Browser forms submit blank hidden UUID fields as "". Preprocess those
+// blanks instead of declaring an empty-string literal, which Gemini rejects
+// when this schema is exposed as a function declaration.
+const optionalFormUuidSchema = z.preprocess(
+  emptyStringToUndefined,
+  uuidSchema.optional(),
+);
 
 const optionalProductUuidSchema = optionalFormUuidSchema
   .nullable()
   .transform((value) => value ?? undefined);
 
-const optionalDateSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
-  .optional()
-  .or(z.literal("").transform(() => undefined));
+const optionalDateSchema = z.preprocess(
+  emptyStringToUndefined,
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+);
 
 const numericFormSchema = z.coerce.number();
 const nonNegativeMoneySchema = numericFormSchema.min(0);

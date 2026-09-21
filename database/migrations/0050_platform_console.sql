@@ -1,8 +1,9 @@
 -- Platform Console base.
 -- Local migration only. Do not apply automatically from the app.
 -- To enable the first SaaS operator, insert a profile_id manually:
--- insert into public.platform_users (profile_id, role, notes)
--- values ('00000000-0000-0000-0000-000000000000', 'owner', 'Primer Platform Admin');
+-- Example manual SQL for the first SaaS operator:
+--   insert into public.platform_users (profile_id, role, notes)
+--   values ('00000000-0000-0000-0000-000000000000', 'owner', 'Primer Platform Admin');
 
 create table if not exists public.platform_users (
   id uuid primary key default gen_random_uuid(),

@@ -6,7 +6,8 @@ Hacienda. El PDF es solo la representacion grafica.
 
 ## Estado actual
 
-- Configuracion fiscal heredada en `/admin/fiscal`.
+- Configuración fiscal estructurada en `/admin/fiscal`, con ubicación,
+  proveedor del sistema, valores predeterminados y lista de preparación.
 - Ruta operativa `/facturacion` y subrutas protegidas por modulo activo y permisos.
 - Base de datos preparada para configuracion fiscal estructurada, CABYS,
   documentos fiscales internos, consecutivos, recepcion y entregas.
@@ -26,8 +27,10 @@ Hacienda. El PDF es solo la representacion grafica.
 - Cuando la factura viene de `fiscal_documents`, cotizaciones enlaza al detalle
   `/facturacion/documentos/[documentoId]` para continuar firma, envio,
   consulta, PDF y archivo.
-- Firma XAdES-EPES y cliente Hacienda quedan como interfaces que fallan
-  explicitamente hasta tener implementacion real.
+- Firma XAdES-EPES real con PKCS#12, validación XSD obligatoria y cliente
+  Hacienda para autenticación, envío, consulta y recuperación por clave.
+- Interruptores server-side impiden enviar o consultar desde ambientes no
+  autorizados.
 
 ## Flujo objetivo
 
@@ -35,5 +38,7 @@ Venta confirmada -> documento fiscal interno -> validacion -> XML 4.4 ->
 firma XAdES-EPES -> envio Hacienda -> respuesta oficial -> PDF/archivo/entrega.
 
 No se debe marcar un documento como `accepted` sin respuesta real de Hacienda.
-El flujo inmediato tampoco marca `signed` sin `Signature` real ni envia a
-Hacienda sin cliente server-side configurado.
+El flujo inmediato tampoco marca `signed` sin una firma verificada ni envía a
+Hacienda cuando la conexión o el interruptor server-side no están activos.
+La salida comercial sigue condicionada a pruebas aceptadas con credenciales y
+certificados reales en el ambiente externo de Hacienda.

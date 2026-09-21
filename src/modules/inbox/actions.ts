@@ -2,17 +2,27 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import {
+  buildFacebookMessagesEndpoint,
+  buildInstagramMessagesEndpoint,
   buildWhatsAppMessagesEndpoint,
+  sendFacebookTextMessage,
+  sendInstagramTextMessage,
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage,
 } from "@/services/meta/client";
+import type { SendMetaMessageResult } from "@/services/meta/client";
 import { META_GRAPH_API_VERSION } from "@/services/meta/constants";
+import { fetchWhatsAppTemplates } from "@/services/meta/templates";
+import { fetchWhatsAppChannelHealth } from "@/services/meta/channel-health";
+import { inferMetaMarketCode } from "@/services/meta/pricing";
 import { dispatchInboxCampaignBatch } from "@/modules/whapp/server/campaign-dispatcher";
+import { checkMetaContactPolicy } from "@/modules/whapp/server/messaging-policy";
 import {
   addInboxCampaignRecipientSchema,
   addInboxMessageSchema,
@@ -66,7 +76,21 @@ type WhatsAppSendConfigRow = {
   to_phone?: string;
 };
 
-type WhatsAppSendConversationRow = {
+type MetaSendConfigRow = {
+  access_token?: string;
+  access_token_suffix?: string | null;
+  access_token_updated_at?: string | null;
+  account_id?: string;
+  api_host?: string | null;
+  canal_id?: string;
+  channel_name?: string;
+  channel_type?: "facebook" | "instagram" | "whatsapp";
+  conversacion_id?: string;
+  empresa_id?: string;
+  recipient_id?: string;
+};
+
+type MetaSendConversationRow = {
   canal: string;
   canal_id: string | null;
   canal_rel:
@@ -92,13 +116,24 @@ type WhatsAppSendConversationRow = {
   id: string;
 };
 
+type LocalMessageConversationRow = {
+  canal_rel:
+    | { proveedor: string }
+    | Array<{ proveedor: string }>
+    | null;
+  id: string;
+};
+
 type MetaTemplateActionRow = {
   canal_id: string | null;
   categoria: string;
   cuerpo: string;
+  disabled_at: string | null;
   estado: string;
   id: string;
   idioma: string;
+  last_synced_at: string | null;
+  meta_status: string | null;
   nombre: string;
   variables: unknown;
 };
@@ -127,6 +162,10 @@ type CampaignRecipientStatusRow = {
   campana_id: string;
   estado: string;
   id: string;
+};
+
+type WhatsAppCampaignSyncConfigRow = {
+  access_token?: string;
 };
 
 type AutomationChannelActionRow = {
@@ -204,6 +243,30 @@ function firstRelation<TRelation>(
 
 function safeString(value: unknown) {
   return String(value ?? "").trim();
+}
+
+const META_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const META_CHANNEL_LABELS = {
+  facebook: "Facebook Messenger",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+} as const;
+
+function formatMetaSendError(result: Extract<SendMetaMessageResult, { ok: false }>) {
+  const details = [
+    result.errorDetails.code !== null
+      ? `codigo ${result.errorDetails.code}`
+      : null,
+    result.errorDetails.subcode !== null
+      ? `subcodigo ${result.errorDetails.subcode}`
+      : null,
+    result.errorDetails.details,
+  ].filter(Boolean);
+
+  return details.length > 0
+    ? `${result.error} (${details.join(", ")})`
+    : result.error;
 }
 
 function parseTemplateVariables(value: string | null | undefined) {
@@ -419,12 +482,15 @@ export async function createInboxChannelAction(formData: FormData) {
 
 export async function changeInboxChannelStatusAction(formData: FormData) {
   const parsed = changeInboxChannelStatusSchema.safeParse(getFormData(formData));
+  const returnPath = formData.get("returnPath") === "/inbox/conexiones"
+    ? "/inbox/conexiones"
+    : `/inbox/canales/${typeof formData.get("canalId") === "string" ? formData.get("canalId") : ""}`;
 
   if (!parsed.success) {
-    redirectWithError("/inbox/canales", "Estado de canal invalido.");
+    redirectWithError(returnPath, "Estado de canal invalido.");
   }
 
-  await assertInboxPermission("inbox.channels.manage", "/inbox/canales");
+  await assertInboxPermission("inbox.channels.manage", returnPath);
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("cambiar_estado_inbox_canal", {
@@ -437,13 +503,13 @@ export async function changeInboxChannelStatusAction(formData: FormData) {
       canalId: parsed.data.canalId,
     });
     redirectWithError(
-      "/inbox/canales",
+      returnPath,
       `No se pudo cambiar el estado: ${safeErrorMessage(error)}`,
     );
   }
 
   revalidateInboxPaths(undefined, parsed.data.canalId);
-  redirect(`/inbox/canales/${parsed.data.canalId}`);
+  redirect(returnPath);
 }
 
 export async function createMetaChannelAction(formData: FormData) {
@@ -838,14 +904,45 @@ export async function addInboxCampaignRecipientAction(formData: FormData) {
     redirectWithError("/whapp/campanas", "Telefono de destinatario invalido.");
   }
 
+  const { data: consentimientoId, error: consentimientoError } = await supabase.rpc(
+    "registrar_inbox_preferencia_contacto",
+    {
+      p_canal: "whatsapp",
+      p_estado: "consentido",
+      p_evidencia: {
+        campana_id: parsed.data.campaignId,
+        detalle: parsed.data.optInEvidence,
+      },
+      p_finalidad: "mensajeria_comercial",
+      p_identificador: normalizedPhone,
+      p_origen: parsed.data.optInSource,
+      p_version_aviso: parsed.data.optInTermsVersion,
+    },
+  );
+
+  if (consentimientoError || !consentimientoId) {
+    if (consentimientoError) {
+      logInboxActionError("addInboxCampaignRecipientAction.consent", consentimientoError, {
+        campaignId: parsed.data.campaignId,
+        telefono: normalizedPhone,
+      });
+    }
+    redirectWithError(
+      "/whapp/campanas",
+      "No se pudo registrar evidencia auditable del consentimiento.",
+    );
+  }
+
   const { error } = await supabase.from("inbox_campana_destinatarios").insert({
     campana_id: parsed.data.campaignId,
     cliente_id: parsed.data.clienteId ?? null,
+    consentimiento_id: consentimientoId,
     conversacion_id: parsed.data.conversacionId ?? null,
     created_by: access.tenant.profileId,
     empresa_id: access.tenant.empresaId,
     estado: "listo",
     external_recipient_id: parsed.data.externalRecipientId ?? null,
+    market_code: inferMetaMarketCode(normalizedPhone, parsed.data.marketCode),
     nombre: parsed.data.nombre ?? null,
     opt_in: true,
     opt_in_at: new Date().toISOString(),
@@ -1444,6 +1541,34 @@ export async function addInboxMessageAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+
+  if (parsed.data.direccion === "saliente") {
+    const { data: conversation, error: conversationError } = await supabase
+      .from("inbox_conversaciones")
+      .select(
+        "id, canal_rel:inbox_canales!inbox_conversaciones_canal_empresa_fkey(proveedor)",
+      )
+      .eq("id", parsed.data.conversacionId)
+      .maybeSingle<LocalMessageConversationRow>();
+
+    if (conversationError) {
+      logInboxActionError("addInboxMessageAction.getConversation", conversationError, {
+        conversacionId: parsed.data.conversacionId,
+      });
+      redirectWithError(
+        redirectPath,
+        `No se pudo validar el canal asociado: ${safeErrorMessage(conversationError)}`,
+      );
+    }
+
+    if (firstRelation(conversation?.canal_rel ?? null)?.proveedor === "meta") {
+      redirectWithError(
+        redirectPath,
+        "Los mensajes de canales Meta deben enviarse realmente; no se permite registrar una respuesta simulada.",
+      );
+    }
+  }
+
   const { error } = await supabase.rpc("agregar_mensaje_inbox", {
     p_contenido: parsed.data.contenido,
     p_conversacion_id: parsed.data.conversacionId,
@@ -1466,7 +1591,7 @@ export async function addInboxMessageAction(formData: FormData) {
   redirect(redirectPath);
 }
 
-export async function sendWhatsAppMessageAction(formData: FormData) {
+export async function sendMetaMessageAction(formData: FormData) {
   const parsed = addInboxMessageSchema.safeParse({
     contenido: formData.get("contenido"),
     conversacionId: formData.get("conversacionId"),
@@ -1492,10 +1617,10 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
       "id, canal_id, canal, canal_rel:inbox_canales!inbox_conversaciones_canal_empresa_fkey(id, nombre, canal, proveedor, estado, conexion_estado, configuracion_publica)",
     )
     .eq("id", parsed.data.conversacionId)
-    .maybeSingle<WhatsAppSendConversationRow>();
+    .maybeSingle<MetaSendConversationRow>();
 
   if (conversationError) {
-    logInboxActionError("sendWhatsAppMessageAction.getConversation", conversationError, {
+    logInboxActionError("sendMetaMessageAction.getConversation", conversationError, {
       conversacionId: parsed.data.conversacionId,
     });
     redirectWithError(
@@ -1511,7 +1636,7 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
   if (!conversation.canal_id) {
     redirectWithError(
       redirectPath,
-      "La conversacion no tiene canal WhatsApp asociado.",
+      "La conversacion no tiene un canal Meta asociado.",
     );
   }
 
@@ -1525,14 +1650,20 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
   }
 
   const channelName = channel.nombre;
-  const channelPhoneNumberId = safeString(
-    channel.configuracion_publica.phone_number_id,
-  );
+  const channelType = channel.canal as keyof typeof META_CHANNEL_LABELS;
+  const channelLabel = META_CHANNEL_LABELS[channelType];
 
-  if (channel.canal !== "whatsapp" || channel.proveedor !== "meta") {
+  if (!channelLabel || channel.proveedor !== "meta") {
     redirectWithError(
       redirectPath,
-      `El canal asociado no es WhatsApp Meta. Canal: ${channelName}.`,
+      `El canal asociado no es WhatsApp, Facebook o Instagram de Meta. Canal: ${channelName}.`,
+    );
+  }
+
+  if (conversation.canal !== channelType) {
+    redirectWithError(
+      redirectPath,
+      "El tipo de canal de la conversacion no coincide con su configuracion Meta.",
     );
   }
 
@@ -1554,16 +1685,66 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
     );
   }
 
-  if (!channelPhoneNumberId) {
+  const accountField =
+    channelType === "whatsapp"
+      ? "phone_number_id"
+      : channelType === "facebook"
+        ? "page_id"
+        : "instagram_business_account_id";
+  const publicAccountId = safeString(channel.configuracion_publica[accountField]);
+
+  if (!publicAccountId) {
     redirectWithError(
       redirectPath,
-      `El canal ${channelName} no tiene phone_number_id configurado.`,
+      `El canal ${channelName} no tiene ${accountField} configurado.`,
+    );
+  }
+
+  const { data: lastIncoming, error: lastIncomingError } = await supabase
+    .from("inbox_mensajes")
+    .select("created_at, received_at")
+    .eq("conversacion_id", parsed.data.conversacionId)
+    .eq("direccion", "entrante")
+    .eq("es_nota_interna", false)
+    .order("received_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ created_at: string; received_at: string | null }>();
+
+  if (lastIncomingError) {
+    logInboxActionError("sendMetaMessageAction.getLastIncoming", lastIncomingError, {
+      conversacionId: parsed.data.conversacionId,
+    });
+    redirectWithError(
+      redirectPath,
+      "No se pudo validar la ventana de respuesta de Meta.",
+    );
+  }
+
+  const incomingTimestamp = lastIncoming?.received_at ?? lastIncoming?.created_at;
+  const lastIncomingAt = incomingTimestamp
+    ? new Date(incomingTimestamp).getTime()
+    : Number.NaN;
+
+  if (!Number.isFinite(lastIncomingAt)) {
+    redirectWithError(
+      redirectPath,
+      "El cliente debe iniciar la conversacion antes de que se le pueda responder por Meta.",
+    );
+  }
+
+  if (Date.now() - lastIncomingAt >= META_REPLY_WINDOW_MS) {
+    redirectWithError(
+      redirectPath,
+      channelType === "whatsapp"
+        ? "La ventana de 24 horas cerro. Usa una plantilla WhatsApp aprobada."
+        : `La ventana de respuesta de 24 horas de ${channelLabel} cerro; el cliente debe escribir nuevamente.`,
     );
   }
 
   const serviceSupabase = createServiceRoleClient();
   const { data, error } = await serviceSupabase.rpc(
-    "obtener_inbox_whatsapp_send_config_server",
+    "obtener_inbox_meta_send_config_server",
     {
       p_actor_id: access.tenant.profileId,
       p_conversacion_id: parsed.data.conversacionId,
@@ -1572,22 +1753,22 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
   );
 
   if (error) {
-    logInboxActionError("sendWhatsAppMessageAction.getConfig", error, {
+    logInboxActionError("sendMetaMessageAction.getConfig", error, {
       conversacionId: parsed.data.conversacionId,
     });
     redirectWithError(
       redirectPath,
-      `No se pudo preparar el envio por WhatsApp: ${safeErrorMessage(error)}`,
+      `No se pudo preparar el envio por ${channelLabel}: ${safeErrorMessage(error)}`,
     );
   }
 
-  const config = (data as WhatsAppSendConfigRow[] | null)?.[0];
+  const config = (data as MetaSendConfigRow[] | null)?.[0];
   const configCanalId = safeString(config?.canal_id);
 
-  if (!config?.access_token || !config.to_phone) {
+  if (!config?.access_token || !config.recipient_id || !config.account_id) {
     redirectWithError(
       redirectPath,
-      `Este canal no esta listo para envio real por WhatsApp. Canal: ${channelName}. Phone Number ID usado: ${channelPhoneNumberId}.`,
+      `Este canal no esta listo para envio real por ${channelLabel}. Canal: ${channelName}.`,
     );
   }
 
@@ -1598,30 +1779,74 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
     );
   }
 
-  const endpoint = buildWhatsAppMessagesEndpoint(channelPhoneNumberId);
+  if (
+    config.channel_type !== channelType ||
+    safeString(config.account_id) !== publicAccountId
+  ) {
+    redirectWithError(
+      redirectPath,
+      "La cuenta Meta resuelta no coincide con la configuracion publica del canal.",
+    );
+  }
 
-  console.info("[sendWhatsAppMessageAction] WhatsApp manual send", {
+  const contactPolicy = await checkMetaContactPolicy({
+    channel: channelType,
+    channelId: channel.id,
+    empresaId: access.tenant.empresaId,
+    identifier: config.recipient_id,
+  });
+  if (!contactPolicy.allowed) redirectWithError(redirectPath, contactPolicy.reason);
+
+  const endpoint =
+    channelType === "whatsapp"
+      ? buildWhatsAppMessagesEndpoint(config.account_id)
+      : channelType === "facebook"
+        ? buildFacebookMessagesEndpoint(config.account_id)
+        : buildInstagramMessagesEndpoint(config.account_id, config.api_host);
+
+  console.info("[sendMetaMessageAction] Meta manual send", {
     accessTokenConfigured: Boolean(config.access_token),
     accessTokenUpdatedAt: config.access_token_updated_at ?? null,
     canalId: channel.id,
+    channel: channelType,
     channelName,
     conversationId: parsed.data.conversacionId,
     endpoint,
     graphVersion: META_GRAPH_API_VERSION,
-    phoneNumberId: channelPhoneNumberId,
-    phoneNumberIdLength: channelPhoneNumberId.length,
+    accountId: config.account_id,
+    recipientSuffix: config.recipient_id.slice(-4),
     tokenFingerprint: config.access_token_suffix
       ? `...${config.access_token_suffix}`
       : null,
-    to: config.to_phone,
   });
 
-  const result = await sendWhatsAppTextMessage({
-    accessToken: config.access_token,
-    body: parsed.data.contenido,
-    phoneNumberId: channelPhoneNumberId,
-    to: config.to_phone,
-  });
+  let result: SendMetaMessageResult;
+
+  if (channelType === "whatsapp") {
+    result = await sendWhatsAppTextMessage({
+      accessToken: config.access_token,
+      body: parsed.data.contenido,
+      phoneNumberId: config.account_id,
+      to: config.recipient_id,
+    });
+  } else if (channelType === "facebook") {
+    result = await sendFacebookTextMessage({
+      accessToken: config.access_token,
+      body: parsed.data.contenido,
+      pageId: config.account_id,
+      recipientId: config.recipient_id,
+    });
+  } else {
+    result = await sendInstagramTextMessage({
+      accessToken: config.access_token,
+      apiHost: config.api_host,
+      body: parsed.data.contenido,
+      instagramBusinessAccountId: config.account_id,
+      recipientId: config.recipient_id,
+    });
+  }
+
+  const metaError = result.ok ? null : formatMetaSendError(result);
 
   const { error: registerError } = await supabase.rpc(
     "registrar_inbox_mensaje_saliente_meta",
@@ -1631,13 +1856,13 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
       p_conversacion_id: parsed.data.conversacionId,
       p_error: result.ok
         ? null
-        : `Canal: ${channelName}. Phone Number ID usado: ${channelPhoneNumberId}. Meta: ${result.error}`,
+        : `Canal: ${channelName}. Cuenta Meta: ${publicAccountId}. Meta: ${metaError}`,
       p_estado: result.ok ? "enviado" : "fallido",
     },
   );
 
   if (registerError) {
-    logInboxActionError("sendWhatsAppMessageAction.register", registerError, {
+    logInboxActionError("sendMetaMessageAction.register", registerError, {
       conversacionId: parsed.data.conversacionId,
     });
     redirectWithError(
@@ -1653,11 +1878,212 @@ export async function sendWhatsAppMessageAction(formData: FormData) {
   if (!result.ok) {
     redirectWithError(
       redirectPath,
-      `No se pudo enviar por WhatsApp. Canal: ${channelName}. Phone Number ID usado: ${channelPhoneNumberId}. Meta: ${result.error}`,
+      `No se pudo enviar por ${channelLabel}. Canal: ${channelName}. Meta: ${metaError}`,
     );
   }
 
   redirect(redirectPath);
+}
+
+export async function syncWhatsAppTemplatesAction(formData: FormData) {
+  const channelId = String(formData.get("canalId") ?? "").trim();
+  const redirectPath = "/whapp/plantillas";
+  if (!z.string().uuid().safeParse(channelId).success) {
+    redirectWithError(redirectPath, "Selecciona un canal WhatsApp valido.");
+  }
+
+  const access = await assertInboxPermission("inbox.channels.manage", redirectPath);
+  const supabase = await createClient();
+  const { data: channel, error: channelError } = await supabase
+    .from("inbox_canales")
+    .select("id, canal, proveedor, configuracion_publica")
+    .eq("empresa_id", access.tenant.empresaId)
+    .eq("id", channelId)
+    .maybeSingle<{
+      canal: string;
+      configuracion_publica: Record<string, unknown>;
+      id: string;
+      proveedor: string;
+    }>();
+  const wabaId = safeString(channel?.configuracion_publica.waba_id);
+  if (channelError || channel?.canal !== "whatsapp" || channel.proveedor !== "meta" || !wabaId) {
+    redirectWithError(redirectPath, "El canal no tiene un WABA valido para sincronizar.");
+  }
+
+  const admin = createServiceRoleClient();
+  const { data: configRows, error: configError } = await admin.rpc(
+    "obtener_inbox_whatsapp_campaign_send_config_server",
+    { p_canal_id: channelId, p_empresa_id: access.tenant.empresaId },
+  );
+  const config = (configRows as WhatsAppCampaignSyncConfigRow[] | null)?.[0];
+  if (configError || !config?.access_token) {
+    redirectWithError(redirectPath, "El canal no tiene credenciales Meta vigentes.");
+  }
+
+  let remoteTemplates;
+  try {
+    remoteTemplates = await fetchWhatsAppTemplates({
+      accessToken: config.access_token,
+      wabaId,
+    });
+  } catch (error) {
+    redirectWithError(
+      redirectPath,
+      error instanceof Error ? error.message : "No se pudieron sincronizar las plantillas.",
+    );
+  }
+
+  const syncedAt = new Date().toISOString();
+  const rows = remoteTemplates.map((template) => ({
+    canal_id: channelId,
+    categoria: template.category,
+    cuerpo: template.body || `Plantilla Meta ${template.name}`,
+    disabled_at: ["DISABLED", "PAUSED"].includes(template.status) ? syncedAt : null,
+    empresa_id: access.tenant.empresaId,
+    estado:
+      template.status === "APPROVED"
+        ? "aprobada"
+        : template.status === "REJECTED"
+          ? "rechazada"
+          : ["DISABLED", "PAUSED"].includes(template.status)
+            ? "pausada"
+            : "pendiente",
+    idioma: template.language,
+    last_synced_at: syncedAt,
+    meta_category: template.category,
+    meta_status: template.status,
+    meta_template_id: template.id,
+    nombre: template.name,
+    quality_score: template.qualityScore,
+    rechazo_motivo: template.rejectedReason,
+    sync_error: null,
+    updated_by: access.tenant.profileId,
+    variables: template.variables,
+  }));
+
+  if (rows.length > 0) {
+    const { error } = await admin
+      .from("inbox_meta_plantillas")
+      .upsert(rows, { onConflict: "empresa_id,nombre,idioma" });
+    if (error) redirectWithError(redirectPath, "Meta respondió, pero no se pudo guardar el catálogo.");
+  }
+
+  const remoteIds = new Set(remoteTemplates.map((template) => template.id));
+  const { data: existingTemplates, error: existingTemplatesError } = await admin
+    .from("inbox_meta_plantillas")
+    .select("id, meta_template_id")
+    .eq("empresa_id", access.tenant.empresaId)
+    .eq("canal_id", channelId)
+    .not("meta_template_id", "is", null);
+  if (existingTemplatesError) {
+    redirectWithError(redirectPath, "No se pudo verificar el catalogo local de plantillas.");
+  }
+
+  const missingIds = (existingTemplates ?? [])
+    .filter((template) => !remoteIds.has(template.meta_template_id as string))
+    .map((template) => template.id as string);
+  if (missingIds.length > 0) {
+    const { error: missingError } = await admin
+      .from("inbox_meta_plantillas")
+      .update({
+        disabled_at: syncedAt,
+        estado: "pausada",
+        meta_status: "MISSING",
+        updated_by: access.tenant.profileId,
+      })
+      .in("id", missingIds);
+    if (missingError) {
+      redirectWithError(redirectPath, "No se pudieron pausar las plantillas retiradas de Meta.");
+    }
+  }
+
+  revalidateInboxPaths();
+  redirect(`${redirectPath}?success=${encodeURIComponent(`${remoteTemplates.length} plantilla(s) sincronizada(s) con Meta.`)}`);
+}
+
+export async function syncMetaChannelHealthAction(formData: FormData) {
+  const channelId = String(formData.get("canalId") ?? "").trim();
+  const redirectPath = `/whapp/canales/${channelId}`;
+  if (!z.string().uuid().safeParse(channelId).success) {
+    redirectWithError("/whapp/canales", "Canal Meta invalido.");
+  }
+
+  const access = await assertInboxPermission("inbox.channels.manage", redirectPath);
+  const supabase = await createClient();
+  const { data: channel, error: channelError } = await supabase
+    .from("inbox_canales")
+    .select("id, canal, proveedor, configuracion_publica")
+    .eq("empresa_id", access.tenant.empresaId)
+    .eq("id", channelId)
+    .maybeSingle<{
+      canal: string;
+      configuracion_publica: Record<string, unknown>;
+      id: string;
+      proveedor: string;
+    }>();
+  const phoneNumberId = safeString(channel?.configuracion_publica.phone_number_id);
+  if (channelError || channel?.proveedor !== "meta" || channel.canal !== "whatsapp" || !phoneNumberId) {
+    redirectWithError(redirectPath, "El canal WhatsApp no tiene Phone Number ID valido.");
+  }
+
+  const admin = createServiceRoleClient();
+  const { data: configRows, error: configError } = await admin.rpc(
+    "obtener_inbox_whatsapp_campaign_send_config_server",
+    { p_canal_id: channelId, p_empresa_id: access.tenant.empresaId },
+  );
+  const config = (configRows as WhatsAppCampaignSyncConfigRow[] | null)?.[0];
+  if (configError || !config?.access_token) {
+    redirectWithError(redirectPath, "El canal no tiene token Meta vigente.");
+  }
+
+  let health;
+  try {
+    health = await fetchWhatsAppChannelHealth({
+      accessToken: config.access_token,
+      phoneNumberId,
+    });
+  } catch (error) {
+    redirectWithError(
+      redirectPath,
+      error instanceof Error ? error.message : "No se pudo consultar la salud Meta.",
+    );
+  }
+
+  const tierLimits: Record<string, number> = {
+    TIER_1K: 1000,
+    TIER_10K: 10000,
+    TIER_100K: 100000,
+    TIER_250K: 250000,
+    TIER_UNLIMITED: 1000000,
+  };
+  const { error: policyError } = await admin
+    .from("inbox_meta_politicas_envio")
+    .upsert({
+      canal_id: channelId,
+      daily_limit: tierLimits[health.messagingLimitTier ?? ""] ?? 1000,
+      empresa_id: access.tenant.empresaId,
+      pause_reason: health.qualityRating === "RED" ? "Meta reporta calidad roja." : null,
+      paused_at: health.qualityRating === "RED" ? new Date().toISOString() : null,
+      quality_status: health.qualityRating,
+    }, { onConflict: "empresa_id,canal_id" });
+  if (policyError) redirectWithError(redirectPath, "No se pudo guardar la politica de salud Meta.");
+
+  const { error: channelUpdateError } = await admin
+    .from("inbox_canales")
+    .update({
+      proveedor_estado: `quality=${health.qualityRating};limit=${health.messagingLimitTier ?? "UNKNOWN"}`,
+      ultima_verificacion_at: new Date().toISOString(),
+    })
+    .eq("empresa_id", access.tenant.empresaId)
+    .eq("id", channelId);
+  if (channelUpdateError) redirectWithError(redirectPath, "La salud se consulto, pero no pudo guardarse.");
+
+  revalidateInboxPaths();
+  redirect(`${redirectPath}?success=${encodeURIComponent(`Calidad ${health.qualityRating}; limite ${health.messagingLimitTier ?? "desconocido"}.`)}`);
+}
+
+export async function sendWhatsAppMessageAction(formData: FormData) {
+  return sendMetaMessageAction(formData);
 }
 
 export async function sendWhatsAppTemplateAction(formData: FormData) {
@@ -1686,10 +2112,10 @@ export async function sendWhatsAppTemplateAction(formData: FormData) {
           "id, canal_id, canal, canal_rel:inbox_canales!inbox_conversaciones_canal_empresa_fkey(id, nombre, canal, proveedor, estado, conexion_estado, configuracion_publica)",
         )
         .eq("id", parsed.data.conversacionId)
-        .maybeSingle<WhatsAppSendConversationRow>(),
+        .maybeSingle<MetaSendConversationRow>(),
       supabase
         .from("inbox_meta_plantillas")
-        .select("id, canal_id, nombre, idioma, categoria, estado, cuerpo, variables")
+        .select("id, canal_id, nombre, idioma, categoria, estado, cuerpo, variables, meta_status, last_synced_at, disabled_at")
         .eq("id", parsed.data.templateId)
         .eq("empresa_id", access.tenant.empresaId)
         .maybeSingle<MetaTemplateActionRow>(),
@@ -1727,6 +2153,18 @@ export async function sendWhatsAppTemplateAction(formData: FormData) {
 
   if (template.estado !== "aprobada") {
     redirectWithError(redirectPath, "Solo se pueden enviar plantillas aprobadas.");
+  }
+
+  if (
+    template.meta_status !== "APPROVED" ||
+    template.disabled_at ||
+    !template.last_synced_at ||
+    Date.now() - new Date(template.last_synced_at).getTime() > 7 * 24 * 60 * 60 * 1000
+  ) {
+    redirectWithError(
+      redirectPath,
+      "La plantilla debe estar aprobada y sincronizada con Meta durante los ultimos 7 dias.",
+    );
   }
 
   if (template.canal_id && template.canal_id !== conversation.canal_id) {
@@ -1814,6 +2252,18 @@ export async function sendWhatsAppTemplateAction(formData: FormData) {
       `La configuracion de envio no coincide con el canal asociado. Canal asociado: ${channel.id}. Canal configuracion: ${configCanalId || "sin canal"}.`,
     );
   }
+
+  const contactPolicy = await checkMetaContactPolicy({
+    channel: "whatsapp",
+    channelId: channel.id,
+    empresaId: access.tenant.empresaId,
+    identifier: config.to_phone,
+    requiredPurpose:
+      template.categoria === "MARKETING"
+        ? "mensajeria_comercial"
+        : "mensajeria_servicio",
+  });
+  if (!contactPolicy.allowed) redirectWithError(redirectPath, contactPolicy.reason);
 
   const variableValues = parseTemplateVariables(parsed.data.variables);
   const endpoint = buildWhatsAppMessagesEndpoint(channelPhoneNumberId);

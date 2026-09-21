@@ -60,9 +60,7 @@ export default async function NewConsultationPage({
     );
   }
 
-  let result: ConsultationSearchResult | null = getBlankConsultationResult(
-    params?.documento ?? "",
-  );
+  let result: ConsultationSearchResult | null = null;
   let searchMessage: string | null = null;
   const parsedDocument = params?.documento
     ? consultationSearchSchema.safeParse({ documento: params.documento })
@@ -82,6 +80,7 @@ export default async function NewConsultationPage({
     }
   } else if (params?.documento) {
     searchMessage = "La identificacion debe tener entre 9 y 12 digitos numericos.";
+    result = getBlankConsultationResult(params.documento);
   }
 
   if (params?.consulta_estado === "saved") {

@@ -41,9 +41,12 @@ export const crmClienteGeneroSchema = z.enum(CRM_CLIENTE_GENEROS);
 export const crmInteraccionTipoSchema = z.enum(CRM_INTERACCION_TIPOS);
 export const crmSeguimientoEstadoSchema = z.enum(CRM_SEGUIMIENTO_ESTADOS);
 
-export const createCustomerSchema = z.object({
+const customerFieldsSchema = z.object({
   asignadoA: optionalFormUuidSchema,
   correo: optionalEmailSchema,
+  fiscalIdentificationType: z.enum(["01", "02", "03", "04"]).optional().or(
+    z.literal("").transform(() => undefined),
+  ),
   genero: crmClienteGeneroSchema.default("o"),
   identificacion: optionalCrmIdentificationSchema,
   nombre: nonEmptyTextSchema,
@@ -54,9 +57,27 @@ export const createCustomerSchema = z.object({
   whatsapp: optionalTextSchema,
 });
 
-export const updateCustomerSchema = createCustomerSchema.extend({
+export const createCustomerSchema = customerFieldsSchema.superRefine((value, context) => {
+  if (Boolean(value.identificacion) !== Boolean(value.fiscalIdentificationType)) {
+    context.addIssue({
+      code: "custom",
+      message: "El numero y el tipo de identificacion fiscal deben completarse juntos.",
+      path: [value.identificacion ? "fiscalIdentificationType" : "identificacion"],
+    });
+  }
+});
+
+export const updateCustomerSchema = customerFieldsSchema.extend({
   clienteId: uuidSchema,
   estado: crmClienteEstadoSchema,
+}).superRefine((value, context) => {
+  if (Boolean(value.identificacion) !== Boolean(value.fiscalIdentificationType)) {
+    context.addIssue({
+      code: "custom",
+      message: "El numero y el tipo de identificacion fiscal deben completarse juntos.",
+      path: [value.identificacion ? "fiscalIdentificationType" : "identificacion"],
+    });
+  }
 });
 
 export const createInteractionSchema = z.object({

@@ -30,6 +30,31 @@ export type DispatchOrder = {
   ventaNumero: string | null;
 };
 
+export type DispatchEvidenceType = "photo" | "signature";
+
+export type DispatchDeliveryEvidence = {
+  accuracyMeters: number | null;
+  capturedAt: string;
+  createdAt: string;
+  fileName: string | null;
+  id: string;
+  latitude: number | null;
+  longitude: number | null;
+  mimeType: string;
+  receiverName: string | null;
+  sizeBytes: number;
+  type: DispatchEvidenceType;
+};
+
+export type DispatchMobileTargetStatus = "en_ruta" | "entregado" | "fallido";
+
+export type DispatchMobileOperationResult = {
+  dispatchId: string;
+  dispatchNumber: string;
+  dispatchStatus: DispatchStatus;
+  evidenceCount: number;
+};
+
 export type DispatchAssignableUser = {
   id: string;
   nombre: string;

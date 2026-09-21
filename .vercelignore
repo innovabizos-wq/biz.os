@@ -1,0 +1,11 @@
+.env*
+!.env.example
+.vercel/
+.codex-vercel-cli/
+.codex-npm-cache/
+.codex-whatsapp-*
+.codex-dev-*
+.tmp-*
+tmp-*
+*.tar.gz
+dashboard2-static-browser.png

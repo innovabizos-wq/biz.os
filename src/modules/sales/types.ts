@@ -7,6 +7,7 @@ export type SaleStatus =
 
 export type SaleInventoryState =
   | "pendiente"
+  | "reservado"
   | "aplicado"
   | "parcial"
   | "no_aplica";

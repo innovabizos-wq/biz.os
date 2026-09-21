@@ -13,6 +13,7 @@ import {
   getInboxMessages,
 } from "@/modules/inbox/queries";
 import type { InboxConversationStatus } from "@/modules/inbox/types";
+import { checkMetaContactPolicy } from "@/modules/whapp/server/messaging-policy";
 import {
   sendWhatsAppTextMessage,
 } from "@/services/meta/client";
@@ -24,6 +25,7 @@ type MetaSendConfig = {
   access_token?: string;
   account_id?: string;
   api_host?: string | null;
+  canal_id?: string;
   channel_name?: string;
   channel_type?: MetaChannel;
   recipient_id?: string;
@@ -272,6 +274,7 @@ export async function getInboxWidgetOperationsAction() {
   const tenant = await getCurrentTenantContext();
   if (!tenant.ok || !tenant.data) {
     return {
+      availableTags: [],
       canAssign: false,
       canChangeStatus: false,
       canCreateCustomer: false,
@@ -279,6 +282,7 @@ export async function getInboxWidgetOperationsAction() {
       currentProfileId: null,
       currentProfileName: null,
       customers: [],
+      funnelStages: [],
       users: [],
     };
   }
@@ -289,18 +293,34 @@ export async function getInboxWidgetOperationsAction() {
   ]);
   const customerRows = customers.ok ? customers.data : [];
   const supabase = await createClient();
-  const { data: numberRows } = customerRows.length > 0
-    ? await supabase
-        .from("crm_clientes")
-        .select("id, numero")
+  const [{ data: numberRows }, { data: tagRows }, { data: funnelStageRows }] =
+    await Promise.all([
+      customerRows.length > 0
+        ? supabase
+            .from("crm_clientes")
+            .select("id, numero")
+            .eq("empresa_id", tenant.data.empresaId)
+            .in("id", customerRows.map((customer) => customer.id))
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("inbox_etiquetas")
+        .select("id, nombre, color")
         .eq("empresa_id", tenant.data.empresaId)
-        .in("id", customerRows.map((customer) => customer.id))
-    : { data: [] };
+        .eq("activa", true)
+        .order("nombre"),
+      supabase
+        .from("inbox_funnel_etapas")
+        .select("id, nombre, color, funnel_id, funnel:inbox_funnels(nombre)")
+        .eq("empresa_id", tenant.data.empresaId)
+        .eq("activa", true)
+        .order("posicion"),
+    ]);
   const customerNumberById = new Map(
     (numberRows ?? []).map((row) => [row.id, row.numero]),
   );
 
   return {
+    availableTags: tagRows ?? [],
     canAssign: tenant.data.permissions.includes("inbox.conversations.assign"),
     canChangeStatus: tenant.data.permissions.includes(
       "inbox.conversations.status.change",
@@ -314,6 +334,18 @@ export async function getInboxWidgetOperationsAction() {
     customers: customerRows.flatMap((customer) => {
       const numero = customerNumberById.get(customer.id);
       return typeof numero === "number" ? [{ ...customer, numero }] : [];
+    }),
+    funnelStages: (funnelStageRows ?? []).flatMap((stage) => {
+      const funnel = firstRelation(stage.funnel);
+      return funnel?.nombre
+        ? [{
+            color: stage.color,
+            funnelId: stage.funnel_id,
+            funnelName: funnel.nombre,
+            id: stage.id,
+            nombre: stage.nombre,
+          }]
+        : [];
     }),
     users: users.ok ? users.data : [],
   };
@@ -571,14 +603,10 @@ export async function updateInboxWidgetConversationAction(formData: FormData) {
       .filter(Boolean)
       .slice(0, 20);
     const etapaFunnel = String(formData.get("etapaFunnel") ?? "").trim().slice(0, 120);
-    const admin = createServiceRoleClient();
-    const { error } = await admin.from("inbox_eventos").insert({
-      conversacion_id: conversacionId,
-      created_by: tenant.data.profileId,
-      descripcion: "Clasificacion actualizada desde el popup.",
-      empresa_id: tenant.data.empresaId,
-      metadata: { etiquetas, etapaFunnel: etapaFunnel || null },
-      tipo: "clasificacion_widget",
+    const { error } = await supabase.rpc("actualizar_inbox_clasificacion", {
+      p_conversacion_id: conversacionId,
+      p_etapa_funnel: etapaFunnel || null,
+      p_etiquetas: etiquetas,
     });
     if (error) return { error: "No se pudo guardar la clasificacion.", ok: false as const };
   } else {
@@ -680,6 +708,16 @@ export async function addInboxWidgetMessageAction(formData: FormData) {
 
   if (configError || !config?.access_token || !config.account_id || !config.recipient_id || !config.channel_type) {
     return { error: "El canal no esta listo para enviar por Meta.", ok: false as const };
+  }
+
+  const contactPolicy = await checkMetaContactPolicy({
+    channel: config.channel_type,
+    channelId: config.canal_id,
+    empresaId: tenant.data.empresaId,
+    identifier: config.recipient_id,
+  });
+  if (!contactPolicy.allowed) {
+    return { error: contactPolicy.reason, ok: false as const };
   }
 
   const metaResult = file

@@ -43,6 +43,7 @@ export const receivePurchaseOrderSchema = z.object({
     )
     .min(1),
   notas: optionalTextSchema,
+  operationId: uuidSchema,
   orderId: uuidSchema,
 });
 

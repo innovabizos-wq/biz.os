@@ -12,6 +12,7 @@ import {
   readMetaVerifyParams,
 } from "@/services/meta/webhook";
 import type { MetaWebhookProcessSummary } from "@/services/meta/types";
+import { processMetaWebhookSignals } from "@/services/meta/webhook-signals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -195,6 +196,16 @@ export async function POST(request: Request) {
   }
 
   const summary = summarizeRpcData(data);
+
+  try {
+    await processMetaWebhookSignals(payload);
+  } catch (signalError) {
+    logMetaWebhookError("Procesamiento de entregas/lecturas Meta fallo", {
+      message: signalError instanceof Error ? signalError.message : "unknown_error",
+      objectType,
+    });
+    return jsonResponse({ ok: false, error: "signal_processing_failed" }, 500);
+  }
 
   logMetaWebhookInfo("RPC procesar_inbox_webhook_meta completado", {
     objectType,

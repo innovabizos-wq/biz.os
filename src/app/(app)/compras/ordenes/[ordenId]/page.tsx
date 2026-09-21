@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -6,6 +8,9 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getCurrentTenantContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
+import { PurchaseReturnsPanel } from "@/modules/purchase-returns/components/purchase-returns-panel";
+import { getPurchaseReturnsForOrder } from "@/modules/purchase-returns/queries";
 import {
   cancelPurchaseOrderAction,
   emitPurchaseOrderAction,
@@ -77,12 +82,14 @@ export default async function PurchaseOrderDetailPage({
   let orderResult;
   let itemsResult;
   let receiptsResult;
+  let returnsResult;
 
   try {
-    [orderResult, itemsResult, receiptsResult] = await Promise.all([
+    [orderResult, itemsResult, receiptsResult, returnsResult] = await Promise.all([
       getPurchaseOrderDetail(tenant, ordenId),
       getPurchaseOrderItems(tenant, ordenId),
       getPurchaseReceipts(tenant, ordenId),
+      getPurchaseReturnsForOrder(tenant, ordenId),
     ]);
   } catch {
     notFound();
@@ -95,6 +102,8 @@ export default async function PurchaseOrderDetailPage({
   const order = orderResult.data;
   const items = itemsResult.ok ? itemsResult.data : [];
   const receipts = receiptsResult.ok ? receiptsResult.data : [];
+  const returns = returnsResult.ok ? returnsResult.data : [];
+  const returnsLoadError = returnsResult.ok ? null : returnsResult.error.message;
   let receiptItemsResult;
 
   try {
@@ -107,7 +116,12 @@ export default async function PurchaseOrderDetailPage({
   }
   const receiptItems = receiptItemsResult.ok ? receiptItemsResult.data : [];
   const canManage = hasPermission(tenant.permissions, "purchases.orders.manage");
-  const canAdjustInventory = hasPermission(tenant.permissions, "inventory.stock.adjust");
+  const canAdjustInventory =
+    isModuleActive(tenant.activeModules, "inventory") &&
+    hasPermission(tenant.permissions, "inventory.stock.adjust");
+  const canManagePayments =
+    isModuleActive(tenant.activeModules, "payments") &&
+    hasPermission(tenant.permissions, "payments.accounts.manage");
   const canReceive =
     canManage &&
     canAdjustInventory &&
@@ -222,6 +236,7 @@ export default async function PurchaseOrderDetailPage({
       {canReceive ? (
         <form action={receivePurchaseOrderAction} className="rounded-lg border bg-background p-5">
           <h2 className="text-base font-semibold">Registrar recepcion</h2>
+          <input name="operationId" type="hidden" value={randomUUID()} />
           <input name="orderId" type="hidden" value={order.id} />
           <div className="mt-4 grid gap-3">
             {items
@@ -292,6 +307,17 @@ export default async function PurchaseOrderDetailPage({
           )}
         </div>
       </div>
+
+      <PurchaseReturnsPanel
+        canCreate={canManage}
+        canProcessFinancial={canManage && canManagePayments}
+        canReturnInventory={canManage && canAdjustInventory}
+        loadError={returnsLoadError}
+        order={order}
+        receiptItems={receiptItems}
+        receipts={receipts}
+        returns={returns}
+      />
     </section>
   );
 }

@@ -17,7 +17,10 @@ import {
 } from "@/modules/brain/queries";
 import { brainAnalystOutputSchema } from "@/modules/brain/schemas";
 import type { BrainActionPlan, BrainAnalysisResult, BrainRecommendation } from "@/modules/brain/types";
-import { getBrainAiProviderSettings } from "@/modules/ai/conversation-layer-service";
+import {
+  getBrainAiProviderSettings,
+  recordBrainProviderEvent,
+} from "@/modules/ai/conversation-layer-service";
 import type { CoreResult, JsonRecord, TenantContext } from "@/types/core";
 import { fail, ok } from "@/types/core";
 
@@ -313,13 +316,27 @@ export async function answerBrainQuestion(
         temperature: 0.3,
       };
 
-      const llmResult = await adapter.generateJson({
-        messages: [
-          { content: BRAIN_OPERATOR_SYSTEM_PROMPT, role: "system" },
-          { content: userPrompt, role: "user" },
-        ],
-        settings: brainSettings,
-      });
+      let llmResult = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          llmResult = await adapter.generateJson({
+            messages: [
+              { content: BRAIN_OPERATOR_SYSTEM_PROMPT, role: "system" },
+              { content: userPrompt, role: "user" },
+            ],
+            settings: brainSettings,
+          });
+          if (llmResult?.content) break;
+        } catch (error) {
+          await recordBrainProviderEvent({
+            errorCode: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+            feature: "brain.business.answer",
+            settings: brainSettings,
+            status: "error",
+          });
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
+        }
+      }
 
       if (llmResult?.content) {
         // Safety net: si el LLM igual devuelve JSON, extraer el texto
@@ -340,9 +357,19 @@ export async function answerBrainQuestion(
         }
 
         if (cleanMessage.length > 10) {
+          await recordBrainProviderEvent({
+            feature: "brain.business.answer",
+            result: llmResult,
+            settings: brainSettings,
+            status: "logged",
+          });
           return ok({
             message: cleanMessage,
-            result: enterpriseContext as unknown as JsonRecord,
+            result: {
+              ...enterpriseContext,
+              provider: providerData.provider,
+              responseMode: "model",
+            } as unknown as JsonRecord,
           });
         }
       }
@@ -371,7 +398,10 @@ export async function answerBrainQuestion(
 
   return ok({
     message,
-    result: enterpriseContext as unknown as JsonRecord,
+    result: {
+      ...enterpriseContext,
+      responseMode: "deterministic_fallback",
+    } as unknown as JsonRecord,
   });
 }
 

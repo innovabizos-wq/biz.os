@@ -64,6 +64,20 @@ test("Brain API routes expose analysis, context, signals and plan execution", ()
   assert.match(source("src/app/api/brain/action-plans/[id]/execute/route.ts"), /executeBrainActionPlan/);
 });
 
+test("Brain action plan executor can resume persisted workflow plans", () => {
+  const executor = source("src/modules/brain/plan-executor.ts");
+
+  assert.match(executor, /executeBrainWorkflow/);
+  assert.match(executor, /workflowIdFromPlan/);
+  assert.match(executor, /workflowStepId/);
+  assert.match(executor, /stepInput\(step\.payload\)/);
+  assert.match(executor, /writeActionPlanAudit/);
+  assert.match(executor, /brain\.action_plan\.\$\{input\.status\}/);
+  assert.match(executor, /entidad: "brain_action_plan"/);
+  assert.match(executor, /inputsByStep: Object\.fromEntries/);
+  assert.doesNotMatch(executor, /params: step\.payload/);
+});
+
 test("Brain services collect cross-module signals and validate analyst output", () => {
   const connectors = source("src/modules/brain/connectors.ts");
   const analyst = source("src/modules/brain/analyst-service.ts");
@@ -130,4 +144,9 @@ test("Brain page exposes signals, recommendations approval and plan execution", 
   assert.match(page, /executeBrainActionPlanAction/);
   assert.match(page, /Salud del Brain/);
   assert.match(page, /Action Registry/);
+  assert.match(page, /RuntimePanel/);
+  assert.match(page, /listBrainAgentsForTenant/);
+  assert.match(page, /listBrainAutomationJobs/);
+  assert.match(page, /getBrainTaskMetrics/);
+  assert.match(page, /Exito por tareas/);
 });

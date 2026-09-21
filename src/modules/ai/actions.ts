@@ -13,6 +13,9 @@ import {
 } from "@/modules/brain/ai-service";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
+// La persistencia de configuracion IA termina en guardar_configuracion_empresa
+// a traves de updateBrainAiSettings/conversation-layer-service.
+
 function getFormData(formData: FormData) {
   return Object.fromEntries(formData.entries());
 }

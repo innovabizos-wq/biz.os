@@ -70,7 +70,7 @@ export default async function CatalogProductDetailPage({
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeader
-          description="Detalle comercial sin stock, bodegas ni costos avanzados."
+          description="Detalle comercial con stock por bodega cuando aplica."
           eyebrow="Catálogo"
           title={product.data.nombre}
         />

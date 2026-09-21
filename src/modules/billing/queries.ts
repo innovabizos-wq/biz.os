@@ -7,7 +7,7 @@ import type {
   FiscalConfiguration,
 } from "@/modules/billing/types";
 import type { CoreResult, JsonRecord, TenantContext } from "@/types/core";
-import { ok } from "@/types/core";
+import { fail, ok } from "@/types/core";
 
 type InvoiceRow = {
   ambiente: ElectronicInvoice["ambiente"];
@@ -33,9 +33,14 @@ type FiscalInvoiceRow = {
 };
 
 type CompanyFiscalSettingsRow = {
+  address_line: string | null;
   branch_code: string;
+  canton_code: string | null;
   certificate_pin_secret_ref: string | null;
   certificate_secret_ref: string | null;
+  default_payment_method_code: string | null;
+  default_sale_condition_code: string | null;
+  district_code: string | null;
   email: string;
   environment: string;
   hacienda_password_secret_ref: string | null;
@@ -44,6 +49,9 @@ type CompanyFiscalSettingsRow = {
   identification_type: string;
   legal_name: string;
   main_activity_code: string | null;
+  neighborhood: string | null;
+  province_code: string | null;
+  software_provider_identification: string | null;
   terminal_code: string;
 };
 
@@ -55,13 +63,21 @@ function defaultFiscalConfiguration(): FiscalConfiguration {
   return {
     actividadEconomica: null,
     ambiente: "pruebas",
+    barrio: null,
+    canton: null,
+    condicionVenta: "01",
     correoEmisor: null,
+    distrito: null,
     hasHaciendaPassword: false,
     hasHaciendaUsuario: false,
     hasP12: false,
     hasPin: false,
     identificacion: null,
+    identificacionProveedorSistema: null,
     listoParaEmitir: false,
+    medioPago: "01",
+    otrasSenas: null,
+    provincia: null,
     razonSocial: null,
     sucursal: "001",
     terminal: "00001",
@@ -79,6 +95,11 @@ function fiscalReady(config: FiscalConfiguration) {
       config.identificacion &&
       config.actividadEconomica &&
       config.correoEmisor &&
+      config.identificacionProveedorSistema &&
+      config.provincia &&
+      config.canton &&
+      config.distrito &&
+      config.otrasSenas &&
       config.hasHaciendaUsuario &&
       config.hasHaciendaPassword &&
       config.hasP12 &&
@@ -94,13 +115,21 @@ function mapStructuredFiscalConfiguration(row: CompanyFiscalSettingsRow): Fiscal
   const config: FiscalConfiguration = {
     actividadEconomica: text(row.main_activity_code),
     ambiente: row.environment === "production" ? "produccion" : "pruebas",
+    barrio: text(row.neighborhood),
+    canton: text(row.canton_code),
+    condicionVenta: text(row.default_sale_condition_code) ?? "01",
     correoEmisor: text(row.email),
+    distrito: text(row.district_code),
     hasHaciendaPassword: hasSecretRef(row.hacienda_password_secret_ref),
     hasHaciendaUsuario: hasSecretRef(row.hacienda_username_secret_ref),
     hasP12: hasSecretRef(row.certificate_secret_ref),
     hasPin: hasSecretRef(row.certificate_pin_secret_ref),
     identificacion: text(row.identification_number),
+    identificacionProveedorSistema: text(row.software_provider_identification),
     listoParaEmitir: false,
+    medioPago: text(row.default_payment_method_code) ?? "01",
+    otrasSenas: text(row.address_line),
+    provincia: text(row.province_code),
     razonSocial: text(row.legal_name),
     sucursal: text(row.branch_code) ?? "001",
     terminal: text(row.terminal_code) ?? "00001",
@@ -165,7 +194,7 @@ export async function getFiscalConfiguration(
   const supabase = await createClient();
   const { data: structuredData, error: structuredError } = await supabase
     .from("company_fiscal_settings")
-    .select("legal_name, identification_type, identification_number, email, main_activity_code, branch_code, terminal_code, environment, hacienda_username_secret_ref, hacienda_password_secret_ref, certificate_secret_ref, certificate_pin_secret_ref")
+    .select("legal_name, identification_type, identification_number, email, province_code, canton_code, district_code, neighborhood, address_line, main_activity_code, software_provider_identification, default_sale_condition_code, default_payment_method_code, branch_code, terminal_code, environment, hacienda_username_secret_ref, hacienda_password_secret_ref, certificate_secret_ref, certificate_pin_secret_ref")
     .eq("empresa_id", tenant.empresaId)
     .maybeSingle<CompanyFiscalSettingsRow>();
 
@@ -181,13 +210,21 @@ export async function getFiscalConfiguration(
   const config: FiscalConfiguration = {
     actividadEconomica: text(raw.actividadEconomica),
     ambiente: raw.ambiente === "produccion" ? "produccion" : "pruebas",
+    barrio: text(raw.barrio),
+    canton: text(raw.canton),
+    condicionVenta: text(raw.condicionVenta) ?? "01",
     correoEmisor: text(raw.correoEmisor),
+    distrito: text(raw.distrito),
     hasHaciendaPassword: bool(raw.hasHaciendaPassword),
     hasHaciendaUsuario: bool(raw.hasHaciendaUsuario),
     hasP12: bool(raw.hasP12),
     hasPin: bool(raw.hasPin),
     identificacion: text(raw.identificacion),
+    identificacionProveedorSistema: text(raw.identificacionProveedorSistema),
     listoParaEmitir: false,
+    medioPago: text(raw.medioPago) ?? "01",
+    otrasSenas: text(raw.otrasSenas),
+    provincia: text(raw.provincia),
     razonSocial: text(raw.razonSocial),
     sucursal: text(raw.sucursal) ?? "001",
     terminal: text(raw.terminal) ?? "00001",
@@ -297,8 +334,11 @@ export type FiscalDocumentDetail = {
   clave: string | null;
   consecutivo: string | null;
   createdAt: string;
+  creditTermDays: number | null;
+  currencyCode: string;
   documentTypeCode: string;
   environment: string;
+  exchangeRate: number | null;
   haciendaStatus: string;
   id: string;
   issueDatetime: string | null;
@@ -306,15 +346,38 @@ export type FiscalDocumentDetail = {
   lastError: string | null;
   lines: FiscalDocumentLine[];
   metadata: JsonRecord;
+  payments: FiscalDocumentPayment[];
+  providerBoundAt: string | null;
+  providerCode: string | null;
+  providerConnectionId: string | null;
+  providerDocumentId: string | null;
+  providerEnvironment: string | null;
+  providerReference: string | null;
+  providerStatus: string | null;
   receiverName: string | null;
   receiverEmail: string | null;
   receiverIdentificationType: string | null;
   receiverSnapshot: JsonRecord;
+  references: FiscalDocumentReference[];
+  saleConditionCode: string | null;
   status: string;
   terminalCode: string | null;
   totals: JsonRecord;
   validationErrors: unknown[];
   xmlUnsignedStoragePath: string | null;
+};
+
+export type FiscalDocumentPayment = {
+  amount: number;
+  paymentMethodCode: string;
+};
+
+export type FiscalDocumentReference = {
+  reason: string | null;
+  referenceClave: string | null;
+  referenceCode: string | null;
+  referenceDocumentTypeCode: string | null;
+  referenceIssueDate: string | null;
 };
 
 export type FiscalDocumentLineTax = {
@@ -362,15 +425,53 @@ export type ReceivedFiscalDocumentSummary = {
   consecutivo: string | null;
   createdAt: string;
   currencyCode: string | null;
+  documentDirection: "incoming" | "outgoing";
+  documentRoot: string | null;
   haciendaStatus: string | null;
+  haciendaStatusVerified: boolean;
   id: string;
+  importSource: string;
   issuerIdentification: string | null;
   issuerName: string | null;
+  linkedSaleId: string | null;
+  linkedSaleNumber: string | null;
+  receiverIdentification: string | null;
+  receiverName: string | null;
   receiverResponseStatus: string;
   receiverMessageArtifactId: string | null;
+  sourceName: string | null;
   totalAmount: number | null;
   validationErrors: unknown[];
   xmlArtifactId: string | null;
+  xsdValid: boolean | null;
+};
+
+export type FiscalXmlImportBatchSummary = {
+  clave: string | null;
+  createdAt: string;
+  currencyCode: string | null;
+  documentDirection: "incoming" | "outgoing";
+  duplicateDocumentId: string | null;
+  id: string;
+  importSource: string;
+  importedDocumentId: string | null;
+  issuerName: string | null;
+  sourceName: string | null;
+  status: "previewed" | "processing" | "imported" | "duplicate" | "rejected";
+  suggestedSaleId: string | null;
+  suggestedSaleNumber: string | null;
+  totalAmount: number | null;
+  validationErrors: unknown[];
+  xsdErrors: unknown[];
+  xsdValid: boolean;
+};
+
+export type FiscalImportSaleCandidate = {
+  currencyCode: string;
+  date: string;
+  id: string;
+  number: string;
+  totalAmount: number;
 };
 
 export type ReceivedFiscalDocumentArtifactSummary = {
@@ -404,23 +505,47 @@ type FiscalDocumentDetailRow = {
   clave: string | null;
   consecutivo: string | null;
   created_at: string;
+  credit_term_days: number | null;
+  currency_code: string;
   document_type_code: string;
   environment: string;
+  exchange_rate: number | null;
   hacienda_status: string;
   id: string;
   issue_datetime: string | null;
   issuer_snapshot: JsonRecord | null;
   last_error: string | null;
   metadata: JsonRecord | null;
+  provider_bound_at: string | null;
+  provider_code: string | null;
+  provider_document_id: string | null;
+  provider_environment: string | null;
+  provider_reference: string | null;
+  provider_status: string | null;
+  fiscal_connection_id: string | null;
   receiver_name: string | null;
   receiver_email: string | null;
   receiver_identification_type: string | null;
   receiver_snapshot: JsonRecord | null;
+  sale_condition_code: string | null;
   status: string;
   terminal_code: string | null;
   totals: JsonRecord | null;
   validation_errors: unknown[] | null;
   xml_unsigned_storage_path: string | null;
+};
+
+type FiscalDocumentPaymentRow = {
+  amount: number;
+  payment_method_code: string;
+};
+
+type FiscalDocumentReferenceRow = {
+  reason: string | null;
+  reference_clave: string | null;
+  reference_code: string | null;
+  reference_document_type_code: string | null;
+  reference_issue_date: string | null;
 };
 
 type FiscalDocumentLineRow = {
@@ -486,13 +611,43 @@ type ReceivedFiscalDocumentSummaryRow = {
   consecutivo: string | null;
   created_at: string;
   currency_code: string | null;
+  document_direction: "incoming" | "outgoing";
+  document_root: string | null;
   hacienda_status: string | null;
+  hacienda_status_verified: boolean;
   id: string;
+  import_source: string;
   issuer_identification: string | null;
   issuer_name: string | null;
+  linked_sale_id: string | null;
+  receiver_identification: string | null;
+  receiver_name: string | null;
   receiver_response_status: string;
+  source_name: string | null;
   total_amount: number | null;
   validation_errors: unknown[] | null;
+  ventas: { numero: string } | { numero: string }[] | null;
+  xsd_valid: boolean | null;
+};
+
+type FiscalXmlImportBatchSummaryRow = {
+  clave: string | null;
+  created_at: string;
+  currency_code: string | null;
+  document_direction: "incoming" | "outgoing";
+  duplicate_document_id: string | null;
+  id: string;
+  import_source: string;
+  imported_document_id: string | null;
+  issuer_name: string | null;
+  source_name: string | null;
+  status: FiscalXmlImportBatchSummary["status"];
+  suggested_sale_id: string | null;
+  total_amount: number | null;
+  validation_errors: unknown[] | null;
+  ventas: { numero: string } | { numero: string }[] | null;
+  xsd_errors: unknown[] | null;
+  xsd_valid: boolean;
 };
 
 type ReceivedFiscalDocumentArtifactRow = {
@@ -692,7 +847,7 @@ export async function getFiscalDocumentDetail(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("fiscal_documents")
-    .select("id, document_type_code, status, hacienda_status, clave, consecutivo, environment, branch_code, terminal_code, issuer_snapshot, receiver_name, receiver_email, receiver_identification_type, receiver_snapshot, totals, validation_errors, last_error, metadata, issue_datetime, xml_unsigned_storage_path, created_at")
+    .select("id, document_type_code, status, hacienda_status, clave, consecutivo, environment, branch_code, terminal_code, currency_code, exchange_rate, sale_condition_code, credit_term_days, issuer_snapshot, receiver_name, receiver_email, receiver_identification_type, receiver_snapshot, totals, validation_errors, last_error, metadata, issue_datetime, xml_unsigned_storage_path, created_at, fiscal_connection_id, provider_code, provider_environment, provider_document_id, provider_reference, provider_status, provider_bound_at")
     .eq("empresa_id", tenant.empresaId)
     .eq("id", documentId)
     .maybeSingle<FiscalDocumentDetailRow>();
@@ -701,20 +856,35 @@ export async function getFiscalDocumentDetail(
     return ok(null);
   }
 
-  const { data: lines } = await supabase
-    .from("fiscal_document_lines")
-    .select("line_number, cabys_code, commercial_code, quantity, unit_code, detail, unit_price, gross_amount, discount_amount, subtotal, taxable_base, tax_amount, total_line_amount, is_exempt, is_non_subject, fiscal_document_line_taxes(tax_code, tax_rate_code, rate, amount, taxable_base)")
-    .eq("empresa_id", tenant.empresaId)
-    .eq("fiscal_document_id", documentId)
-    .order("line_number", { ascending: true });
+  const [{ data: lines }, { data: payments }, { data: references }] = await Promise.all([
+    supabase
+      .from("fiscal_document_lines")
+      .select("line_number, cabys_code, commercial_code, quantity, unit_code, detail, unit_price, gross_amount, discount_amount, subtotal, taxable_base, tax_amount, total_line_amount, is_exempt, is_non_subject, fiscal_document_line_taxes(tax_code, tax_rate_code, rate, amount, taxable_base)")
+      .eq("empresa_id", tenant.empresaId)
+      .eq("fiscal_document_id", documentId)
+      .order("line_number", { ascending: true }),
+    supabase
+      .from("fiscal_document_payments")
+      .select("payment_method_code, amount")
+      .eq("empresa_id", tenant.empresaId)
+      .eq("fiscal_document_id", documentId),
+    supabase
+      .from("fiscal_document_references")
+      .select("reference_document_type_code, reference_clave, reference_issue_date, reference_code, reason")
+      .eq("empresa_id", tenant.empresaId)
+      .eq("fiscal_document_id", documentId),
+  ]);
 
   return ok({
     branchCode: data.branch_code,
     clave: data.clave,
     consecutivo: data.consecutivo,
     createdAt: data.created_at,
+    creditTermDays: data.credit_term_days,
+    currencyCode: data.currency_code,
     documentTypeCode: data.document_type_code,
     environment: data.environment,
+    exchangeRate: data.exchange_rate,
     haciendaStatus: data.hacienda_status,
     id: data.id,
     issueDatetime: data.issue_datetime,
@@ -745,10 +915,29 @@ export async function getFiscalDocumentDetail(
       unitPrice: line.unit_price,
     })),
     metadata: data.metadata ?? {},
+    payments: ((payments ?? []) as FiscalDocumentPaymentRow[]).map((payment) => ({
+      amount: payment.amount,
+      paymentMethodCode: payment.payment_method_code,
+    })),
+    providerBoundAt: data.provider_bound_at,
+    providerCode: data.provider_code,
+    providerConnectionId: data.fiscal_connection_id,
+    providerDocumentId: data.provider_document_id,
+    providerEnvironment: data.provider_environment,
+    providerReference: data.provider_reference,
+    providerStatus: data.provider_status,
     receiverName: data.receiver_name,
     receiverEmail: data.receiver_email,
     receiverIdentificationType: data.receiver_identification_type,
     receiverSnapshot: data.receiver_snapshot ?? {},
+    references: ((references ?? []) as FiscalDocumentReferenceRow[]).map((reference) => ({
+      reason: reference.reason,
+      referenceClave: reference.reference_clave,
+      referenceCode: reference.reference_code,
+      referenceDocumentTypeCode: reference.reference_document_type_code,
+      referenceIssueDate: reference.reference_issue_date,
+    })),
+    saleConditionCode: data.sale_condition_code,
     status: data.status,
     terminalCode: data.terminal_code,
     totals: data.totals ?? {},
@@ -830,13 +1019,13 @@ export async function getReceivedFiscalDocuments(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("fiscal_received_documents")
-    .select("id, clave, consecutivo, issuer_name, issuer_identification, total_amount, currency_code, hacienda_status, receiver_response_status, validation_errors, created_at")
+    .select("id, clave, consecutivo, issuer_name, issuer_identification, receiver_name, receiver_identification, total_amount, currency_code, document_direction, document_root, import_source, source_name, linked_sale_id, hacienda_status, hacienda_status_verified, receiver_response_status, validation_errors, xsd_valid, created_at, ventas!fiscal_received_documents_linked_sale_empresa_fkey(numero)")
     .eq("empresa_id", tenant.empresaId)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(50);
 
   if (error) {
-    return ok([]);
+    return fail("PERMISSION_DENIED", "No se pudieron consultar los XML importados.", error);
   }
 
   const rows = (data ?? []) as ReceivedFiscalDocumentSummaryRow[];
@@ -872,15 +1061,104 @@ export async function getReceivedFiscalDocuments(
       consecutivo: row.consecutivo,
       createdAt: row.created_at,
       currencyCode: row.currency_code,
+      documentDirection: row.document_direction,
+      documentRoot: row.document_root,
       haciendaStatus: row.hacienda_status,
+      haciendaStatusVerified: row.hacienda_status_verified,
       id: row.id,
+      importSource: row.import_source,
       issuerIdentification: row.issuer_identification,
       issuerName: row.issuer_name,
+      linkedSaleId: row.linked_sale_id,
+      linkedSaleNumber: relationOne(row.ventas)?.numero ?? null,
+      receiverIdentification: row.receiver_identification,
+      receiverName: row.receiver_name,
       receiverMessageArtifactId: receiverMessageArtifactByDocument.get(row.id) ?? null,
       receiverResponseStatus: row.receiver_response_status,
+      sourceName: row.source_name,
       totalAmount: row.total_amount,
       validationErrors: row.validation_errors ?? [],
       xmlArtifactId: xmlArtifactByDocument.get(row.id) ?? null,
+      xsdValid: row.xsd_valid,
+    })),
+  );
+}
+
+export async function getFiscalXmlImportBatches(
+  tenant: TenantContext,
+): Promise<CoreResult<FiscalXmlImportBatchSummary[]>> {
+  if (!canUseBilling(tenant)) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver importaciones fiscales.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("fiscal_xml_import_batches")
+    .select("id, import_source, document_direction, source_name, status, clave, issuer_name, total_amount, currency_code, xsd_valid, xsd_errors, validation_errors, duplicate_document_id, suggested_sale_id, imported_document_id, created_at, ventas!fiscal_xml_import_batches_sale_empresa_fkey(numero)")
+    .eq("empresa_id", tenant.empresaId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    return fail("PERMISSION_DENIED", "No se pudo consultar el historial de importacion.", error);
+  }
+
+  return ok(
+    ((data ?? []) as FiscalXmlImportBatchSummaryRow[]).map((row) => ({
+      clave: row.clave,
+      createdAt: row.created_at,
+      currencyCode: row.currency_code,
+      documentDirection: row.document_direction,
+      duplicateDocumentId: row.duplicate_document_id,
+      id: row.id,
+      importSource: row.import_source,
+      importedDocumentId: row.imported_document_id,
+      issuerName: row.issuer_name,
+      sourceName: row.source_name,
+      status: row.status,
+      suggestedSaleId: row.suggested_sale_id,
+      suggestedSaleNumber: relationOne(row.ventas)?.numero ?? null,
+      totalAmount: row.total_amount,
+      validationErrors: row.validation_errors ?? [],
+      xsdErrors: row.xsd_errors ?? [],
+      xsdValid: row.xsd_valid,
+    })),
+  );
+}
+
+export async function getFiscalImportSaleCandidates(
+  tenant: TenantContext,
+): Promise<CoreResult<FiscalImportSaleCandidate[]>> {
+  if (!hasAnyPermission(tenant.permissions, ["sales.orders.view"])) {
+    return ok([]);
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ventas")
+    .select("id, numero, fecha_venta, moneda, total")
+    .eq("empresa_id", tenant.empresaId)
+    .neq("estado", "cancelada")
+    .order("fecha_venta", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    return fail("PERMISSION_DENIED", "No se pudieron consultar ventas para vincular.", error);
+  }
+
+  return ok(
+    ((data ?? []) as {
+      fecha_venta: string;
+      id: string;
+      moneda: string;
+      numero: string;
+      total: number;
+    }[]).map((row) => ({
+      currencyCode: row.moneda,
+      date: row.fecha_venta,
+      id: row.id,
+      number: row.numero,
+      totalAmount: row.total,
     })),
   );
 }

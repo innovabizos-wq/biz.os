@@ -3,6 +3,7 @@ import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-ch
 import { DEFAULT_DISPATCH_STATUS_FILTER } from "@/modules/dispatch/constants";
 import type {
   DispatchAssignableUser,
+  DispatchDeliveryEvidence,
   DispatchOrder,
   DispatchStatusFilter,
 } from "@/modules/dispatch/types";
@@ -43,6 +44,20 @@ type DispatchRow = {
 type UserRow = {
   id: string;
   nombre: string;
+};
+
+type DispatchEvidenceRow = {
+  accuracy_meters: number | null;
+  captured_at: string;
+  created_at: string;
+  file_name: string | null;
+  id: string;
+  latitude: number | null;
+  longitude: number | null;
+  mime_type: string;
+  receptor_nombre: string | null;
+  size_bytes: number;
+  tipo: DispatchDeliveryEvidence["type"];
 };
 
 function firstRelation<TRelation>(
@@ -191,4 +206,46 @@ export async function getAssignableUsersForDispatch(
   }
 
   return ok(((data ?? []) as UserRow[]).map((row) => ({ ...row })));
+}
+
+export async function getDispatchDeliveryEvidence(
+  tenant: TenantContext,
+  despachoId: string,
+): Promise<CoreResult<DispatchDeliveryEvidence[]>> {
+  if (
+    !hasAnyPermission(tenant.permissions, [
+      "dispatch.orders.view",
+      "dispatch.orders.status.change",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver evidencias de entrega.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("dispatch_delivery_evidence")
+    .select(
+      "id, tipo, mime_type, file_name, size_bytes, captured_at, receptor_nombre, latitude, longitude, accuracy_meters, created_at",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .eq("despacho_id", despachoId)
+    .order("captured_at", { ascending: false });
+
+  if (error) {
+    return fail("VALIDATION_ERROR", "No se pudieron consultar las evidencias.", error);
+  }
+
+  return ok(((data ?? []) as DispatchEvidenceRow[]).map((row) => ({
+    accuracyMeters: row.accuracy_meters,
+    capturedAt: row.captured_at,
+    createdAt: row.created_at,
+    fileName: row.file_name,
+    id: row.id,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    mimeType: row.mime_type,
+    receiverName: row.receptor_nombre,
+    sizeBytes: row.size_bytes,
+    type: row.tipo,
+  })));
 }

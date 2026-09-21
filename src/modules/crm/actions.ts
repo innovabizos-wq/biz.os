@@ -126,6 +126,22 @@ export async function createCustomerAction(formData: FormData) {
 
   const clienteId = (data as CreatedCustomerRow[] | null)?.[0]?.cliente_id;
 
+  if (clienteId) {
+    const { error: fiscalTypeError } = await supabase.rpc(
+      "set_crm_customer_fiscal_identification_type",
+      {
+        p_customer_id: clienteId,
+        p_fiscal_identification_type: parsed.data.fiscalIdentificationType ?? null,
+      },
+    );
+    if (fiscalTypeError) {
+      redirectWithError(
+        `/crm/clientes/${clienteId}`,
+        "El cliente se creo, pero no se pudo guardar su tipo de identificacion fiscal.",
+      );
+    }
+  }
+
   revalidateCrmPaths(clienteId);
   redirect(clienteId ? `/crm/clientes/${clienteId}` : "/crm/clientes");
 }
@@ -160,6 +176,20 @@ export async function updateCustomerAction(formData: FormData) {
     redirectWithError(
       `/crm/clientes/${parsed.data.clienteId}`,
       `No se pudo actualizar el cliente: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  const { error: fiscalTypeError } = await supabase.rpc(
+    "set_crm_customer_fiscal_identification_type",
+    {
+      p_customer_id: parsed.data.clienteId,
+      p_fiscal_identification_type: parsed.data.fiscalIdentificationType ?? null,
+    },
+  );
+  if (fiscalTypeError) {
+    redirectWithError(
+      `/crm/clientes/${parsed.data.clienteId}`,
+      "Los datos se guardaron, pero no se pudo actualizar el tipo de identificacion fiscal.",
     );
   }
 

@@ -14,6 +14,13 @@ function numberFromRecord(record: Record<string, unknown>, key: string) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function nestedRecord(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function issue(
   group: BillingValidationIssue["group"],
   code: string,
@@ -83,8 +90,49 @@ export async function validateFiscalDocumentReadyForXml(
     }
   }
 
+  if (!textFromRecord(document.issuerSnapshot, "softwareProviderIdentification")) {
+    issues.push(
+      issue(
+        "Empresa",
+        "missing_software_provider_identification",
+        "Falta la identificacion del proveedor del sistema exigida por XML 4.4.",
+      ),
+    );
+  }
+
+  const issuerAddress = nestedRecord(document.issuerSnapshot, "address");
+  for (const [key, code, message] of [
+    ["provinceCode", "missing_issuer_province", "Falta provincia fiscal del emisor."],
+    ["cantonCode", "missing_issuer_canton", "Falta canton fiscal del emisor."],
+    ["districtCode", "missing_issuer_district", "Falta distrito fiscal del emisor."],
+    ["addressLine", "missing_issuer_address", "Faltan otras senas del emisor."],
+  ] as const) {
+    if (!textFromRecord(issuerAddress, key)) issues.push(issue("Empresa", code, message));
+  }
+
   if (document.documentTypeCode === "01" && !document.receiverName) {
     issues.push(issue("Cliente", "missing_receiver_name", "La factura electronica requiere receptor."));
+  }
+  if (
+    document.documentTypeCode === "01" &&
+    (!document.receiverIdentificationType ||
+      !textFromRecord(document.receiverSnapshot, "identificationNumber"))
+  ) {
+    issues.push(
+      issue(
+        "Cliente",
+        "missing_receiver_identification",
+        "La factura requiere numero y tipo de identificacion fiscal del receptor.",
+      ),
+    );
+  }
+
+  if (document.saleConditionCode === "02" && (!document.creditTermDays || document.creditTermDays <= 0)) {
+    issues.push(issue("Cliente", "missing_credit_term", "La venta a credito requiere plazo en dias."));
+  }
+
+  if (document.currencyCode !== "CRC" && (!document.exchangeRate || document.exchangeRate <= 0)) {
+    issues.push(issue("Impuestos", "missing_exchange_rate", "La moneda extranjera requiere tipo de cambio."));
   }
 
   const totalComprobante = numberFromRecord(document.totals, "totalComprobante");
@@ -127,6 +175,40 @@ export async function validateFiscalDocumentReadyForXml(
       recalculatedTotals.totalComprobante,
       totalComprobante,
     );
+  }
+
+  for (const line of document.lines) {
+    if (!line.cabysCode || !/^\d{13}$/.test(line.cabysCode)) {
+      issues.push(
+        issue(
+          "Productos/CABYS",
+          "invalid_cabys",
+          `La linea ${line.lineNumber} requiere un CABYS de 13 digitos.`,
+        ),
+      );
+    }
+    if (line.taxes.length === 0) {
+      issues.push(
+        issue(
+          "Impuestos",
+          "missing_line_tax_detail",
+          `La linea ${line.lineNumber} no conserva su detalle de impuesto, incluso a tarifa cero.`,
+        ),
+      );
+    }
+  }
+
+  if (document.payments.length > 0 && totalComprobante !== null) {
+    const paymentTotal = document.payments.reduce((sum, payment) => sum + payment.amount, 0);
+    if (!nearlyEqual(totalComprobante, paymentTotal)) {
+      issues.push(
+        issue(
+          "Impuestos",
+          "payment_total_mismatch",
+          "La suma de medios de pago no coincide con el total del comprobante.",
+        ),
+      );
+    }
   }
 
   const supabase = await createClient();

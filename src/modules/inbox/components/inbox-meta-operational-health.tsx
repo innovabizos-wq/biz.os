@@ -3,6 +3,8 @@ import type {
   InboxMetaChannelStatus,
   InboxWebhookEvent,
 } from "@/modules/inbox/types";
+import { Button } from "@/components/ui/button";
+import { syncMetaChannelHealthAction } from "@/modules/inbox/actions";
 
 type InboxMetaOperationalHealthProps = {
   channel: InboxChannelConfig;
@@ -74,6 +76,12 @@ export function InboxMetaOperationalHealth({
           ok={Boolean(lastPost)}
           text={lastPost ? "POST recibido" : "Sin POST"}
         />
+        {channel.canal === "whatsapp" ? (
+          <form action={syncMetaChannelHealthAction}>
+            <input name="canalId" type="hidden" value={channel.id} />
+            <Button size="sm" type="submit" variant="outline">Actualizar salud Meta</Button>
+          </form>
+        ) : null}
       </div>
 
       <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
@@ -118,6 +126,14 @@ export function InboxMetaOperationalHealth({
           <dd className="text-destructive">
             {lastError?.error ?? "Sin errores visibles"}
           </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Calidad y limite Meta</dt>
+          <dd>{channel.proveedorEstado ?? "Sin sincronizar"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Ultima verificacion Meta</dt>
+          <dd>{formatDateTime(channel.ultimaVerificacionAt)}</dd>
         </div>
       </dl>
 

@@ -23,6 +23,22 @@ export const createProfileInternalSchema = z.object({
   telefono: phoneSchema,
 });
 
+export const createAdministrativeUserSchema = z
+  .object({
+    cargo: z.string().trim().max(120).optional().or(z.literal("")),
+    correo: emailSchema,
+    nombre: nonEmptyTextSchema,
+    password: z.string().min(12, "La contrasena temporal debe tener al menos 12 caracteres."),
+    passwordConfirmation: z.string().min(1),
+    rolId: uuidSchema,
+    sucursalId: optionalFormUuidSchema,
+    telefono: phoneSchema,
+  })
+  .refine((data) => data.password === data.passwordConfirmation, {
+    message: "Las contrasenas no coinciden.",
+    path: ["passwordConfirmation"],
+  });
+
 export const updateProfileSchema = z.object({
   nombre: nonEmptyTextSchema.optional(),
   rolId: optionalFormUuidSchema,
@@ -58,6 +74,9 @@ export const updateProfileStatusInternalSchema = z.object({
 
 export type CreateProfileInternalInput = z.infer<
   typeof createProfileInternalSchema
+>;
+export type CreateAdministrativeUserInput = z.infer<
+  typeof createAdministrativeUserSchema
 >;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateProfileStatusInternalInput = z.infer<

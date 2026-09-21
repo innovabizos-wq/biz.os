@@ -22,6 +22,16 @@ export const signupSchema = loginSchema.extend({
   password: z.string().min(8, "La contrasena debe tener al menos 8 caracteres."),
 });
 
+export const firstPasswordChangeSchema = z
+  .object({
+    password: z.string().min(12, "La nueva contrasena debe tener al menos 12 caracteres."),
+    passwordConfirmation: z.string().min(1),
+  })
+  .refine((data) => data.password === data.passwordConfirmation, {
+    message: "Las contrasenas no coinciden.",
+    path: ["passwordConfirmation"],
+  });
+
 export const bootstrapEmpresaInicialSchema = z.object({
   identificacionFiscal: optionalTextSchema,
   nombreComercial: optionalTextSchema,
@@ -34,6 +44,7 @@ export const bootstrapEmpresaInicialSchema = z.object({
 export type AuthSessionInput = z.infer<typeof authSessionSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
+export type FirstPasswordChangeInput = z.infer<typeof firstPasswordChangeSchema>;
 export type BootstrapEmpresaInicialInput = z.infer<
   typeof bootstrapEmpresaInicialSchema
 >;

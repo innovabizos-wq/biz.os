@@ -20,11 +20,6 @@ type RpcError = {
   message?: string;
 };
 
-type PaymentAccountGuardRow = {
-  estado: string;
-  saldo: number;
-};
-
 function getFormData(formData: FormData) {
   return Object.fromEntries(formData.entries());
 }
@@ -84,39 +79,21 @@ export async function recordPaymentAction(formData: FormData) {
   const parsed = recordPaymentSchema.safeParse(getFormData(formData));
 
   if (!parsed.success) {
-    redirectWithError("/pagos", "Datos de pago invalidos.");
-  }
-
-  const access = await assertPaymentsManage();
-
-  const supabase = await createClient();
-  const { data: account, error: accountError } = await supabase
-    .from("payments_accounts")
-    .select("saldo, estado")
-    .eq("empresa_id", access.tenant.empresaId)
-    .eq("id", parsed.data.accountId)
-    .maybeSingle<PaymentAccountGuardRow>();
-
-  if (accountError || !account) {
-    redirectWithError("/pagos", "Cuenta no encontrada.");
-  }
-
-  if (["pagada", "anulada"].includes(account.estado)) {
-    redirectWithError("/pagos", "La cuenta no acepta nuevos movimientos.");
-  }
-
-  if (parsed.data.monto > Number(account.saldo)) {
     redirectWithError(
       "/pagos",
-      "El monto no puede superar el saldo pendiente.",
+      parsed.error.issues[0]?.message ?? "Datos de pago invalidos.",
     );
   }
 
-  const { error } = await supabase.rpc("registrar_movimiento_cuenta", {
+  await assertPaymentsManage();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("registrar_movimiento_cuenta_idempotente", {
     p_account_id: parsed.data.accountId,
     p_metodo: parsed.data.metodo,
     p_monto: parsed.data.monto,
     p_notas: parsed.data.notas ?? null,
+    p_operation_id: parsed.data.operationId,
     p_referencia: parsed.data.referencia ?? null,
   });
 

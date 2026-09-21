@@ -8,7 +8,11 @@ import {
   PlatformSectionHeader,
   statusTone,
 } from "@/modules/platform-console/components";
-import { getPlatformWhappChannels } from "@/modules/platform-console/queries";
+import {
+  getPlatformMetaRates,
+  getPlatformWhappChannels,
+} from "@/modules/platform-console/queries";
+import { upsertMetaRateAction } from "@/modules/whapp/platform-actions";
 
 function formatDate(value: string | null) {
   if (!value) return "Sin eventos";
@@ -22,17 +26,28 @@ function formatDate(value: string | null) {
   });
 }
 
-export default async function PlatformWhappPage() {
-  const channels = await getPlatformWhappChannels();
+type PlatformWhappPageProps = {
+  searchParams?: Promise<{ error?: string; success?: string }>;
+};
+
+export default async function PlatformWhappPage({ searchParams }: PlatformWhappPageProps) {
+  const [channels, rates, query] = await Promise.all([
+    getPlatformWhappChannels(),
+    getPlatformMetaRates(),
+    searchParams,
+  ]);
 
   if (!channels.ok) {
     return <EmptyState description={channels.error.message} title="Whapp" />;
   }
 
+  if (!rates.ok) {
+    return <EmptyState description={rates.error.message} title="Tarifas Meta" />;
+  }
+
   const pendingChannels = channels.data.filter((channel) =>
     ["pendiente", "error"].includes(channel.connectionStatus),
   ).length;
-
   return (
     <section className="space-y-6">
       <PlatformSectionHeader
@@ -40,6 +55,49 @@ export default async function PlatformWhappPage() {
         eyebrow="Provider model"
         title="Whapp"
       />
+
+      {query?.error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{query.error}</p> : null}
+      {query?.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{query.success}</p> : null}
+
+      <PlatformCard>
+        <h2 className="text-lg font-black text-slate-950">Tarifas oficiales de Meta</h2>
+        <p className="mt-1 text-sm text-slate-500">Registra cada vigencia desde la tabla oficial. Whapp bloquea campanas cuyo mercado o categoria no tenga tarifa vigente.</p>
+        <form action={upsertMetaRateAction} className="mt-4 grid gap-3 md:grid-cols-4">
+          <input className="rounded-lg border px-3 py-2" name="marketCode" placeholder="MEXICO o REST_OF_LATIN_AMERICA" required />
+          <select className="rounded-lg border px-3 py-2" name="category" required>
+            <option value="MARKETING">Marketing</option>
+            <option value="UTILITY">Utility</option>
+            <option value="AUTHENTICATION">Authentication</option>
+            <option value="AUTHENTICATION_INTERNATIONAL">Authentication internacional</option>
+            <option value="SERVICE">Service</option>
+          </select>
+          <input className="rounded-lg border px-3 py-2" defaultValue="USD" name="currency" placeholder="USD" required />
+          <input className="rounded-lg border px-3 py-2" min="0" name="unitCost" placeholder="Costo por mensaje" required step="0.000001" type="number" />
+          <input className="rounded-lg border px-3 py-2" defaultValue="1" min="1" name="volumeFrom" placeholder="Tramo desde" required step="1" type="number" />
+          <input className="rounded-lg border px-3 py-2" min="1" name="volumeTo" placeholder="Tramo hasta (vacio = sin limite)" step="1" type="number" />
+          <label className="text-sm font-bold text-slate-600">Desde<input className="mt-1 block w-full rounded-lg border px-3 py-2 font-normal" name="effectiveFrom" required type="date" /></label>
+          <label className="text-sm font-bold text-slate-600">Hasta<input className="mt-1 block w-full rounded-lg border px-3 py-2 font-normal" name="effectiveTo" type="date" /></label>
+          <input className="rounded-lg border px-3 py-2 md:col-span-2" name="sourceUrl" placeholder="URL oficial de la tarifa" type="url" />
+          <button className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700" type="submit">Guardar tarifa</button>
+        </form>
+        <div className="mt-5 overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase text-slate-500"><tr><th className="py-2">Mercado</th><th>Categoria</th><th>Tramo mensual</th><th>Costo</th><th>Vigencia</th><th>Fuente</th></tr></thead>
+            <tbody>
+              {rates.data.map((rate) => (
+                <tr className="border-t" key={rate.id}>
+                  <td className="py-2 font-bold">{rate.marketCode}</td>
+                  <td>{rate.category}</td>
+                  <td>{rate.volumeFrom} - {rate.volumeTo ?? "sin limite"}</td>
+                  <td>{rate.currency} {rate.unitCost.toFixed(6)}</td>
+                  <td>{rate.effectiveFrom}{rate.effectiveTo ? ` - ${rate.effectiveTo}` : " - vigente"}</td>
+                  <td>{rate.sourceUrl ? <a className="text-blue-700 underline" href={rate.sourceUrl} rel="noreferrer" target="_blank">Meta</a> : "Sin fuente"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </PlatformCard>
 
       <div className="grid gap-4 md:grid-cols-3">
         <PlatformCard>

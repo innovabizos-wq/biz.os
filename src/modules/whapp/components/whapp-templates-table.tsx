@@ -58,6 +58,9 @@ export function WhappTemplatesTable({ templates }: WhappTemplatesTableProps) {
                 >
                   {INBOX_META_TEMPLATE_STATUS_LABELS[template.estado]}
                 </span>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Meta: {template.metaStatus ?? "Sin sincronizar"}
+                </p>
               </td>
               <td className="px-4 py-3">
                 {template.variables.length > 0
@@ -65,7 +68,9 @@ export function WhappTemplatesTable({ templates }: WhappTemplatesTableProps) {
                   : "Sin variables"}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
-                {formatDate(template.updatedAt)}
+                {template.lastSyncedAt
+                  ? `Meta ${formatDate(template.lastSyncedAt)}`
+                  : `Local ${formatDate(template.updatedAt)}`}
               </td>
             </tr>
           ))}

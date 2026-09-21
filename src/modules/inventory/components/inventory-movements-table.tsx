@@ -10,6 +10,11 @@ const TYPE_STYLES = {
   salida: "border-rose-200 bg-rose-50 text-rose-800",
 } satisfies Record<InventoryMovement["tipo"], string>;
 
+const CRC_FORMATTER = new Intl.NumberFormat("es-CR", {
+  currency: "CRC",
+  style: "currency",
+});
+
 function getMovementLabel(type: InventoryMovement["tipo"]) {
   if (type === "entrada") return "Entrada";
   if (type === "salida") return "Salida";
@@ -35,7 +40,7 @@ export function InventoryMovementsTable({
   movements,
 }: InventoryMovementsTableProps) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-background">
+    <div className="overflow-x-auto rounded-lg border bg-background">
       <table className="w-full text-left text-sm">
         <thead className="bg-muted text-xs uppercase text-muted-foreground">
           <tr>
@@ -46,6 +51,9 @@ export function InventoryMovementsTable({
             <th className="px-4 py-3">Cantidad</th>
             <th className="px-4 py-3">Anterior</th>
             <th className="px-4 py-3">Nueva</th>
+            <th className="px-4 py-3">Costo unitario</th>
+            <th className="px-4 py-3">Costo total</th>
+            <th className="px-4 py-3">Costo promedio</th>
             <th className="px-4 py-3">Motivo</th>
             <th className="px-4 py-3">Referencia</th>
             <th className="px-4 py-3">Creado por</th>
@@ -72,6 +80,21 @@ export function InventoryMovementsTable({
               <td className="px-4 py-3">{movement.cantidad}</td>
               <td className="px-4 py-3">{movement.cantidadAnterior}</td>
               <td className="px-4 py-3">{movement.cantidadNueva}</td>
+              <td className="px-4 py-3">
+                {movement.unitCost === null
+                  ? "Por conciliar"
+                  : CRC_FORMATTER.format(movement.unitCost)}
+              </td>
+              <td className="px-4 py-3">
+                {movement.totalCost === null
+                  ? "-"
+                  : CRC_FORMATTER.format(movement.totalCost)}
+              </td>
+              <td className="px-4 py-3">
+                {movement.averageCostAfter === null
+                  ? "Incompleto"
+                  : CRC_FORMATTER.format(movement.averageCostAfter)}
+              </td>
               <td className="px-4 py-3">{movement.motivo ?? "-"}</td>
               <td className="px-4 py-3">
                 {getReferenceLabel(movement)}

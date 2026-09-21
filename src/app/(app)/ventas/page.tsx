@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
+import { buttonVariants } from "@/components/ui/button";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { SalesDatabase } from "@/modules/sales/components/sales-database";
 import { getSales } from "@/modules/sales/queries";
@@ -368,6 +370,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   return (
     <section className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
       <SectionHeader
+        actions={hasPermission(access.tenant.permissions, "sales.pos.use") ? <Link className={buttonVariants()} href="/ventas/pos">Abrir punto de venta</Link> : undefined}
         title="Ventas"
         titleClassName="app-page-title-compact normal-case"
       />

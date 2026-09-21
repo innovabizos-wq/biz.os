@@ -24,7 +24,7 @@ tecnicas de Meta.
   Pausado.
 - Conversacion robusta con mensajes entrantes, salientes, notas internas, estado del mensaje y WAMID tecnico.
 - Envio manual real por WhatsApp cuando la conversacion pertenece a canal Meta WhatsApp configurado.
-- Catalogo local de plantillas Meta con categoria, idioma, estado y canal.
+- Catalogo sincronizado de plantillas Meta con categoria, idioma, estado oficial, calidad y canal.
 - Envio de plantillas aprobadas desde conversaciones WhatsApp Meta configuradas.
 - Catalogo base de campanas WhatsApp con canal Meta, plantilla aprobada,
   audiencia prevista, programacion y metricas iniciales.
@@ -56,14 +56,17 @@ tecnicas de Meta.
 - Salud del canal con configuracion publica, secretos en modo configurado/no configurado, ultimos eventos webhook asociados y no asociados.
 - Advertencia de canales WhatsApp Meta duplicados por `phone_number_id`.
 - Migracion local para vinculo CRM basico por telefono y actualizacion de estados Meta.
+- Consentimiento y bajas auditables por contacto/finalidad.
+- Tarifas por mercado/categoria, ledger por mensaje y bloqueo sin tarifa vigente.
+- Salud Meta, limites y pausa automatica por calidad roja.
+- Etiquetas y funnels normalizados, administrables y disponibles en el popup.
+- Privacidad, eliminacion de datos y desautorizacion firmadas por Meta.
 
 ## No Incluye Todavia
 
 - Motor de ejecucion automatica por eventos.
 - Generacion IA con proveedor LLM externo y streaming.
-- Sincronizacion automatica de aprobacion de plantillas contra Meta.
 - Conector de correo productivo IMAP/SMTP u OAuth administrado dentro de biz.os.
-- Bloqueo estricto de ventana 24h.
 - Push, sonido o SLA avanzado configurable por equipo/horario.
 - Deduplicacion pesada de clientes.
 
@@ -86,20 +89,14 @@ tecnicas de Meta.
 4. Confirmar que el mensaje queda saliente con estado `enviado` o `fallido`.
 5. Si Meta devuelve WAMID, se guarda como `canal_message_id`.
 
-La ventana de 24 horas se muestra como advertencia visual. El bloqueo estricto y
-la seleccion obligatoria de plantillas fuera de ventana quedan para la fase de
-control estricto. Las plantillas aprobadas ya pueden registrarse localmente y
-enviarse desde conversaciones WhatsApp Meta configuradas.
+La ventana de 24 horas se aplica como bloqueo. Fuera de ella solo se permite una
+plantilla oficial aprobada, vigente y sincronizada recientemente con Meta.
 
 ## Plantillas Meta
 
-La ruta `/whapp/plantillas` permite registrar plantillas aprobadas, pendientes,
-rechazadas o en borrador. El envio desde una conversacion solo permite
-plantillas con estado `aprobada`.
-
-El catalogo local no sustituye la aprobacion oficial en Meta. Platform
-Admin/AInovaCR debe crear o validar la plantilla en Meta y mantener el estado
-local alineado hasta que exista sincronizacion automatica.
+La ruta `/whapp/plantillas` permite guardar borradores locales y sincronizar el
+catalogo oficial por WABA. El envio solo acepta `APPROVED`; plantillas pausadas,
+retiradas o con sincronizacion vencida se bloquean.
 
 ## Campanas WhatsApp
 
@@ -165,8 +162,9 @@ reintento con backoff de 5 y 30 minutos. Al tercer intento fallido pasa a
 `fallido`, conserva `last_error`, `attempt_count` y `last_attempt_at`, y las
 metricas se recalculan.
 
-Todavia faltan limites avanzados por numero, pausas automaticas por calidad
-Meta, ventanas de atribucion configurables y panel avanzado de entregabilidad.
+Los limites, calidad, consentimiento, tarifa y antiguedad de plantilla se
+validan antes de cada lote. La operacion detallada vive en
+`docs/whapp-meta-production.md`.
 
 ## Automatizaciones Y Autopilot
 

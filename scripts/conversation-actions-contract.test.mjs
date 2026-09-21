@@ -10,10 +10,25 @@ test("conversation action endpoints are exposed", () => {
     "src/app/api/ai/conversation/dry-run/route.ts",
     "src/app/api/ai/conversation/execute/route.ts",
     "src/app/api/ai/conversation/confirm/route.ts",
+    "src/app/api/brain/agents/route.ts",
+    "src/app/api/brain/jobs/route.ts",
+    "src/app/api/brain/jobs/run/route.ts",
+    "src/app/api/brain/metrics/route.ts",
   ]) {
     const source = read(path);
     assert.match(source, /NextResponse/);
   }
+});
+
+test("conversation actions endpoint exposes Brain Runtime catalog", () => {
+  const source = read("src/app/api/ai/conversation/actions/route.ts");
+
+  assert.match(source, /businessSkillRegistry/);
+  assert.match(source, /capabilityRegistry/);
+  assert.match(source, /getAvailable\(context\.tenant\)/);
+  assert.match(source, /capabilities:/);
+  assert.match(source, /skills:/);
+  assert.match(source, /actions:\s*listConversationActionsForTenant/);
 });
 
 test("conversation registry declares guarded business actions", () => {
@@ -32,9 +47,10 @@ test("conversation registry declares guarded business actions", () => {
 
   assert.match(source, /requiredPermissions/);
   assert.match(source, /requiresConfirmation: true/);
-  assert.match(source, /initializeProductStockRows/);
-  assert.match(source, /actualizar_stock_minimos/);
-  assert.match(source, /stockRowsInitialized/);
+  assert.match(source, /resolveActiveWarehouse/);
+  assert.match(source, /registrar_movimiento_inventario/);
+  assert.match(source, /Stock inicial registrado desde Biz\.Brain/);
+  assert.doesNotMatch(source, /stockRowsInitialized/);
 });
 
 test("conversation execution bridge blocks sensitive actions behind confirmation", () => {

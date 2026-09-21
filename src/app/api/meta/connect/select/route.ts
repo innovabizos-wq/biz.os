@@ -14,16 +14,32 @@ function redirect(request: Request, query: string) {
   return NextResponse.redirect(new URL(`/inbox/conexiones?${query}`, request.url));
 }
 
-async function subscribeFacebookPageToMessages(
-  pageId: string,
+const FACEBOOK_SUBSCRIBED_FIELDS = [
+  "messages",
+  "messaging_postbacks",
+  "message_deliveries",
+  "message_reads",
+  "message_echoes",
+].join(",");
+
+const INSTAGRAM_SUBSCRIBED_FIELDS = [
+  "messages",
+  "messaging_postbacks",
+  "message_reactions",
+  "messaging_seen",
+].join(",");
+
+async function subscribeMetaAccountToMessages(
+  accountId: string,
   accessToken: string,
+  subscribedFields: string,
 ) {
   const response = await fetch(
-    `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${pageId}/subscribed_apps`,
+    `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${accountId}/subscribed_apps`,
     {
       body: new URLSearchParams({
         access_token: accessToken,
-        subscribed_fields: "messages",
+        subscribed_fields: subscribedFields,
       }),
       cache: "no-store",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -33,7 +49,7 @@ async function subscribeFacebookPageToMessages(
 
   if (!response.ok) {
     console.error("Meta OAuth: no se pudo suscribir la pagina al webhook", {
-      pageId,
+      accountId,
       status: response.status,
     });
     return false;
@@ -76,17 +92,18 @@ export async function POST(request: Request) {
       : page.id;
     if (!accountId) continue;
 
-    if (pending.provider === "facebook") {
-      const subscribed = await subscribeFacebookPageToMessages(
-        page.id,
-        page.accessToken,
+    const subscribed = await subscribeMetaAccountToMessages(
+      accountId,
+      page.accessToken,
+      pending.provider === "instagram"
+        ? INSTAGRAM_SUBSCRIBED_FIELDS
+        : FACEBOOK_SUBSCRIBED_FIELDS,
+    );
+    if (!subscribed) {
+      return redirect(
+        request,
+        `error=${encodeURIComponent(`No se pudo activar ${pending.provider === "instagram" ? "Instagram" : "Messenger"}. Intenta conectar la cuenta de nuevo.`)}`,
       );
-      if (!subscribed) {
-        return redirect(
-          request,
-          "error=No%20se%20pudo%20activar%20Messenger%20para%20esta%20Pagina.%20Intenta%20conectarla%20de%20nuevo.",
-        );
-      }
     }
 
     const existing = await supabase.from("inbox_canales")
@@ -130,7 +147,7 @@ export async function POST(request: Request) {
       p_app_secret: appSecret,
       p_canal_id: channelId,
       p_empresa_id: access.tenant.empresaId,
-      p_token_expires_at: null,
+      p_token_expires_at: page.tokenExpiresAt,
       p_verify_token: randomUUID(),
     });
     if (secrets.error) {
@@ -145,6 +162,23 @@ export async function POST(request: Request) {
     if (activated.error) {
       console.error("Meta OAuth: no se pudo activar el canal", activated.error);
       return redirect(request, "error=Las%20credenciales%20se%20guardaron%2C%20pero%20no%20se%20pudo%20activar%20el%20canal.");
+    }
+
+    const { error: ownerError } = await admin
+      .from("inbox_meta_oauth_propietarios")
+      .upsert({
+        canal_id: channelId,
+        empresa_id: access.tenant.empresaId,
+        granted_by: access.tenant.profileId,
+        granted_scopes: page.grantedScopes,
+        last_validated_at: new Date().toISOString(),
+        meta_user_id: pending.metaUserId,
+        proveedor: pending.provider,
+        token_expires_at: page.tokenExpiresAt,
+      }, { onConflict: "empresa_id,canal_id,meta_user_id" });
+    if (ownerError) {
+      console.error("Meta OAuth: no se pudo registrar el propietario OAuth", ownerError);
+      return redirect(request, "error=El%20canal%20se%20conecto%2C%20pero%20no%20se%20pudo%20registrar%20la%20autorizacion.");
     }
   }
 

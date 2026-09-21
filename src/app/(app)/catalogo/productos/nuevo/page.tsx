@@ -2,8 +2,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { ProductForm } from "@/modules/catalog/components/product-form";
 import { getActiveCategoriesForProductForm } from "@/modules/catalog/queries";
+import { getWarehouses } from "@/modules/inventory/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type NewCatalogProductPageProps = {
@@ -35,12 +37,18 @@ export default async function NewCatalogProductPage({
     );
   }
 
-  const categories = await getActiveCategoriesForProductForm(access.tenant);
+  const canSetInitialStock =
+    isModuleActive(access.tenant.activeModules, "inventory") &&
+    hasPermission(access.tenant.permissions, "inventory.stock.adjust");
+  const [categories, warehouses] = await Promise.all([
+    getActiveCategoriesForProductForm(access.tenant),
+    canSetInitialStock ? getWarehouses(access.tenant) : null,
+  ]);
 
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Crea un producto o servicio comercial sin inventario."
+        description="Crea un producto o servicio. Si aplica, registra stock inicial en una bodega activa."
         eyebrow="Catálogo"
         title="Nuevo producto/servicio"
       />
@@ -48,8 +56,10 @@ export default async function NewCatalogProductPage({
       <EphemeralPageAlert error={params?.error} />
 
       <ProductForm
+        canSetInitialStock={canSetInitialStock}
         categories={categories.ok ? categories.data : []}
         mode="create"
+        warehouses={warehouses?.ok ? warehouses.data : []}
       />
     </section>
   );

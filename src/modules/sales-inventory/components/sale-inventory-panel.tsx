@@ -31,12 +31,15 @@ export function SaleInventoryPanel({
   const alreadyApplied =
     sale.inventarioEstado === "aplicado" ||
     inventoryItems.some((item) => item.yaAplicado);
+  const hasReservation = sale.inventarioEstado === "reservado";
+  const reservedWarehouseId =
+    inventoryItems.find((item) => item.bodegaId)?.bodegaId ?? null;
   const showApply =
     canApply &&
     canApplyForStatus &&
     hasInventoryItems &&
     !alreadyApplied &&
-    !hasInsufficientStock;
+    (hasReservation || !hasInsufficientStock);
   const showMarkWithoutInventory =
     canMarkWithoutInventory && !hasInventoryItems && sale.inventarioEstado !== "no_aplica";
 
@@ -59,8 +62,10 @@ export function SaleInventoryPanel({
           <div className="text-sm text-muted-foreground">
             {alreadyApplied
               ? "La salida ya fue aplicada."
-              : hasInventoryItems
-                ? "La salida se aplica manualmente desde una bodega."
+              : hasReservation
+                ? "Las unidades están separadas para esta venta."
+                : hasInventoryItems
+                  ? "Puedes reservar para entrega o aplicar la salida inmediata."
                 : "Esta venta no tiene productos inventariables. Solo los productos fisicos agregados desde el catalogo descuentan stock. Los items manuales y servicios no afectan inventario."}
           </div>
         </div>
@@ -88,6 +93,8 @@ export function SaleInventoryPanel({
 
       <ApplySaleInventoryForm
         canApply={showApply}
+        hasReservation={hasReservation}
+        reservedWarehouseId={reservedWarehouseId}
         saleId={sale.id}
         warehouses={warehouses}
       />

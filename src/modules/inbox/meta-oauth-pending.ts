@@ -3,17 +3,21 @@ import "server-only";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
 export const META_OAUTH_PENDING_COOKIE = "bizos_meta_oauth_pending";
+export const META_OAUTH_PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 
 export type PendingMetaPage = {
   accessToken: string;
+  grantedScopes: string[];
   id: string;
   instagramBusinessAccount?: { id: string; username?: string };
   name: string;
+  tokenExpiresAt: string | null;
 };
 
 export type PendingMetaConnection = {
   empresaId: string;
   issuedAt: number;
+  metaUserId: string;
   pages: PendingMetaPage[];
   profileId: string;
   provider: "facebook" | "instagram";
@@ -55,6 +59,7 @@ export function decryptPendingMetaConnection(value: string | undefined) {
       !["facebook", "instagram"].includes(parsed.provider) ||
       !Array.isArray(parsed.pages) ||
       !parsed.empresaId ||
+      !parsed.metaUserId ||
       !parsed.profileId ||
       !Number.isFinite(parsed.issuedAt)
     ) return null;
@@ -63,4 +68,11 @@ export function decryptPendingMetaConnection(value: string | undefined) {
   } catch {
     return null;
   }
+}
+
+export function isPendingMetaConnectionExpired(
+  value: PendingMetaConnection,
+  currentTime = Date.now(),
+) {
+  return currentTime - value.issuedAt > META_OAUTH_PENDING_MAX_AGE_MS;
 }

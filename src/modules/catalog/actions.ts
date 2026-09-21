@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import {
   changeCategoryStatusSchema,
   changeProductStatusSchema,
@@ -69,6 +70,58 @@ function revalidateCatalogPaths(productoId?: string) {
   if (productoId) {
     revalidatePath(`/catalogo/productos/${productoId}`);
   }
+}
+
+async function initializeProductStockRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: {
+    empresaId: string;
+    productId: string | null | undefined;
+  },
+) {
+  if (!input.productId) return 0;
+
+  const { data: warehouses, error: warehouseError } = await supabase
+    .from("inventario_bodegas")
+    .select("id")
+    .eq("empresa_id", input.empresaId)
+    .eq("estado", "activa");
+
+  if (warehouseError || !warehouses?.length) return 0;
+
+  let initialized = 0;
+
+  for (const warehouse of warehouses) {
+    const { error } = await supabase.rpc("actualizar_stock_minimos", {
+      p_bodega_id: warehouse.id,
+      p_producto_id: input.productId,
+      p_stock_maximo: null,
+      p_stock_minimo: 0,
+    });
+
+    if (!error) initialized += 1;
+  }
+
+  return initialized;
+}
+
+async function registerInitialProductStock(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: {
+    bodegaId: string;
+    cantidad: number;
+    productId: string;
+  },
+) {
+  return supabase.rpc("registrar_movimiento_inventario", {
+    p_bodega_id: input.bodegaId,
+    p_cantidad: input.cantidad,
+    p_motivo: "Ingreso inicial desde alta de catalogo",
+    p_producto_id: input.productId,
+    p_referencia_id: null,
+    p_referencia_tipo: null,
+    p_tipo: "entrada",
+  });
 }
 
 async function assertCatalogPermission(
@@ -186,10 +239,33 @@ export async function createProductAction(formData: FormData) {
     redirectWithError("/catalogo/productos/nuevo", "Datos de producto invalidos.");
   }
 
-  await assertCatalogPermission(
+  const access = await assertCatalogPermission(
     "catalog.products.create",
     "/catalogo/productos/nuevo",
   );
+
+  const hasInitialStock = Boolean(
+    parsed.data.tipo === "producto" &&
+      parsed.data.cantidadInicial &&
+      parsed.data.cantidadInicial > 0,
+  );
+  const canAdjustInventory =
+    isModuleActive(access.tenant.activeModules, "inventory") &&
+    hasPermission(access.tenant.permissions, "inventory.stock.adjust");
+
+  if (parsed.data.tipo === "servicio" && parsed.data.cantidadInicial) {
+    redirectWithError(
+      "/catalogo/productos/nuevo",
+      "Los servicios no pueden tener stock inicial.",
+    );
+  }
+
+  if (hasInitialStock && !canAdjustInventory) {
+    redirectWithError(
+      "/catalogo/productos/nuevo",
+      "No tienes permiso para registrar stock inicial.",
+    );
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("crear_catalogo_producto", {
@@ -215,6 +291,39 @@ export async function createProductAction(formData: FormData) {
   }
 
   const productoId = (data as CreatedProductRow[] | null)?.[0]?.producto_id;
+
+  if (
+    parsed.data.tipo === "producto" &&
+    productoId &&
+    canAdjustInventory
+  ) {
+    await initializeProductStockRows(supabase, {
+      empresaId: access.tenant.empresaId,
+      productId: productoId,
+    });
+
+    if (hasInitialStock) {
+      const { error: stockError } = await registerInitialProductStock(supabase, {
+        bodegaId: parsed.data.bodegaId!,
+        cantidad: parsed.data.cantidadInicial!,
+        productId: productoId,
+      });
+
+      if (stockError) {
+        logCatalogActionError("createProductAction.initialStock", stockError, {
+          productoId,
+        });
+        redirectWithError(
+          `/catalogo/productos/${productoId}`,
+          `Producto creado, pero no se pudo registrar stock inicial: ${safeErrorMessage(stockError)}`,
+        );
+      }
+    }
+
+    revalidatePath("/inventario");
+    revalidatePath("/inventario/productos");
+    revalidatePath("/inventario/movimientos");
+  }
 
   revalidateCatalogPaths(productoId);
   redirect(productoId ? `/catalogo/productos/${productoId}` : "/catalogo/productos");

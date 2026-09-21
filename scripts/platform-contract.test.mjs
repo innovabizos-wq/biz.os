@@ -70,6 +70,13 @@ const migration0052 = readFileSync(
   new URL("../database/migrations/0052_crm_identification_normalization_and_timeline.sql", import.meta.url),
   "utf8",
 );
+const paymentIdempotencyMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/20260915013555_idempotent_payment_recording.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 const expectedCoreModules = [
   "admin",
@@ -302,12 +309,18 @@ test("payments block overpayments instead of silently clipping amounts", () => {
     "utf8",
   );
 
-  assert.match(paymentsActions, /El monto no puede superar el saldo pendiente/);
-  assert.match(paymentsActions, /\.eq\("empresa_id", access\.tenant\.empresaId\)/);
+  assert.match(paymentsActions, /registrar_movimiento_cuenta_idempotente/);
+  assert.match(paymentsActions, /p_operation_id: parsed\.data\.operationId/);
   assert.match(migration0049, /p_monto > v_account\.saldo/);
   assert.match(migration0049, /El monto no puede superar el saldo pendiente/);
   assert.doesNotMatch(migration0049, /least\(p_monto, v_account\.saldo\)/);
   assert.doesNotMatch(migration0049, /drop\s+(table|column|index)/i);
+  assert.match(paymentIdempotencyMigration, /v_amount > v_account\.saldo/);
+  assert.match(
+    paymentIdempotencyMigration,
+    /El monto no puede superar el saldo pendiente/,
+  );
+  assert.doesNotMatch(paymentIdempotencyMigration, /least\(p_monto, v_account\.saldo\)/);
 });
 
 test("CRM document normalization is enforced at database level", () => {

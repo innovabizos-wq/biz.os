@@ -1,4 +1,9 @@
-export type SaleInventoryState = "pendiente" | "aplicado" | "parcial" | "no_aplica";
+export type SaleInventoryState =
+  | "pendiente"
+  | "reservado"
+  | "aplicado"
+  | "parcial"
+  | "no_aplica";
 
 export type SaleInventorySummaryItem = {
   bodegaId: string | null;

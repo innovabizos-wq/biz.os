@@ -1,3 +1,6 @@
+"use client";
+
+import { useId } from "react";
 import { ArrowRightLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,8 @@ export function InventoryTransferForm({
   products,
   warehouses,
 }: InventoryTransferFormProps) {
+  const formId = useId();
+  const idempotencyKey = `inventory-transfer:${formId}`;
   const activeWarehouses = warehouses.filter(
     (warehouse) => warehouse.estado === "activa",
   );
@@ -31,6 +36,7 @@ export function InventoryTransferForm({
       action={createInventoryTransferAction}
       className="rounded-lg border bg-background p-5"
     >
+      <input name="idempotencyKey" type="hidden" value={idempotencyKey} />
       <div className="mb-4 flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
           <ArrowRightLeft aria-hidden="true" size={20} />

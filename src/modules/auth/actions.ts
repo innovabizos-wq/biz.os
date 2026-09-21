@@ -4,9 +4,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import {
   bootstrapEmpresaInicialSchema,
   loginSchema,
+  firstPasswordChangeSchema,
   signupSchema,
 } from "@/modules/auth/schemas";
 import {
@@ -37,9 +39,16 @@ function isPublicSignupEnabled() {
 
 async function getAppBaseUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(/\/$/, "");
 
   if (configuredUrl) {
     return configuredUrl;
+  }
+
+  if (productionUrl) {
+    return productionUrl.startsWith("http")
+      ? productionUrl
+      : `https://${productionUrl}`;
   }
 
   const headerStore = await headers();
@@ -66,12 +75,11 @@ async function getAppBaseUrl() {
 
 async function getSignupEmailRedirectTo(invitationToken?: string | null) {
   const baseUrl = await getAppBaseUrl();
+  const next = invitationToken
+    ? `/invitation?token=${encodeURIComponent(invitationToken)}`
+    : "/onboarding";
 
-  if (invitationToken) {
-    return `${baseUrl}/invitation?token=${encodeURIComponent(invitationToken)}`;
-  }
-
-  return `${baseUrl}/onboarding`;
+  return `${baseUrl}/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
 function redirectWithAuthError(
@@ -96,7 +104,7 @@ type AuthErrorLike = {
 };
 
 type LoginProfileState =
-  | { status: "active" }
+  | { requiresPasswordChange: boolean; status: "active" }
   | { status: "inactive" | "suspended" }
   | { status: "missing" }
   | { error: unknown; status: "error" };
@@ -168,7 +176,7 @@ async function getLoginProfileState(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, estado")
+    .select("id, estado, requiere_cambio_contrasena")
     .eq("id", userId)
     .maybeSingle();
 
@@ -183,7 +191,10 @@ async function getLoginProfileState(
   }
 
   if (data.estado === "activo") {
-    return { status: "active" };
+    return {
+      requiresPasswordChange: Boolean(data.requiere_cambio_contrasena),
+      status: "active",
+    };
   }
 
   if (data.estado === "suspendido") {
@@ -255,10 +266,12 @@ export async function loginAction(formData: FormData) {
     if (process.env.NODE_ENV !== "production") {
       console.info("[loginAction] login ok", {
         email: maskEmail(parsed.data.email),
-        redirectTarget: "/dashboard",
+        redirectTarget: profileState.requiresPasswordChange
+          ? "/cambiar-contrasena"
+          : "/dashboard",
       });
     }
-    redirect("/dashboard");
+    redirect(profileState.requiresPasswordChange ? "/cambiar-contrasena" : "/dashboard");
   }
 
   if (invitationToken) {
@@ -336,6 +349,100 @@ export async function signOutAction() {
   redirect("/login");
 }
 
+function getBootstrapEmpresaErrorMessage(error: AuthErrorLike) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  if (message.includes("ya tiene empresa")) {
+    return "Esta cuenta ya tiene una empresa creada. Inicia sesion normalmente.";
+  }
+
+  if (message.includes("plan starter no encontrado")) {
+    return "Falta configuracion base del sistema (plan starter). Contacta a soporte.";
+  }
+
+  if (message.includes("nombre de empresa")) {
+    return "El nombre de empresa es requerido.";
+  }
+
+  if (message.includes("nombre del usuario")) {
+    return "El nombre del usuario es requerido.";
+  }
+
+  if (message.includes("correo del usuario no coincide")) {
+    return "El correo del formulario no coincide con tu sesion.";
+  }
+
+  if (message.includes("usuario autenticado requerido")) {
+    return "Tu sesion expiro. Inicia sesion de nuevo.";
+  }
+
+  return "No se pudo completar el alta inicial. Intenta de nuevo o contacta a soporte.";
+}
+
+export async function completeFirstPasswordChangeAction(formData: FormData) {
+  const parsed = firstPasswordChangeSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError(
+      "/cambiar-contrasena",
+      parsed.error.issues[0]?.message ?? "Datos de contrasena invalidos.",
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    redirect("/login");
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, requiere_cambio_contrasena")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    redirectWithError("/cambiar-contrasena", "No se pudo validar tu acceso. Inicia sesion de nuevo.");
+  }
+
+  if (!profile.requiere_cambio_contrasena) {
+    redirect("/dashboard");
+  }
+
+  const { error: passwordError } = await supabase.auth.updateUser({
+    password: parsed.data.password,
+  });
+
+  if (passwordError) {
+    redirectWithError("/cambiar-contrasena", "No se pudo actualizar la contrasena. Intenta de nuevo.");
+  }
+
+  const admin = createServiceRoleClient();
+  const { error: updateProfileError } = await admin
+    .from("profiles")
+    .update({ requiere_cambio_contrasena: false })
+    .eq("id", userData.user.id);
+
+  if (updateProfileError) {
+    redirectWithError(
+      "/cambiar-contrasena",
+      "La contrasena se actualizo, pero falta habilitar tu acceso. Intenta de nuevo.",
+    );
+  }
+
+  redirect("/dashboard");
+}
+
+function logBootstrapEmpresaError(error: AuthErrorLike, userEmail: string) {
+  console.error("[bootstrapEmpresaInicialAction] bootstrap tenant failed", {
+    code: error.code,
+    email: maskEmail(userEmail),
+    message: error.message,
+    name: error.name,
+  });
+}
+
 export async function bootstrapEmpresaInicialAction(formData: FormData) {
   const parsed = bootstrapEmpresaInicialSchema.safeParse(getFormData(formData));
 
@@ -381,7 +488,8 @@ export async function bootstrapEmpresaInicialAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithError("/onboarding", "No se pudo completar el alta inicial.");
+    logBootstrapEmpresaError(error, userEmail);
+    redirectWithError("/onboarding", getBootstrapEmpresaErrorMessage(error));
   }
 
   redirect("/dashboard");

@@ -5,6 +5,10 @@ import type { InboxWidgetConversation } from "@/modules/inbox-widget/types";
 import type { CoreResult } from "@/types/core";
 import { ok } from "@/types/core";
 
+function firstRelation<T>(value: T | T[] | null) {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
 export async function getInboxWidgetConversations(): Promise<
   CoreResult<InboxWidgetConversation[]>
 > {
@@ -21,14 +25,16 @@ export async function getInboxWidgetConversations(): Promise<
   const linkedCustomerIds = result.data
     .map((conversation) => conversation.clienteId)
     .filter((value): value is string => Boolean(value));
-  const [{ data }, { data: customerRows }] = await Promise.all([
+  const conversationIds = result.data.map((conversation) => conversation.id);
+  const [{ data }, { data: customerRows }, { data: tagRows }, { data: funnelRows }] =
+    await Promise.all([
     supabase
-    .from("inbox_eventos")
-    .select("conversacion_id, metadata, created_at")
-    .eq("empresa_id", tenant.data.empresaId)
-    .eq("tipo", "clasificacion_widget")
-    .in("conversacion_id", result.data.map((conversation) => conversation.id))
-    .order("created_at", { ascending: false }),
+      .from("inbox_eventos")
+      .select("conversacion_id, metadata, created_at")
+      .eq("empresa_id", tenant.data.empresaId)
+      .eq("tipo", "clasificacion_widget")
+      .in("conversacion_id", conversationIds)
+      .order("created_at", { ascending: false }),
     supabase
       .from("crm_clientes")
       .select("id, numero")
@@ -39,6 +45,16 @@ export async function getInboxWidgetConversations(): Promise<
           ? linkedCustomerIds
           : ["00000000-0000-0000-0000-000000000000"],
       ),
+    supabase
+      .from("inbox_conversacion_etiquetas")
+      .select("conversacion_id, etiqueta:inbox_etiquetas(nombre)")
+      .eq("empresa_id", tenant.data.empresaId)
+      .in("conversacion_id", conversationIds),
+    supabase
+      .from("inbox_conversacion_funnel")
+      .select("conversacion_id, etapa:inbox_funnel_etapas(nombre)")
+      .eq("empresa_id", tenant.data.empresaId)
+      .in("conversacion_id", conversationIds),
   ]);
 
   const classificationByConversation = new Map<
@@ -63,6 +79,28 @@ export async function getInboxWidgetConversations(): Promise<
           ? metadata.etapaFunnel
           : null,
     });
+  }
+
+  for (const row of tagRows ?? []) {
+    const etiqueta = firstRelation(row.etiqueta)?.nombre;
+    if (!row.conversacion_id || !etiqueta) continue;
+    const current = classificationByConversation.get(row.conversacion_id) ?? {
+      etiquetas: [],
+      etapaFunnel: null,
+    };
+    if (!current.etiquetas.includes(etiqueta)) current.etiquetas.push(etiqueta);
+    classificationByConversation.set(row.conversacion_id, current);
+  }
+
+  for (const row of funnelRows ?? []) {
+    const etapaFunnel = firstRelation(row.etapa)?.nombre;
+    if (!row.conversacion_id || !etapaFunnel) continue;
+    const current = classificationByConversation.get(row.conversacion_id) ?? {
+      etiquetas: [],
+      etapaFunnel: null,
+    };
+    current.etapaFunnel = etapaFunnel;
+    classificationByConversation.set(row.conversacion_id, current);
   }
 
   const customerNumberById = new Map(

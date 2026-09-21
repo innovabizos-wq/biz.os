@@ -1,5 +1,7 @@
 export type CoreErrorCode =
   | "AUTH_NOT_CONNECTED"
+  | "CONFIRMATION_REQUIRED"
+  | "IDEMPOTENCY_CONFLICT"
   | "INVALID_TENANT_CONTEXT"
   | "MODULE_INACTIVE"
   | "MODULE_MISCONFIGURED"
@@ -107,6 +109,10 @@ export type PermissionCode =
   | "sales.orders.create"
   | "sales.orders.edit"
   | "sales.orders.status.change"
+  | "sales.pos.use"
+  | "sales.pos.manage"
+  | "sales.pos.refund"
+  | "sales.cash.manage"
   | "sales.quotes.view"
   | "sales.quotes.create"
   | "billing.view"
@@ -205,6 +211,7 @@ export type Profile = {
   nombre: string;
   correo: string;
   telefono: string | null;
+  requiereCambioContrasena: boolean;
   estado: ProfileEstado;
   ultimoAcceso: string | null;
   createdAt: string;

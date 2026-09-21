@@ -51,6 +51,7 @@ export const createInventoryTransferSchema = z
     bodegaDestinoId: uuidSchema,
     bodegaOrigenId: uuidSchema,
     cantidad: positiveNumberSchema,
+    idempotencyKey: z.string().trim().min(8).max(200),
     motivo: optionalTextSchema,
     productoId: uuidSchema,
   })
@@ -76,6 +77,32 @@ export const updateStockLimitsSchema = z
       path: ["stockMaximo"],
     },
   );
+
+export const reconcileInventoryCostSchema = z.object({
+  bodegaId: uuidSchema,
+  operationId: uuidSchema,
+  productoId: uuidSchema,
+  reason: z.string().trim().min(3).max(500),
+  unitCost: z.coerce.number().min(0).max(999999999999.999999),
+});
+
+export const startInventoryCountSchema = z.object({
+  notes: optionalTextSchema,
+  operationId: uuidSchema,
+  warehouseId: uuidSchema,
+});
+
+export const recordInventoryCountItemSchema = z.object({
+  countId: uuidSchema,
+  countedQuantity: z.coerce.number().min(0).max(999999999999.99),
+  itemId: uuidSchema,
+  notes: optionalTextSchema,
+});
+
+export const finishInventoryCountSchema = z.object({
+  countId: uuidSchema,
+  operationId: uuidSchema,
+});
 
 const optionalPositiveNumberSchema = z.coerce
   .number()
@@ -123,5 +150,17 @@ export type CreateInventoryTransferInput = z.infer<
   typeof createInventoryTransferSchema
 >;
 export type UpdateStockLimitsInput = z.infer<typeof updateStockLimitsSchema>;
+export type ReconcileInventoryCostInput = z.infer<
+  typeof reconcileInventoryCostSchema
+>;
+export type StartInventoryCountInput = z.infer<
+  typeof startInventoryCountSchema
+>;
+export type RecordInventoryCountItemInput = z.infer<
+  typeof recordInventoryCountItemSchema
+>;
+export type FinishInventoryCountInput = z.infer<
+  typeof finishInventoryCountSchema
+>;
 export type CreateMaterialEntryInput = z.infer<typeof createMaterialEntrySchema>;
 export type ImportMaterialRowsInput = z.infer<typeof importMaterialRowsSchema>;

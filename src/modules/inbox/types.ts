@@ -166,8 +166,12 @@ export type InboxMetaChannelDiagnostic = {
 };
 
 export type InboxConversationMetaSendStatus = {
+  channel: InboxMetaChannel | null;
+  isConfigured: boolean;
+  isMetaChannel: boolean;
   isReady: boolean;
   reason: string | null;
+  windowClosesAt: string | null;
 };
 
 export type InboxMetaTemplate = {
@@ -178,18 +182,25 @@ export type InboxMetaTemplate = {
   estado: InboxMetaTemplateStatus;
   id: string;
   idioma: string;
+  lastSyncedAt: string | null;
+  metaCategory: string | null;
+  metaStatus: string | null;
   metaTemplateId: string | null;
   nombre: string;
   rechazoMotivo: string | null;
+  syncError: string | null;
   updatedAt: string;
   variables: string[];
 };
 
 export type InboxCampaign = {
+  actualCost: number;
   audiencia: JsonRecord;
+  billingStatus: string;
   canalId: string;
   canalNombre: string | null;
   createdAt: string;
+  costCurrency: string | null;
   deliveredCount: number;
   estado: InboxCampaignStatus;
   failedCount: number;
@@ -210,7 +221,9 @@ export type InboxCampaign = {
 };
 
 export type InboxCampaignRecipient = {
+  actualCost: number | null;
   attemptCount: number;
+  billingStatus: string;
   campaignId: string;
   canalMessageId: string | null;
   clienteId: string | null;
@@ -222,6 +235,7 @@ export type InboxCampaignRecipient = {
   id: string;
   lastAttemptAt: string | null;
   lastError: string | null;
+  marketCode: string | null;
   nombre: string | null;
   optIn: boolean;
   optInAt: string | null;

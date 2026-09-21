@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { upsertMetaTemplateAction } from "@/modules/inbox/actions";
+import {
+  syncWhatsAppTemplatesAction,
+  upsertMetaTemplateAction,
+} from "@/modules/inbox/actions";
 import {
   INBOX_META_TEMPLATE_CATEGORY_LABELS,
   INBOX_META_TEMPLATE_CATEGORIES,
-  INBOX_META_TEMPLATE_STATUS_LABELS,
-  INBOX_META_TEMPLATE_STATUSES,
 } from "@/modules/inbox/constants";
 import type { InboxChannelConfig } from "@/modules/inbox/types";
 
@@ -24,7 +25,27 @@ export function WhappTemplateForm({
   );
 
   return (
-    <form action={upsertMetaTemplateAction} className="rounded-lg border bg-background p-5">
+    <div className="space-y-4">
+      <form action={syncWhatsAppTemplatesAction} className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="min-w-64 flex-1 space-y-1 text-sm">
+            <span className="font-medium">Canal oficial</span>
+            <select className="h-9 w-full rounded-md border bg-background px-3" name="canalId" required>
+              <option value="">Seleccionar WhatsApp Meta</option>
+              {whatsappChannels.map((channel) => (
+                <option key={channel.id} value={channel.id}>{channel.nombre}</option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit">Sincronizar con Meta</Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          El estado aprobado, la categoría y la calidad siempre se toman directamente de Meta.
+        </p>
+      </form>
+
+      <form action={upsertMetaTemplateAction} className="rounded-lg border bg-background p-5">
+      <input name="estado" type="hidden" value="borrador" />
       <div className="grid gap-4 md:grid-cols-3">
         <label className="space-y-1 text-sm">
           <span className="font-medium">Nombre Meta</span>
@@ -66,16 +87,6 @@ export function WhappTemplateForm({
           </select>
         </label>
         <label className="space-y-1 text-sm">
-          <span className="font-medium">Estado</span>
-          <select className="h-9 w-full rounded-md border bg-background px-3" name="estado">
-            {INBOX_META_TEMPLATE_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {INBOX_META_TEMPLATE_STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-1 text-sm">
           <span className="font-medium">Variables esperadas</span>
           <input
             className="h-9 w-full rounded-md border bg-background px-3"
@@ -94,8 +105,9 @@ export function WhappTemplateForm({
         />
       </label>
       <Button className="mt-4" type="submit">
-        Guardar plantilla
+        Guardar borrador local
       </Button>
-    </form>
+      </form>
+    </div>
   );
 }

@@ -14,6 +14,10 @@ import {
   createMaterialEntrySchema,
   createWarehouseSchema,
   importMaterialRowsSchema,
+  finishInventoryCountSchema,
+  recordInventoryCountItemSchema,
+  reconcileInventoryCostSchema,
+  startInventoryCountSchema,
   updateStockLimitsSchema,
   updateWarehouseSchema,
 } from "@/modules/inventory/schemas";
@@ -554,6 +558,7 @@ function revalidateInventoryPaths(productoId?: string) {
   revalidatePath("/inventario/productos");
   revalidatePath("/inventario/movimientos");
   revalidatePath("/inventario/bodegas");
+  revalidatePath("/inventario/conteos");
 
   if (productoId) {
     revalidatePath(`/catalogo/productos/${productoId}`);
@@ -1075,80 +1080,28 @@ export async function createInventoryTransferAction(formData: FormData) {
     productoId: parsed.data.productoId,
   });
 
-  const transferId = crypto.randomUUID();
   const motivo = parsed.data.motivo ?? "Traslado entre bodegas";
-  const { error: salidaError } = await supabase.rpc(
-    "registrar_movimiento_inventario",
+  const { error } = await supabase.rpc(
+    "transferir_inventario_entre_bodegas",
     {
-      p_bodega_id: parsed.data.bodegaOrigenId,
+      p_bodega_destino_id: parsed.data.bodegaDestinoId,
+      p_bodega_origen_id: parsed.data.bodegaOrigenId,
       p_cantidad: parsed.data.cantidad,
+      p_idempotency_key: parsed.data.idempotencyKey,
       p_motivo: motivo,
       p_producto_id: parsed.data.productoId,
-      p_referencia_id: transferId,
-      p_referencia_tipo: "traslado_bodega",
-      p_tipo: "salida",
     },
   );
 
-  if (salidaError) {
-    logInventoryActionError("createInventoryTransferAction.salida", salidaError, {
+  if (error) {
+    logInventoryActionError("createInventoryTransferAction", error, {
       productoId: parsed.data.productoId,
-      transferId,
+      bodegaOrigenId: parsed.data.bodegaOrigenId,
+      bodegaDestinoId: parsed.data.bodegaDestinoId,
     });
     redirectWithError(
       "/inventario/productos",
-      `No se pudo retirar stock de la bodega origen: ${safeErrorMessage(salidaError)}`,
-    );
-  }
-
-  const { error: entradaError } = await supabase.rpc(
-    "registrar_movimiento_inventario",
-    {
-      p_bodega_id: parsed.data.bodegaDestinoId,
-      p_cantidad: parsed.data.cantidad,
-      p_motivo: motivo,
-      p_producto_id: parsed.data.productoId,
-      p_referencia_id: transferId,
-      p_referencia_tipo: "traslado_bodega",
-      p_tipo: "entrada",
-    },
-  );
-
-  if (entradaError) {
-    logInventoryActionError("createInventoryTransferAction.entrada", entradaError, {
-      productoId: parsed.data.productoId,
-      transferId,
-    });
-
-    const { error: rollbackError } = await supabase.rpc(
-      "registrar_movimiento_inventario",
-      {
-        p_bodega_id: parsed.data.bodegaOrigenId,
-        p_cantidad: parsed.data.cantidad,
-        p_motivo: `Reversion automatica de traslado fallido ${transferId}`,
-        p_producto_id: parsed.data.productoId,
-        p_referencia_id: transferId,
-        p_referencia_tipo: "traslado_bodega_reversion",
-        p_tipo: "entrada",
-      },
-    );
-
-    if (rollbackError) {
-      logInventoryActionError(
-        "createInventoryTransferAction.rollback",
-        rollbackError,
-        {
-          productoId: parsed.data.productoId,
-          transferId,
-        },
-      );
-    }
-
-    redirectWithError(
-      "/inventario/productos",
-      rollbackError
-        ? `El traslado quedo incompleto y requiere revision manual: ${safeErrorMessage(entradaError)}`
-        : `No se pudo ingresar stock en destino. La salida fue revertida: ${safeErrorMessage(entradaError)}`,
+      `No se pudo completar el traslado: ${safeErrorMessage(error)}`,
     );
   }
 
@@ -1188,4 +1141,170 @@ export async function updateStockLimitsAction(formData: FormData) {
 
   revalidateInventoryPaths(parsed.data.productoId);
   redirect("/inventario/productos");
+}
+
+export async function reconcileInventoryCostAction(formData: FormData) {
+  const parsed = reconcileInventoryCostSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError(
+      "/inventario/productos",
+      parsed.error.issues[0]?.message ?? "Costo promedio invalido.",
+    );
+  }
+
+  await assertInventoryPermission(
+    "inventory.stock.adjust",
+    "/inventario/productos",
+  );
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reconcile_inventory_average_cost", {
+    p_operation_id: parsed.data.operationId,
+    p_product_id: parsed.data.productoId,
+    p_reason: parsed.data.reason,
+    p_unit_cost: parsed.data.unitCost,
+    p_warehouse_id: parsed.data.bodegaId,
+  });
+
+  if (error) {
+    logInventoryActionError("reconcileInventoryCostAction", error, {
+      bodegaId: parsed.data.bodegaId,
+      productoId: parsed.data.productoId,
+    });
+    redirectWithError(
+      "/inventario/productos",
+      `No se pudo conciliar el costo: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateInventoryPaths(parsed.data.productoId);
+  redirect("/inventario/productos");
+}
+
+export async function startInventoryCountAction(formData: FormData) {
+  const parsed = startInventoryCountSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError("/inventario/conteos", "Datos del conteo físico inválidos.");
+  }
+
+  await assertInventoryPermission("inventory.stock.adjust", "/inventario/conteos");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("start_inventory_physical_count", {
+    p_notes: parsed.data.notes ?? null,
+    p_operation_id: parsed.data.operationId,
+    p_warehouse_id: parsed.data.warehouseId,
+  });
+
+  if (error) {
+    logInventoryActionError("startInventoryCountAction", error, {
+      warehouseId: parsed.data.warehouseId,
+    });
+    redirectWithError(
+      "/inventario/conteos",
+      `No se pudo iniciar el conteo: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  const countId = (data as Array<{ count_id?: string }> | null)?.[0]?.count_id;
+  revalidateInventoryPaths();
+  redirect(
+    `/inventario/conteos${countId ? `?conteo=${countId}&` : "?"}success=${encodeURIComponent("Conteo iniciado. La bodega quedó protegida contra movimientos.")}`,
+  );
+}
+
+export async function recordInventoryCountItemAction(formData: FormData) {
+  const parsed = recordInventoryCountItemSchema.safeParse(getFormData(formData));
+  const countId = String(formData.get("countId") ?? "");
+  const redirectPath = `/inventario/conteos${countId ? `?conteo=${encodeURIComponent(countId)}` : ""}`;
+
+  if (!parsed.success) {
+    redirectWithError(redirectPath, "Cantidad contada inválida.");
+  }
+
+  await assertInventoryPermission("inventory.stock.adjust", redirectPath);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_inventory_count_item", {
+    p_count_id: parsed.data.countId,
+    p_counted_quantity: parsed.data.countedQuantity,
+    p_item_id: parsed.data.itemId,
+    p_notes: parsed.data.notes ?? null,
+  });
+
+  if (error) {
+    logInventoryActionError("recordInventoryCountItemAction", error, {
+      countId: parsed.data.countId,
+      itemId: parsed.data.itemId,
+    });
+    redirectWithError(
+      redirectPath,
+      `No se pudo guardar el conteo: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateInventoryPaths();
+  redirect(`${redirectPath}&success=${encodeURIComponent("Cantidad guardada.")}`);
+}
+
+export async function closeInventoryCountAction(formData: FormData) {
+  const parsed = finishInventoryCountSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError("/inventario/conteos", "Conteo físico inválido.");
+  }
+
+  const redirectPath = `/inventario/conteos?conteo=${parsed.data.countId}`;
+  await assertInventoryPermission("inventory.stock.adjust", redirectPath);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("close_inventory_physical_count", {
+    p_count_id: parsed.data.countId,
+    p_operation_id: parsed.data.operationId,
+  });
+
+  if (error) {
+    logInventoryActionError("closeInventoryCountAction", error, {
+      countId: parsed.data.countId,
+    });
+    redirectWithError(
+      redirectPath,
+      `No se pudo cerrar el conteo: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateInventoryPaths();
+  redirect(`${redirectPath}&success=${encodeURIComponent("Conteo cerrado y diferencias aplicadas.")}`);
+}
+
+export async function cancelInventoryCountAction(formData: FormData) {
+  const parsed = finishInventoryCountSchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError("/inventario/conteos", "Conteo físico inválido.");
+  }
+
+  const redirectPath = `/inventario/conteos?conteo=${parsed.data.countId}`;
+  await assertInventoryPermission("inventory.stock.adjust", redirectPath);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cancel_inventory_physical_count", {
+    p_count_id: parsed.data.countId,
+    p_operation_id: parsed.data.operationId,
+  });
+
+  if (error) {
+    logInventoryActionError("cancelInventoryCountAction", error, {
+      countId: parsed.data.countId,
+    });
+    redirectWithError(
+      redirectPath,
+      `No se pudo cancelar el conteo: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateInventoryPaths();
+  redirect(`${redirectPath}&success=${encodeURIComponent("Conteo cancelado; la bodega volvió a operar.")}`);
 }

@@ -192,6 +192,7 @@ export function FloatingInboxWidget({
   const [toolView, setToolView] = useState<"management" | "replies">("replies");
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [operations, setOperations] = useState<InboxWidgetOperations>({
+    availableTags: [],
     canAssign: false,
     canChangeStatus: false,
     canCreateCustomer: false,
@@ -199,6 +200,7 @@ export function FloatingInboxWidget({
     currentProfileId: null,
     currentProfileName: null,
     customers: [],
+    funnelStages: [],
     users: [],
   });
   const [widgetError, setWidgetError] = useState<string | null>(null);
@@ -990,15 +992,21 @@ export function FloatingInboxWidget({
                                   const data = new FormData(event.currentTarget);
                                   runConversationOperation(data, {
                                     etiquetas: String(data.get("etiquetas") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
-                                    etapaFunnel: String(data.get("etapaFunnel") ?? "").trim() || null,
+                                    etapaFunnel: operations.funnelStages.find((stage) => stage.id === String(data.get("etapaFunnel") ?? ""))?.nombre ?? null,
                                   });
                                 }}
                               >
                                 <input name="operation" type="hidden" value="classification" />
                                 <label className="block text-xs font-black text-slate-700">Etiquetas</label>
-                                <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" defaultValue={activeConversation.etiquetas.join(", ")} name="etiquetas" placeholder="venta, urgente, mayorista" />
+                                <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" defaultValue={activeConversation.etiquetas.join(", ")} list="whapp-etiquetas" name="etiquetas" placeholder="venta, urgente, mayorista" />
+                                <datalist id="whapp-etiquetas">
+                                  {operations.availableTags.map((tag) => <option key={tag.id} value={tag.nombre} />)}
+                                </datalist>
                                 <label className="block text-xs font-black text-slate-700">Etapa del funnel</label>
-                                <input className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm" defaultValue={activeConversation.etapaFunnel ?? ""} name="etapaFunnel" placeholder="Nuevo, calificado, propuesta..." />
+                                <select className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" defaultValue={operations.funnelStages.find((stage) => stage.nombre === activeConversation.etapaFunnel)?.id ?? ""} name="etapaFunnel">
+                                  <option value="">Sin etapa</option>
+                                  {operations.funnelStages.map((stage) => <option key={stage.id} value={stage.id}>{stage.funnelName} / {stage.nombre}</option>)}
+                                </select>
                                 <button className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white" disabled={isSending} type="submit">Guardar clasificación</button>
                               </form>
                             </>

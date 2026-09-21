@@ -69,7 +69,7 @@ export default async function NewAutoblogArticlePage({
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Escribe un borrador simple y agrega fuentes, SEO o copys solo si los necesitas."
+        description="Genera articulos editables con contexto del negocio, investigacion web, SEO y copys."
         eyebrow="Autoblog"
         title="Crear articulo"
       />
@@ -104,7 +104,7 @@ export default async function NewAutoblogArticlePage({
               <div>
                 <h2 className="text-base font-semibold">Generar con IA</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Describe el tema y biz.os crea un borrador editable con SEO y copys.
+                  Describe el tema y biz.os investiga referencias web, arma un brief y crea un borrador editable.
                 </p>
               </div>
               <span className="rounded-full border px-2.5 py-1 text-xs font-medium">
@@ -152,7 +152,7 @@ export default async function NewAutoblogArticlePage({
                   <textarea
                     className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
                     name="sourceUrlsText"
-                    placeholder="Una URL por linea"
+                    placeholder="Una URL por linea. Si lo dejas vacio, biz.os intentara buscar referencias web."
                   />
                 </label>
               </fieldset>
@@ -198,9 +198,9 @@ export default async function NewAutoblogArticlePage({
           <section className="rounded-lg border bg-background p-5">
             <h2 className="text-base font-semibold">Herramientas de escritura</h2>
             <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-              <p>Revision ortografica del navegador activa en campos de texto.</p>
+              <p>La generacion con IA intenta leer fuentes reales antes de redactar.</p>
               <p>
-                Los borradores generados quedan guardados como articulos editables.
+                Los borradores generados quedan guardados como articulos editables con las fuentes usadas.
               </p>
             </div>
           </section>

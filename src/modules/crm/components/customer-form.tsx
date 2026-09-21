@@ -109,7 +109,7 @@ export function CustomerForm({
         </label>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-[1fr_180px_1fr]">
         <label className="space-y-2 text-sm font-medium">
           Nombre
           <input
@@ -118,6 +118,20 @@ export function CustomerForm({
             name="nombre"
             required
           />
+        </label>
+        <label className="space-y-2 text-sm font-medium">
+          Tipo de identificacion
+          <select
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            defaultValue={customer?.fiscalIdentificationType ?? ""}
+            name="fiscalIdentificationType"
+          >
+            <option value="">Sin documento</option>
+            <option value="01">Cedula fisica</option>
+            <option value="02">Cedula juridica</option>
+            <option value="03">DIMEX</option>
+            <option value="04">NITE</option>
+          </select>
         </label>
         <label className="space-y-2 text-sm font-medium">
           Identificacion

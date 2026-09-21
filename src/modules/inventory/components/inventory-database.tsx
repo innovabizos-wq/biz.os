@@ -19,6 +19,11 @@ type InventoryFilters = {
   q: string;
 };
 
+const CRC_FORMATTER = new Intl.NumberFormat("es-CR", {
+  currency: "CRC",
+  style: "currency",
+});
+
 function getStockStatus(item: InventoryStock) {
   if (item.stockMinimo > 0 && item.cantidad < item.stockMinimo) {
     return "bajo minimo";
@@ -55,6 +60,9 @@ function filterStock(stock: InventoryStock[], filters: InventoryFilters) {
         item.cantidad,
         item.stockMinimo,
         item.stockMaximo,
+        item.averageUnitCost,
+        item.totalInventoryValue,
+        item.costStatus,
         status,
       ].some((value) => normalizeText(value).includes(query));
     const matchesWarehouse = !filters.bodega || item.bodegaNombre === filters.bodega;
@@ -165,6 +173,9 @@ export function InventoryDatabase({ className, stock }: InventoryDatabaseProps) 
                 <th className="px-4 py-3">Minimo</th>
                 <th className="px-4 py-3">Maximo</th>
                 <th className="px-4 py-3">Estado stock</th>
+                <th className="px-4 py-3">Costo promedio</th>
+                <th className="px-4 py-3">Valor</th>
+                <th className="px-4 py-3">Estado costo</th>
                 <th className="px-4 py-3">Estado bodega</th>
               </tr>
             </thead>
@@ -180,6 +191,19 @@ export function InventoryDatabase({ className, stock }: InventoryDatabaseProps) 
                   <td className="px-4 py-3">{item.stockMinimo}</td>
                   <td className="px-4 py-3">{item.stockMaximo ?? "-"}</td>
                   <td className="px-4 py-3">{getStockStatus(item)}</td>
+                  <td className="px-4 py-3">
+                    {item.averageUnitCost === null
+                      ? "-"
+                      : CRC_FORMATTER.format(item.averageUnitCost)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {item.totalInventoryValue === null
+                      ? "-"
+                      : CRC_FORMATTER.format(item.totalInventoryValue)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {item.costStatus === "complete" ? "Completo" : "Por conciliar"}
+                  </td>
                   <td className="px-4 py-3">{item.bodegaEstado ?? "-"}</td>
                 </tr>
               ))}

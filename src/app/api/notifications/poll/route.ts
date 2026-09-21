@@ -29,8 +29,6 @@ export async function GET() {
 
   await createDueFollowupReminderNotifications({
     leadMinutes: settings.ok ? settings.data.followupReminderLeadMinutes : 30,
-    profileId: profileResult.data.id,
-    tenant: tenantResult.data,
   });
 
   const [notificationsResult, unreadCountResult] = await Promise.all([

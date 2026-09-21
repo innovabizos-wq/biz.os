@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   decryptPendingMetaConnection,
+  isPendingMetaConnectionExpired,
   META_OAUTH_PENDING_COOKIE,
 } from "@/modules/inbox/meta-oauth-pending";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
@@ -17,7 +18,7 @@ export default async function SelectMetaPagesPage() {
     !pending ||
     pending.empresaId !== access.tenant.empresaId ||
     pending.profileId !== access.tenant.profileId ||
-    Date.now() - pending.issuedAt > 10 * 60 * 1000
+    isPendingMetaConnectionExpired(pending)
   ) redirect("/inbox/conexiones?error=La%20seleccion%20de%20Meta%20expir%C3%B3.%20Vuelve%20a%20conectar.");
 
   return (

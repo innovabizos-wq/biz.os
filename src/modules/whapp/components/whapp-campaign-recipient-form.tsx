@@ -101,9 +101,36 @@ export function WhappCampaignRecipientForm({
             placeholder="lead_123"
           />
         </label>
-        <label className="flex items-center gap-2 pt-6 text-sm">
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Mercado Meta (opcional)</span>
+          <input
+            className="h-9 w-full rounded-md border bg-background px-3 uppercase"
+            maxLength={48}
+            name="marketCode"
+            placeholder="Se detecta por el telefono"
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Evidencia del consentimiento</span>
+          <input
+            className="h-9 w-full rounded-md border bg-background px-3"
+            name="optInEvidence"
+            placeholder="Formulario, contrato o conversación"
+            required
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Versión del aviso</span>
+          <input
+            className="h-9 w-full rounded-md border bg-background px-3"
+            defaultValue="whapp-optin-v1"
+            name="optInTermsVersion"
+            required
+          />
+        </label>
+        <label className="flex items-center gap-2 pt-6 text-sm md:col-span-3">
           <input className="size-4" name="optIn" required type="checkbox" />
-          <span>Confirmo opt-in valido para recibir mensajes.</span>
+          <span>Confirmo que existe consentimiento verificable y vigente.</span>
         </label>
       </fieldset>
 

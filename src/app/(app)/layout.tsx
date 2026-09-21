@@ -3,7 +3,11 @@ import AppTopHeader from "@/components/layout/AppTopHeader";
 
 import { AppSidebarNav } from "@/components/navigation/app-sidebar-nav";
 import { SidebarBrandLogo } from "@/components/navigation/sidebar-brand-logo";
-import { getCurrentTenantContext, getCurrentUser } from "@/lib/auth/session";
+import {
+  getCurrentProfile,
+  getCurrentTenantContext,
+  getCurrentUser,
+} from "@/lib/auth/session";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { FloatingConsultationButton } from "@/modules/consultations/components/floating-consultation-button";
@@ -27,7 +31,10 @@ export default function AppLayout({
 }
 
 async function AppShell({ children }: { children: React.ReactNode }) {
-  const userResult = await getCurrentUser();
+  const [userResult, profileResult] = await Promise.all([
+    getCurrentUser(),
+    getCurrentProfile(),
+  ]);
 
   if (!userResult.ok || !userResult.data) {
     if (process.env.NODE_ENV !== "production") {
@@ -36,6 +43,10 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       });
     }
     redirect("/login");
+  }
+
+  if (profileResult.ok && profileResult.data?.requiereCambioContrasena) {
+    redirect("/cambiar-contrasena");
   }
 
   const tenantResult = await getCurrentTenantContext();

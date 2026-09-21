@@ -1,10 +1,24 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PENDING_INVITATION_COOKIE = "bizos_pending_invitation_token";
 const PENDING_INVITATION_MAX_AGE = 60 * 60 * 24 * 7;
 
-export function proxy(request: NextRequest) {
-  const response = NextResponse.next();
+function getSupabaseProxyConfig() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !publishableKey) {
+    throw new Error("Missing public Supabase environment variables.");
+  }
+
+  return { publishableKey, url };
+}
+
+function capturePendingInvitationToken(
+  request: NextRequest,
+  response: NextResponse,
+) {
   const token =
     request.nextUrl.searchParams.get("token") ??
     request.nextUrl.searchParams.get("invitation_token");
@@ -34,6 +48,40 @@ export function proxy(request: NextRequest) {
   return response;
 }
 
+export async function proxy(request: NextRequest) {
+  let response = NextResponse.next({
+    request,
+  });
+  const { publishableKey, url } = getSupabaseProxyConfig();
+
+  const supabase = createServerClient(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
+
+        response = NextResponse.next({
+          request,
+        });
+
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
+
+  await supabase.auth.getUser();
+
+  return capturePendingInvitationToken(request, response);
+}
+
 export const config = {
-  matcher: ["/invitation", "/login", "/signup", "/onboarding"],
+  matcher: [
+    "/((?!api|\\.well-known/workflow|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };

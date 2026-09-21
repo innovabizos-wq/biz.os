@@ -83,9 +83,9 @@ export default async function FiscalConfigurationPage({
         title="Configuracion fiscal"
       />
 
-      <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-        Facturacion electronica en configuracion: la emision real requiere completar
-        firma XAdES-EPES, XML v4.4 firmado, envio y consulta de estado en Hacienda.
+      <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+        Biz.OS valida el XML 4.4 ya firmado antes de enviarlo. Completa el domicilio fiscal y la
+        identificacion registrada para el proveedor del sistema para habilitar la emision.
       </p>
 
       <EphemeralPageAlert error={params?.error} success={params?.success} />
@@ -155,7 +155,112 @@ export default async function FiscalConfigurationPage({
                   className="h-10 w-full rounded-md border px-3 text-sm"
                   defaultValue={config?.actividadEconomica ?? ""}
                   name="actividadEconomica"
+                  inputMode="numeric"
+                  maxLength={6}
                 />
+              </label>
+            </div>
+
+            <label className="space-y-1 text-sm font-semibold">
+              <span>Identificacion del proveedor del sistema</span>
+              <input
+                className="h-10 w-full rounded-md border px-3 text-sm"
+                defaultValue={config?.identificacionProveedorSistema ?? ""}
+                maxLength={20}
+                name="identificacionProveedorSistema"
+              />
+              <span className="block text-xs font-normal text-muted-foreground">
+                Numero registrado ante Hacienda para quien provee el sistema de emision.
+              </span>
+            </label>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Provincia</span>
+                <select
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.provincia ?? ""}
+                  name="provincia"
+                >
+                  <option value="">Seleccionar</option>
+                  <option value="1">San Jose</option>
+                  <option value="2">Alajuela</option>
+                  <option value="3">Cartago</option>
+                  <option value="4">Heredia</option>
+                  <option value="5">Guanacaste</option>
+                  <option value="6">Puntarenas</option>
+                  <option value="7">Limon</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Canton</span>
+                <input
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.canton ?? ""}
+                  inputMode="numeric"
+                  maxLength={2}
+                  name="canton"
+                  placeholder="01"
+                />
+              </label>
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Distrito</span>
+                <input
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.distrito ?? ""}
+                  inputMode="numeric"
+                  maxLength={2}
+                  name="distrito"
+                  placeholder="01"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Barrio (opcional)</span>
+                <input
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.barrio ?? ""}
+                  maxLength={50}
+                  name="barrio"
+                />
+              </label>
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Otras senas</span>
+                <input
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.otrasSenas ?? ""}
+                  maxLength={250}
+                  name="otrasSenas"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Condicion de venta predeterminada</span>
+                <select
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.condicionVenta ?? "01"}
+                  name="condicionVenta"
+                >
+                  <option value="01">Contado</option>
+                  <option value="02">Credito</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm font-semibold">
+                <span>Medio de pago predeterminado</span>
+                <select
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                  defaultValue={config?.medioPago ?? "01"}
+                  name="medioPago"
+                >
+                  <option value="01">Efectivo</option>
+                  <option value="02">Tarjeta</option>
+                  <option value="03">Cheque</option>
+                  <option value="04">Transferencia / SINPE</option>
+                </select>
               </label>
             </div>
 
@@ -243,6 +348,14 @@ export default async function FiscalConfigurationPage({
               label="Datos de empresa"
             />
             <ChecklistItem done={Boolean(config?.actividadEconomica)} label="Actividad" />
+            <ChecklistItem
+              done={Boolean(config?.identificacionProveedorSistema)}
+              label="Proveedor del sistema"
+            />
+            <ChecklistItem
+              done={Boolean(config?.provincia && config.canton && config.distrito && config.otrasSenas)}
+              label="Domicilio fiscal"
+            />
             <ChecklistItem
               done={Boolean(config?.hasHaciendaUsuario && config.hasHaciendaPassword)}
               label="Credenciales Hacienda"

@@ -18,6 +18,7 @@ type CustomerRow = {
   created_at: string;
   empresa_id: string;
   estado: CrmCustomer["estado"];
+  fiscal_identification_type: CrmCustomer["fiscalIdentificationType"];
   genero: CrmCustomer["genero"] | null;
   id: string;
   identificacion: string | null;
@@ -207,6 +208,7 @@ function mapCustomer(row: CustomerRow): CrmCustomer {
     createdAt: row.created_at,
     empresaId: row.empresa_id,
     estado: row.estado,
+    fiscalIdentificationType: row.fiscal_identification_type,
     followupsCount: 0,
     genero: row.genero ?? "o",
     id: row.id,
@@ -263,7 +265,7 @@ export async function getCrmCustomers(
   const { data, error } = await supabase
     .from("crm_clientes")
     .select(
-      "id, empresa_id, tipo, estado, genero, nombre, identificacion, telefono, whatsapp, correo, origen, asignado_a, notas, created_at, updated_at, profiles!crm_clientes_asignado_empresa_fkey(nombre)",
+      "id, empresa_id, tipo, estado, genero, nombre, identificacion, fiscal_identification_type, telefono, whatsapp, correo, origen, asignado_a, notas, created_at, updated_at, profiles!crm_clientes_asignado_empresa_fkey(nombre)",
     )
     .eq("empresa_id", tenant.empresaId)
     .order("created_at", { ascending: false });
@@ -326,7 +328,7 @@ export async function getCrmCustomerDetail(
   const { data, error } = await supabase
     .from("crm_clientes")
     .select(
-      "id, empresa_id, tipo, estado, genero, nombre, identificacion, telefono, whatsapp, correo, origen, asignado_a, notas, created_at, updated_at, profiles!crm_clientes_asignado_empresa_fkey(nombre)",
+      "id, empresa_id, tipo, estado, genero, nombre, identificacion, fiscal_identification_type, telefono, whatsapp, correo, origen, asignado_a, notas, created_at, updated_at, profiles!crm_clientes_asignado_empresa_fkey(nombre)",
     )
     .eq("empresa_id", tenant.empresaId)
     .eq("id", clienteId)

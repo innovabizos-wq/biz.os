@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import {
   addQuoteItemSchema,
   changeQuoteStatusSchema,
@@ -201,6 +202,33 @@ async function querySaleForQuote(cotizacionId: string, empresaId: string) {
     .maybeSingle<{ id: string; estado: string }>();
 
   return data ?? null;
+}
+
+async function syncReceivablesAfterSaleConfirmation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  access: Awaited<ReturnType<typeof requireAdminAccess>>,
+) {
+  if (!isModuleActive(access.tenant.activeModules, "payments")) {
+    return;
+  }
+
+  if (
+    !hasPermission(access.tenant.permissions, "payments.accounts.view") &&
+    !hasPermission(access.tenant.permissions, "payments.accounts.manage")
+  ) {
+    return;
+  }
+
+  const { error } = await supabase.rpc("sincronizar_cuentas_cobrar_ventas_actual");
+
+  if (error && process.env.NODE_ENV !== "production") {
+    console.error("[confirmSaleFromQuoteAction] receivables sync failed", {
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      message: error.message,
+    });
+  }
 }
 
 export async function createQuoteAction(formData: FormData) {
@@ -661,9 +689,13 @@ export async function confirmSaleFromQuoteAction(formData: FormData) {
     }
   }
 
+  await syncReceivablesAfterSaleConfirmation(supabase, access);
+
   revalidateQuotePaths(quote.id, quote.cliente_id ?? undefined);
   revalidatePath("/ventas");
   revalidatePath(`/ventas/${sale.id}`);
+  revalidatePath("/pagos");
+  revalidatePath("/dashboard");
   redirect("/cotizaciones?success=Venta%20confirmada.%20Ahora%20puedes%20emitir%20factura.");
 }
 

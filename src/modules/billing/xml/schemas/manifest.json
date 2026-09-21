@@ -1,0 +1,13 @@
+{
+  "version": "4.4",
+  "retrievedAt": "2026-09-14",
+  "officialPortal": "https://www.hacienda.go.cr/ATV/ComprobanteElectronico/frmAnexosyEstructuras.aspx",
+  "archivedPortal": "https://apis.gometa.org/4.4/hacienda/ATV/ComprobanteElectronico/frmAnexosyEstructuras.aspx",
+  "files": {
+    "2024/v4.4/FacturaElectronica_V4.4.xsd": "4D7A1718CF5B09A4816503C08D1701C37B7BECA5F212DD82F18D1D3A9A3042BA",
+    "2024/v4.4/NotaCreditoElectronica_V4.4.xsd": "3A0142010E59126B22D42F736A0F54AF38F473D59564E311DECA9EE4CCC824A4",
+    "2024/v4.4/NotaDebitoElectronica_V4.4.xsd": "F92BF9D4B83F2DA9892B5658F8B4E39347CED871BD15C03B5D6437DE7BC4FE94",
+    "2024/v4.4/TiqueteElectronico_V4.4.xsd": "5184857D0F5D9777B898BD1C129BD3E8936D37362EDE6B3B975B36FE5345CC41",
+    "2024/xmldsig-core-schema.xsd": "D102AD3DF7664C307E0C2C776BA4A90513B1969974D8A940BAE1A77F9F21E15D"
+  }
+}

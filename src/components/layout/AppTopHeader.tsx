@@ -1,8 +1,11 @@
+import { Suspense } from "react";
+
 import {
   DashboardAiSearch,
   type DashboardAiSearchCapabilities,
 } from "@/app/(app)/dashboard/dashboard-ai-search";
 import { NotificationBell } from "@/modules/notifications/components/notification-bell";
+import { PostNotes } from "@/modules/post-notes/components/post-notes";
 import { TimesheetSidebarWidget } from "@/modules/hr-timesheets/components/timesheet-sidebar-widget";
 import type { CurrentTimesheetStatus, TimesheetState } from "@/modules/hr-timesheets/types";
 import type { UserNotification } from "@/modules/notifications/types";
@@ -54,6 +57,9 @@ export default function AppTopHeader({
       </div>
 
       <div className="dashboard-topbar-actions">
+        <Suspense fallback={<span className="post-note-launcher-placeholder" />}>
+          <PostNotes />
+        </Suspense>
         <NotificationBell
           initialCount={unreadNotificationCount}
           notifications={notifications}

@@ -1,5 +1,6 @@
 export type CrmClienteTipo = "prospecto" | "cliente";
 export type CrmClienteGenero = "h" | "m" | "o";
+export type CrmFiscalIdentificationType = "01" | "02" | "03" | "04";
 
 export type CrmClienteEstado =
   | "nuevo"
@@ -28,6 +29,7 @@ export type CrmCustomer = {
   empresaId: string;
   estado: CrmClienteEstado;
   followupsCount: number;
+  fiscalIdentificationType: CrmFiscalIdentificationType | null;
   genero: CrmClienteGenero;
   id: string;
   identificacion: string | null;

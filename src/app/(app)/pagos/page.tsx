@@ -44,6 +44,16 @@ function formatDate(value: string | null) {
   });
 }
 
+function paymentMethodLabel(value: string) {
+  return ({
+    card: "Tarjeta",
+    cash: "Efectivo",
+    other: "Otro",
+    sinpe: "SINPE",
+    transfer: "Transferencia",
+  } as Record<string, string>)[value] ?? value;
+}
+
 function accountName(account: PaymentAccount) {
   if (account.tipo === "receivable") {
     return account.clienteNombre ?? "Cliente sin nombre";
@@ -158,6 +168,9 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
   const canManage = canManagePayments(tenant);
   const accounts = accountsResult.data;
   const transactions = transactionsResult.ok ? transactionsResult.data : [];
+  const transactionsError = transactionsResult.ok
+    ? null
+    : transactionsResult.error.message;
   const summary = buildPaymentsSummary(accounts, transactions);
 
   return (
@@ -191,6 +204,12 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
       {params?.error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           {params.error}
+        </p>
+      ) : null}
+
+      {transactionsError ? (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900">
+          {transactionsError} Los totales de movimientos recientes estan incompletos.
         </p>
       ) : null}
 
@@ -268,10 +287,11 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
                       <div className="grid gap-2">
                         <form action={recordPaymentAction} className="grid gap-2">
                           <input name="accountId" type="hidden" value={account.id} />
+                          <input name="operationId" type="hidden" value={crypto.randomUUID()} />
                           <input
                             className="rounded-md border bg-background px-3 py-2"
                             max={account.saldo}
-                            min="1"
+                            min="0.01"
                             name="monto"
                             placeholder={account.tipo === "receivable" ? "Cobro" : "Pago"}
                             step="0.01"
@@ -282,11 +302,20 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
                             name="referencia"
                             placeholder="Referencia"
                           />
-                          <input
+                          <select
+                            className="rounded-md border bg-background px-3 py-2"
+                            defaultValue="cash"
                             name="metodo"
-                            type="hidden"
-                            value={account.tipo === "receivable" ? "cobro_manual" : "pago_manual"}
-                          />
+                          >
+                            <option value="cash">Efectivo</option>
+                            <option value="card">Tarjeta</option>
+                            <option value="sinpe">SINPE</option>
+                            <option value="transfer">Transferencia</option>
+                            <option value="other">Otro</option>
+                          </select>
+                          <p className="text-xs text-muted-foreground">
+                            La referencia es obligatoria para tarjeta, SINPE y transferencia.
+                          </p>
                           <Button size="sm" type="submit">
                             {account.tipo === "receivable" ? "Registrar cobro" : "Registrar pago"}
                           </Button>
@@ -312,7 +341,11 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
       <div className="rounded-lg border bg-background p-5">
         <h2 className="text-base font-semibold">Movimientos recientes</h2>
         <div className="mt-4 grid gap-3">
-          {transactions.length === 0 ? (
+          {transactionsError ? (
+            <p className="text-sm text-amber-900">
+              Los movimientos no estan disponibles en este momento.
+            </p>
+          ) : transactions.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay pagos registrados.</p>
           ) : (
             transactions.map((transaction) => (
@@ -324,7 +357,7 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
                   <strong>{formatCurrency(transaction.monto)}</strong>
                   <p className="text-sm text-muted-foreground">
                     {transaction.accountNumero ?? "Cuenta"} -{" "}
-                    {transaction.referencia ?? transaction.metodo}
+                    {transaction.referencia ?? paymentMethodLabel(transaction.metodo)}
                   </p>
                 </div>
                 <time className="text-sm text-muted-foreground">

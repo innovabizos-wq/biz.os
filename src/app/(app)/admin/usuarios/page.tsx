@@ -48,20 +48,19 @@ export default async function AdminUsuariosPage({
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeader
-          description="Usuarios activos de la empresa actual. El personal nuevo se agrega por invitacion."
+          description="Usuarios activos de la empresa actual. El personal nuevo se crea con acceso directo."
           eyebrow="Administracion"
           title="Usuarios activos"
         />
         {canManage ? (
           <Link className={buttonVariants()} href="/admin/invitaciones">
-            Agregar personal
+            Crear usuario
           </Link>
         ) : null}
       </div>
 
       <div className="rounded-lg border bg-muted p-4 text-sm text-muted-foreground">
-        No se crean usuarios ni contrasenas temporales desde este panel. El
-        colaborador crea su propia contrasena al aceptar la invitacion.
+        Los usuarios creados por administracion entran con una contrasena temporal y deben cambiarla antes de usar el sistema.
       </div>
 
       <EphemeralPageAlert error={params?.error} />

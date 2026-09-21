@@ -96,6 +96,18 @@ export function ConsultationResultCard({ result }: ConsultationResultCardProps) 
   }
 
   return (
-    null
+    <div className="rounded-lg border border-dashed bg-background p-5 text-sm">
+      <p className="font-semibold">Registro manual</p>
+      <p className="mt-1 text-muted-foreground">
+        {result.message ||
+          "No se encontro un cliente existente. Completa los datos para registrar la gestion."}
+      </p>
+      {result.documento ? (
+        <dl className="mt-4 text-sm">
+          <dt className="text-muted-foreground">Documento</dt>
+          <dd>{result.documento}</dd>
+        </dl>
+      ) : null}
+    </div>
   );
 }

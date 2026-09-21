@@ -51,6 +51,7 @@ const criticalRoutes = [
   "src/app/(app)/cotizaciones/page.tsx",
   "src/app/(app)/cotizaciones/nueva/page.tsx",
   "src/app/(app)/cotizaciones/[cotizacionId]/imprimir/page.tsx",
+  "src/app/(app)/consultas/nueva/page.tsx",
   "src/app/(app)/ventas/page.tsx",
   "src/app/(app)/pagos/page.tsx",
   "src/app/(app)/compras/page.tsx",
@@ -73,6 +74,24 @@ test("MVP critical routes exist and remain routable", () => {
   for (const route of criticalRoutes) {
     exists(route);
   }
+});
+
+test("new consultation route starts in search mode and exposes manual lookup state", () => {
+  const newConsultationPage = source("src/app/(app)/consultas/nueva/page.tsx");
+  const resultCard = source(
+    "src/modules/consultations/components/consultation-result-card.tsx",
+  );
+
+  assert.match(
+    newConsultationPage,
+    /let result: ConsultationSearchResult \| null = null/,
+  );
+  assert.doesNotMatch(
+    newConsultationPage,
+    /let result: ConsultationSearchResult \| null = getBlankConsultationResult/,
+  );
+  assert.match(newConsultationPage, /params\?\.documento/);
+  assert.match(resultCard, /Registro manual/);
 });
 
 test("optional and operational module route groups are protected by the module contract", () => {
@@ -143,10 +162,33 @@ test("service-role client stays server-only and allowlisted", () => {
 
   assert.match(adminHelper, /import "server-only";/);
   assert.deepEqual(adminImporters, [
+    "src/app/api/inbox/media/[messageId]/route.ts",
+    "src/app/api/meta/connect/select/route.ts",
+    "src/app/api/meta/data-deletion/route.ts",
+    "src/app/api/meta/deauthorize/route.ts",
     "src/app/api/webhooks/meta/route.ts",
     "src/app/api/whapp/email/inbound/route.ts",
+    "src/app/meta/data-deletion/status/[code]/page.tsx",
+    "src/lib/supabase/service-role-context.ts",
+    "src/modules/auth/actions.ts",
+    "src/modules/billing/actions.ts",
+    "src/modules/billing/connectors/actions.ts",
+    "src/modules/billing/connectors/rest-client.ts",
+    "src/modules/billing/hacienda/client.ts",
+    "src/modules/billing/signing/signer.ts",
+    "src/modules/brain/automation-service.ts",
+    "src/modules/inbox-widget/actions.ts",
     "src/modules/inbox/actions.ts",
+    "src/modules/integrations/outbox/processor.ts",
+    "src/modules/integrations/outbox/repository.ts",
+    "src/modules/notifications/followup-reminder-job.ts",
+    "src/modules/public-api/auth.ts",
+    "src/modules/public-api/management.ts",
+    "src/modules/users/actions.ts",
+    "src/modules/whapp/classification-actions.ts",
     "src/modules/whapp/server/campaign-dispatcher.ts",
+    "src/modules/whapp/server/messaging-policy.ts",
+    "src/services/meta/webhook-signals.ts",
   ]);
 
   for (const file of allSourceFiles) {
@@ -211,7 +253,7 @@ test("authenticated SaaS shell and commercial flow are wired for sellable demo",
   assert.match(saleDetailPage, /SaleInventoryPanel/);
   assert.match(saleDetailPage, /SaleDispatchPanel/);
   assert.match(saleDetailPage, /Pagos esta disponible desde/);
-  assert.match(saleInventoryActions, /aplicar_salida_inventario_venta/);
+  assert.match(saleInventoryActions, /apply_sale_inventory_atomic/);
   assert.match(saleInventoryActions, /inventory\.stock\.adjust/);
   assert.match(dispatchActions, /crear_despacho_desde_venta/);
   assert.match(dispatchActions, /dispatch\.orders\.create/);
@@ -271,8 +313,8 @@ test("CRM customer search and consultation deduping stay document-aware", () => 
   assert.match(customersDatabase, /Con documento/);
   assert.match(customersDatabase, /Seguimiento pendiente/);
   assert.match(customersDatabase, /sin-actividad/);
-  assert.match(customersTable, /Identificacion/);
-  assert.match(customersTable, /Ultimo movimiento/);
+  assert.match(customersTable, /Identificaci[oó]n/);
+  assert.match(customersTable, /[ÚU]ltimo movimiento/);
   assert.match(crmQueries, /from\("crm_interacciones"\)/);
   assert.match(crmQueries, /from\("crm_seguimientos"\)/);
   assert.match(crmQueries, /from\("cotizaciones"\)/);
@@ -289,7 +331,7 @@ test("payments, purchases, AI and mobile contracts are wired through server guar
   assert.match(source("src/modules/payments/actions.ts"), /sincronizar_cuentas_pagar_compras_actual/);
   assert.match(source("src/modules/payments/actions.ts"), /registrar_movimiento_cuenta/);
   assert.match(source("src/modules/purchases/actions.ts"), /crear_orden_compra_completa/);
-  assert.match(source("src/modules/purchases/actions.ts"), /recibir_orden_compra_parcial/);
+  assert.match(source("src/modules/purchases/actions.ts"), /receive_purchase_order_atomic/);
   assert.match(source("src/modules/billing/actions.ts"), /isModuleActive\(access\.tenant\.activeModules, "billing"\)/);
   assert.match(source("src/modules/ai/actions.ts"), /guardar_configuracion_empresa/);
   assert.match(source("src/modules/ai/actions.ts"), /registrar_ai_usage_event/);

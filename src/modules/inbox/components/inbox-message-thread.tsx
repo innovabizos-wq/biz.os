@@ -1,19 +1,36 @@
-import type { InboxMessage } from "@/modules/inbox/types";
+import type { InboxChannel, InboxMessage } from "@/modules/inbox/types";
 
 type InboxMessageThreadProps = {
+  channel: InboxChannel;
   messages: InboxMessage[];
+};
+
+const META_MESSAGE_LABELS: Partial<
+  Record<InboxChannel, { incoming: string; outgoing: string }>
+> = {
+  facebook: {
+    incoming: "Entrante Meta · Facebook",
+    outgoing: "Enviado por Facebook",
+  },
+  instagram: {
+    incoming: "Entrante Meta · Instagram",
+    outgoing: "Enviado por Instagram",
+  },
+  whatsapp: {
+    incoming: "Entrante Meta · WhatsApp",
+    outgoing: "Enviado por WhatsApp",
+  },
 };
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("es-CR");
 }
 
-function getMessageLabel(message: InboxMessage) {
+function getMessageLabel(message: InboxMessage, channel: InboxChannel) {
   if (message.esNotaInterna) return "Nota interna";
-  if (message.canalMessageId) {
-    return message.direccion === "saliente"
-      ? "Enviado por WhatsApp"
-      : "Entrante Meta";
+  const labels = META_MESSAGE_LABELS[channel];
+  if (message.canalMessageId && labels) {
+    return message.direccion === "saliente" ? labels.outgoing : labels.incoming;
   }
 
   return message.direccion === "saliente"
@@ -21,7 +38,7 @@ function getMessageLabel(message: InboxMessage) {
     : "Entrante manual";
 }
 
-export function InboxMessageThread({ messages }: InboxMessageThreadProps) {
+export function InboxMessageThread({ channel, messages }: InboxMessageThreadProps) {
   return (
     <div className="rounded-lg border bg-background p-4">
       <div className="flex max-h-[58vh] min-h-80 flex-col gap-3 overflow-auto pr-2">
@@ -44,7 +61,7 @@ export function InboxMessageThread({ messages }: InboxMessageThreadProps) {
             >
               <div className="mb-1 flex items-center justify-between gap-3 text-xs opacity-75">
                 <span>
-                  {getMessageLabel(message)}
+                  {getMessageLabel(message, channel)}
                 </span>
                 <span>{formatDate(message.createdAt)}</span>
               </div>

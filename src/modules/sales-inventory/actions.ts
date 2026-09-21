@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   applySaleInventorySchema,
   markSaleWithoutInventorySchema,
+  releaseSaleInventorySchema,
+  reserveSaleInventorySchema,
 } from "@/modules/sales-inventory/schemas";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
@@ -60,6 +62,7 @@ function revalidateSaleInventoryPaths(ventaId: string) {
   revalidatePath("/inventario");
   revalidatePath("/inventario/productos");
   revalidatePath("/inventario/movimientos");
+  revalidatePath("/despacho");
 }
 
 async function assertApplyPermission(redirectPath: string) {
@@ -87,9 +90,10 @@ export async function applySaleInventoryAction(formData: FormData) {
   await assertApplyPermission(redirectPath);
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("aplicar_salida_inventario_venta", {
-    p_bodega_id: parsed.data.bodegaId,
-    p_venta_id: parsed.data.ventaId,
+  const { error } = await supabase.rpc("apply_sale_inventory_atomic", {
+    p_operation_id: parsed.data.operationId,
+    p_sale_id: parsed.data.ventaId,
+    p_warehouse_id: parsed.data.bodegaId,
   });
 
   if (error) {
@@ -105,6 +109,69 @@ export async function applySaleInventoryAction(formData: FormData) {
 
   revalidateSaleInventoryPaths(parsed.data.ventaId);
   redirect(redirectPath);
+}
+
+export async function reserveSaleInventoryAction(formData: FormData) {
+  const parsed = reserveSaleInventorySchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError("/ventas", "Datos de reserva inválidos.");
+  }
+
+  const redirectPath = `/ventas/${parsed.data.ventaId}`;
+  await assertApplyPermission(redirectPath);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reserve_sale_inventory", {
+    p_operation_id: parsed.data.operationId,
+    p_sale_id: parsed.data.ventaId,
+    p_warehouse_id: parsed.data.bodegaId,
+  });
+
+  if (error) {
+    logSaleInventoryActionError("reserveSaleInventoryAction", error, {
+      bodegaId: parsed.data.bodegaId,
+      ventaId: parsed.data.ventaId,
+    });
+    redirectWithError(
+      redirectPath,
+      `No se pudo reservar el inventario: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateSaleInventoryPaths(parsed.data.ventaId);
+  redirect(`${redirectPath}?success=${encodeURIComponent("Inventario reservado para la entrega.")}`);
+}
+
+export async function releaseSaleInventoryAction(formData: FormData) {
+  const parsed = releaseSaleInventorySchema.safeParse(getFormData(formData));
+
+  if (!parsed.success) {
+    redirectWithError("/ventas", "Reserva de venta inválida.");
+  }
+
+  const redirectPath = `/ventas/${parsed.data.ventaId}`;
+  await assertApplyPermission(redirectPath);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("release_sale_inventory_reservation", {
+    p_operation_id: parsed.data.operationId,
+    p_reason: parsed.data.reason ?? null,
+    p_sale_id: parsed.data.ventaId,
+  });
+
+  if (error) {
+    logSaleInventoryActionError("releaseSaleInventoryAction", error, {
+      ventaId: parsed.data.ventaId,
+    });
+    redirectWithError(
+      redirectPath,
+      `No se pudo liberar la reserva: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateSaleInventoryPaths(parsed.data.ventaId);
+  redirect(`${redirectPath}?success=${encodeURIComponent("Reserva liberada.")}`);
 }
 
 export async function markSaleWithoutInventoryAction(formData: FormData) {

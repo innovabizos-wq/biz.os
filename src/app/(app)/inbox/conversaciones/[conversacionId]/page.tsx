@@ -118,15 +118,22 @@ export default async function InboxConversationDetailPage({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
-          <InboxMessageThread messages={messages.ok ? messages.data : []} />
+          <InboxMessageThread
+            channel={conversation.data.canal}
+            messages={messages.ok ? messages.data : []}
+          />
           <div className="grid gap-4 lg:grid-cols-3">
             <InboxReplyForm
               canReply={canReply}
+              channel={conversation.data.canal}
               conversacionId={conversation.data.id}
-              realWhatsAppReady={
+              isMetaChannel={
+                metaSendStatus.ok ? metaSendStatus.data.isMetaChannel : false
+              }
+              realMetaReady={
                 metaSendStatus.ok ? metaSendStatus.data.isReady : false
               }
-              realWhatsAppReason={
+              realMetaReason={
                 metaSendStatus.ok ? metaSendStatus.data.reason : null
               }
             />

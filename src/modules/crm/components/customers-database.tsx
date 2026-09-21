@@ -1,7 +1,7 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Maximize2, Minimize2, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,13 @@ const CUSTOMER_STATUSES = [
 type CustomersDatabaseProps = {
   className?: string;
   customers: CrmCustomer[];
+};
+
+type ExpandedPanelBounds = {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
 };
 
 type CustomerFilters = {
@@ -176,6 +183,11 @@ function filterCustomers(customers: CrmCustomer[], filters: CustomerFilters) {
 }
 
 export function CustomersDatabase({ className, customers }: CustomersDatabaseProps) {
+  const slotRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [expandedBounds, setExpandedBounds] = useState<ExpandedPanelBounds | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [filters, setFilters] = useState<CustomerFilters>({
     asignado: "",
     conDocumento: "",
@@ -195,34 +207,192 @@ export function CustomersDatabase({ className, customers }: CustomersDatabasePro
     () => filterCustomers(customers, filters),
     [customers, filters],
   );
-  return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-3 pt-5", className)}>
-      <div className="grid gap-3 md:grid-cols-5">
-        {segmentOptions.map((segment) => (
-          <button
-            className={cn(
-              "rounded-xl border bg-background px-4 py-3 text-left transition hover:border-emerald-300",
-              filters.segmento === segment.key ? "border-emerald-500 ring-1 ring-emerald-200" : "",
-            )}
-            key={segment.key}
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                segmento: current.segmento === segment.key ? "" : segment.key,
-              }))
-            }
-            type="button"
-          >
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Segmento
-            </p>
-            <p className="mt-1 text-sm font-semibold">{segment.label}</p>
-            <p className="mt-1 text-2xl font-black">{segment.count}</p>
-          </button>
-        ))}
-      </div>
 
-      <div className="app-filter-shell p-4">
+  const measureExpandedBounds = useCallback((): ExpandedPanelBounds | null => {
+    const chartsRegion = document.querySelector<HTMLElement>(
+      "[data-crm-charts-region]",
+    );
+    const pageSection = slotRef.current?.closest("section");
+
+    if (!chartsRegion || !pageSection) return null;
+
+    const chartsRect = chartsRegion.getBoundingClientRect();
+    const sectionRect = pageSection.getBoundingClientRect();
+    const bottom = Math.min(sectionRect.bottom, window.innerHeight - 12);
+
+    return {
+      height: Math.max(bottom - chartsRect.top, 320),
+      left: chartsRect.left,
+      top: chartsRect.top,
+      width: chartsRect.width,
+    };
+  }, []);
+
+  const animatePanel = useCallback(
+    (
+      startRect: DOMRect,
+      endRect: DOMRect,
+      direction: "expand" | "collapse",
+      onFinish?: () => void,
+    ) => {
+      const panel = panelRef.current;
+
+      if (!panel || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        onFinish?.();
+        return;
+      }
+
+      const deltaX = direction === "expand"
+        ? startRect.left - endRect.left
+        : endRect.left - startRect.left;
+      const deltaY = direction === "expand"
+        ? startRect.top - endRect.top
+        : endRect.top - startRect.top;
+      const movingFrame = {
+        opacity: 0.98,
+        transform: `translate3d(${deltaX}px, ${deltaY}px, 0)`,
+      };
+      const settledFrame = {
+        opacity: 1,
+        transform: "translate3d(0, 0, 0)",
+      };
+      const softLandingFrame = {
+        opacity: 1,
+        transform: `translate3d(0, ${direction === "expand" ? -3 : 3}px, 0)`,
+      };
+      const frames =
+        direction === "expand"
+          ? [
+              { ...movingFrame, offset: 0 },
+              { ...softLandingFrame, offset: 0.82 },
+              { ...settledFrame, offset: 1 },
+            ]
+          : [
+              { ...settledFrame, offset: 0 },
+              { ...softLandingFrame, offset: 0.18 },
+              { ...movingFrame, offset: 1 },
+            ];
+      const animation = panel.animate(frames, {
+        duration: 420,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "both",
+      });
+
+      animation.finished
+        .catch(() => undefined)
+        .finally(() => {
+          onFinish?.();
+          requestAnimationFrame(() => animation.cancel());
+        });
+    },
+    [],
+  );
+
+  const toggleExpanded = useCallback(() => {
+    if (isAnimating) return;
+
+    const panel = panelRef.current;
+    const slot = slotRef.current;
+
+    if (!panel || !slot) return;
+
+    if (!isExpanded) {
+      const bounds = measureExpandedBounds();
+
+      if (!bounds) return;
+
+      const startRect = panel.getBoundingClientRect();
+      setIsAnimating(true);
+      setExpandedBounds(bounds);
+      setIsExpanded(true);
+
+      requestAnimationFrame(() => {
+        const endRect = panelRef.current?.getBoundingClientRect();
+
+        if (!endRect) {
+          setIsAnimating(false);
+          return;
+        }
+
+        animatePanel(startRect, endRect, "expand", () => setIsAnimating(false));
+      });
+      return;
+    }
+
+    const startRect = panel.getBoundingClientRect();
+    const endRect = slot.getBoundingClientRect();
+    setIsAnimating(true);
+    animatePanel(startRect, endRect, "collapse", () => {
+      setIsExpanded(false);
+      setExpandedBounds(null);
+      setIsAnimating(false);
+    });
+  }, [animatePanel, isAnimating, isExpanded, measureExpandedBounds]);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    const updateBounds = () => {
+      const bounds = measureExpandedBounds();
+      if (bounds) setExpandedBounds(bounds);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") toggleExpanded();
+    };
+
+    window.addEventListener("resize", updateBounds);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("resize", updateBounds);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isExpanded, measureExpandedBounds, toggleExpanded]);
+
+  return (
+    <div className={cn("flex min-h-0 flex-1", className)} ref={slotRef}>
+      <button
+        aria-label={isExpanded ? "Restaurar vista de clientes" : "Ampliar vista de clientes"}
+        aria-pressed={isExpanded}
+        className="absolute right-2 top-1 z-50 grid size-8 place-items-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 disabled:pointer-events-none disabled:opacity-60"
+        disabled={isAnimating}
+        onClick={toggleExpanded}
+        title={isExpanded ? "Restaurar vista" : "Ampliar lista"}
+        type="button"
+      >
+        <span
+          className={cn(
+            "grid place-items-center transition-transform duration-500",
+            isExpanded ? "rotate-180" : "rotate-0",
+          )}
+        >
+          {isExpanded ? (
+            <Minimize2 aria-hidden="true" className="size-4" strokeWidth={1.8} />
+          ) : (
+            <Maximize2 aria-hidden="true" className="size-4" strokeWidth={1.8} />
+          )}
+        </span>
+      </button>
+
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-3",
+          isExpanded &&
+            "fixed z-40 isolate overflow-hidden rounded-2xl border border-cyan-200/80 bg-white p-3 shadow-[0_24px_64px_rgba(15,23,42,0.18)] will-change-transform [backface-visibility:hidden] [contain:layout_paint]",
+        )}
+        ref={panelRef}
+        style={
+          isExpanded && expandedBounds
+            ? {
+                height: expandedBounds.height,
+                left: expandedBounds.left,
+                top: expandedBounds.top,
+                width: expandedBounds.width,
+              }
+            : undefined
+        }
+      >
+        <div className="app-filter-shell p-4" style={{ boxShadow: "none" }}>
         <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_140px_150px_180px_170px_160px_160px]">
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-blue-500" />
@@ -337,18 +507,19 @@ export function CustomersDatabase({ className, customers }: CustomersDatabasePro
             <option value="sin-documento">Sin documento</option>
           </select>
         </div>
-      </div>
-
-      {filteredCustomers.length > 0 ? (
-        <CustomersTable className="min-h-0 flex-1" customers={filteredCustomers} />
-      ) : (
-        <div className="min-h-0 flex-1 rounded-lg border bg-background">
-          <EmptyState
-            description="Ajusta los filtros para volver a mostrar clientes."
-            title="Sin resultados"
-          />
         </div>
-      )}
+
+        {filteredCustomers.length > 0 ? (
+          <CustomersTable className="min-h-0 flex-1" customers={filteredCustomers} />
+        ) : (
+          <div className="min-h-0 flex-1 rounded-lg border bg-background">
+            <EmptyState
+              description="Ajusta los filtros para volver a mostrar clientes."
+              title="Sin resultados"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
