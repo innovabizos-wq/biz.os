@@ -4,14 +4,21 @@ import { DEFAULT_DISPATCH_STATUS_FILTER } from "@/modules/dispatch/constants";
 import type {
   DispatchAssignableUser,
   DispatchDeliveryEvidence,
+  DispatchFulfillmentEvent,
+  DispatchItemProgress,
   DispatchOrder,
   DispatchStatusFilter,
+  DispatchWarehouse,
 } from "@/modules/dispatch/types";
 import type { CoreResult, TenantContext } from "@/types/core";
 import { fail, ok } from "@/types/core";
 
 type NameRelation = {
   nombre: string | null;
+};
+
+type DescriptionRelation = {
+  description: string | null;
 };
 
 type SaleRelation = {
@@ -58,6 +65,34 @@ type DispatchEvidenceRow = {
   receptor_nombre: string | null;
   size_bytes: number;
   tipo: DispatchDeliveryEvidence["type"];
+};
+
+type DispatchItemRow = {
+  delivered_quantity: number;
+  description: string;
+  despacho_id: string;
+  id: string;
+  ordered_quantity: number;
+  product_id: string | null;
+  returned_quantity: number;
+  sale_item_id: string;
+};
+
+type DispatchFulfillmentRow = {
+  created_at: string;
+  event_type: DispatchFulfillmentEvent["eventType"];
+  id: string;
+  receiver_name: string | null;
+  result: string | null;
+  sales_return_id: string | null;
+  warehouse: NameRelation | NameRelation[] | null;
+};
+
+type DispatchFulfillmentItemRow = {
+  dispatch_item_id: string;
+  dispatch_items: DescriptionRelation | DescriptionRelation[] | null;
+  fulfillment_id: string;
+  quantity: number;
 };
 
 function firstRelation<TRelation>(
@@ -248,4 +283,115 @@ export async function getDispatchDeliveryEvidence(
     sizeBytes: row.size_bytes,
     type: row.tipo,
   })));
+}
+
+export async function getDispatchItemProgress(
+  tenant: TenantContext,
+  despachoId: string,
+): Promise<CoreResult<DispatchItemProgress[]>> {
+  if (!hasPermission(tenant.permissions, "dispatch.orders.view")) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver las líneas del despacho.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("dispatch_items")
+    .select(
+      "id, despacho_id, sale_item_id, product_id, description, ordered_quantity, delivered_quantity, returned_quantity",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .eq("despacho_id", despachoId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return fail("VALIDATION_ERROR", "No se pudo consultar el avance por línea.", error);
+  }
+
+  return ok(((data ?? []) as DispatchItemRow[]).map((row) => ({
+    deliveredQuantity: row.delivered_quantity,
+    description: row.description,
+    dispatchId: row.despacho_id,
+    id: row.id,
+    netDeliveredQuantity: row.delivered_quantity - row.returned_quantity,
+    orderedQuantity: row.ordered_quantity,
+    productId: row.product_id,
+    returnedQuantity: row.returned_quantity,
+    saleItemId: row.sale_item_id,
+  })));
+}
+
+export async function getDispatchFulfillmentEvents(
+  tenant: TenantContext,
+  despachoId: string,
+): Promise<CoreResult<DispatchFulfillmentEvent[]>> {
+  if (!hasPermission(tenant.permissions, "dispatch.orders.view")) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver el historial operativo.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("dispatch_fulfillments")
+    .select(
+      "id, event_type, receiver_name, result, sales_return_id, created_at, warehouse:inventario_bodegas!dispatch_fulfillments_warehouse_empresa_fkey(nombre)",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .eq("despacho_id", despachoId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return fail("VALIDATION_ERROR", "No se pudo consultar el historial operativo.", error);
+  }
+
+  const rows = (data ?? []) as DispatchFulfillmentRow[];
+  if (rows.length === 0) return ok([]);
+  const eventIds = rows.map((row) => row.id);
+  const { data: itemData, error: itemError } = await supabase
+    .from("dispatch_fulfillment_items")
+    .select(
+      "fulfillment_id, dispatch_item_id, quantity, dispatch_items!dispatch_fulfillment_items_dispatch_item_empresa_fkey(description)",
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .in("fulfillment_id", eventIds)
+    .order("created_at", { ascending: true });
+
+  if (itemError) {
+    return fail("VALIDATION_ERROR", "No se pudieron consultar las líneas del historial.", itemError);
+  }
+
+  const itemsByEvent = new Map<string, DispatchFulfillmentEvent["items"]>();
+  for (const row of (itemData ?? []) as DispatchFulfillmentItemRow[]) {
+    const items = itemsByEvent.get(row.fulfillment_id) ?? [];
+    items.push({
+      description: firstRelation(row.dispatch_items)?.description ?? "Línea de venta",
+      dispatchItemId: row.dispatch_item_id,
+      quantity: row.quantity,
+    });
+    itemsByEvent.set(row.fulfillment_id, items);
+  }
+
+  return ok(rows.map((row) => ({
+    createdAt: row.created_at,
+    eventType: row.event_type,
+    id: row.id,
+    items: itemsByEvent.get(row.id) ?? [],
+    receiverName: row.receiver_name,
+    result: row.result,
+    salesReturnId: row.sales_return_id,
+    warehouseName: firstRelation(row.warehouse)?.nombre ?? null,
+  })));
+}
+
+export async function getDispatchWarehouses(
+  tenant: TenantContext,
+): Promise<CoreResult<DispatchWarehouse[]>> {
+  if (!hasPermission(tenant.permissions, "dispatch.orders.status.change")) return ok([]);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inventario_bodegas")
+    .select("id, nombre")
+    .eq("empresa_id", tenant.empresaId)
+    .eq("estado", "activa")
+    .order("nombre", { ascending: true });
+  if (error) return fail("VALIDATION_ERROR", "No se pudieron consultar las bodegas.", error);
+  return ok((data ?? []) as DispatchWarehouse[]);
 }

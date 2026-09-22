@@ -3,6 +3,7 @@ export const DISPATCH_STATUSES = [
   "preparando",
   "listo",
   "en_ruta",
+  "parcial",
   "entregado",
   "fallido",
   "cancelado",

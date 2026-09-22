@@ -97,3 +97,43 @@ export type ChangeDispatchStatusInput = z.infer<
 export type DispatchMobileMetadataInput = z.infer<
   typeof dispatchMobileMetadataSchema
 >;
+
+const fulfillmentQuantitySchema = z.coerce.number().positive().multipleOf(0.01);
+
+export const recordDispatchFulfillmentSchema = z.object({
+  despachoId: uuidSchema,
+  eventType: z.enum(["delivery", "return"]),
+  items: z
+    .array(
+      z.object({
+        dispatchItemId: uuidSchema,
+        quantity: fulfillmentQuantitySchema,
+      }),
+    )
+    .min(1)
+    .max(50),
+  operationId: uuidSchema,
+  receiverName: optionalTextSchema,
+  result: optionalTextSchema,
+  ventaId: uuidSchema,
+  warehouseId: optionalFormUuidSchema,
+}).superRefine((value, context) => {
+  if (value.eventType === "return" && !value.warehouseId) {
+    context.addIssue({
+      code: "custom",
+      message: "Selecciona la bodega que recibe la devolución.",
+      path: ["warehouseId"],
+    });
+  }
+  if (value.eventType === "return" && !value.result) {
+    context.addIssue({
+      code: "custom",
+      message: "Describe el motivo de la devolución.",
+      path: ["result"],
+    });
+  }
+});
+
+export type RecordDispatchFulfillmentInput = z.infer<
+  typeof recordDispatchFulfillmentSchema
+>;

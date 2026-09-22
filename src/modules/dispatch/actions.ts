@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   changeDispatchStatusSchema,
   createDispatchFromSaleSchema,
+  recordDispatchFulfillmentSchema,
   updateDispatchSchema,
 } from "@/modules/dispatch/schemas";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
@@ -195,5 +196,85 @@ export async function changeDispatchStatusAction(formData: FormData) {
   }
 
   revalidateDispatchPaths(parsed.data.despachoId, parsed.data.ventaId);
+  redirect(`/despacho/${parsed.data.despachoId}`);
+}
+
+function parseFulfillmentItems(formData: FormData) {
+  const items: Array<{ dispatchItemId: string; quantity: FormDataEntryValue }> = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("quantity:")) continue;
+    const dispatchItemId = key.slice("quantity:".length);
+    if (typeof value !== "string" || value.trim() === "" || Number(value) === 0) continue;
+    items.push({ dispatchItemId, quantity: value });
+  }
+  return items;
+}
+
+export async function recordDispatchFulfillmentAction(formData: FormData) {
+  const parsed = recordDispatchFulfillmentSchema.safeParse({
+    despachoId: formData.get("despachoId"),
+    eventType: formData.get("eventType"),
+    items: parseFulfillmentItems(formData),
+    operationId: formData.get("operationId"),
+    receiverName: formData.get("receiverName"),
+    result: formData.get("result"),
+    ventaId: formData.get("ventaId"),
+    warehouseId: formData.get("warehouseId"),
+  });
+
+  const fallbackDispatchId = String(formData.get("despachoId") ?? "");
+  if (!parsed.success) {
+    redirectWithError(
+      fallbackDispatchId ? `/despacho/${fallbackDispatchId}` : "/despacho",
+      parsed.error.issues[0]?.message ?? "Selecciona al menos una cantidad válida.",
+    );
+  }
+
+  const access = await assertDispatchPermission(
+    "dispatch.orders.status.change",
+    `/despacho/${parsed.data.despachoId}`,
+  );
+  if (parsed.data.eventType === "return") {
+    if (
+      !hasPermission(access.tenant.permissions, "sales.orders.edit")
+      || !hasPermission(access.tenant.permissions, "inventory.stock.adjust")
+    ) {
+      redirectWithError(
+        `/despacho/${parsed.data.despachoId}`,
+        "Necesitas permisos de ventas e inventario para registrar la devolución física.",
+      );
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_dispatch_fulfillment", {
+    p_dispatch_id: parsed.data.despachoId,
+    p_event_type: parsed.data.eventType,
+    p_items: parsed.data.items.map((item) => ({
+      dispatchItemId: item.dispatchItemId,
+      quantity: item.quantity,
+    })),
+    p_operation_id: parsed.data.operationId,
+    p_receiver_name: parsed.data.receiverName ?? null,
+    p_result: parsed.data.result ?? null,
+    p_warehouse_id: parsed.data.warehouseId ?? null,
+  });
+
+  if (error) {
+    logDispatchActionError("recordDispatchFulfillmentAction", error, {
+      despachoId: parsed.data.despachoId,
+      eventType: parsed.data.eventType,
+    });
+    redirectWithError(
+      `/despacho/${parsed.data.despachoId}`,
+      `No se pudo registrar el movimiento: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  revalidateDispatchPaths(parsed.data.despachoId, parsed.data.ventaId);
+  revalidatePath("/inventario");
+  revalidatePath("/inventario/movimientos");
+  revalidatePath("/pagos");
+  revalidatePath("/facturacion");
   redirect(`/despacho/${parsed.data.despachoId}`);
 }

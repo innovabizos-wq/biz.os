@@ -2,9 +2,9 @@
 
 **Fecha de corte:** 21 de septiembre de 2026
 **Etapa actual:** Entrega 2 — operaciones internas y despacho móvil
-**Avance estimado de desarrollo:** 62 %
-**Avance estimado hasta salida comercial completa:** 43 %
-**Faltante estimado:** 38 % de construcción y 57 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
+**Avance estimado de desarrollo:** 65 %
+**Avance estimado hasta salida comercial completa:** 45 %
+**Faltante estimado:** 35 % de construcción y 55 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
 
 Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una etapa solo llega al 100 % cuando cubre permisos, fallos, reintentos, documentación, pruebas reales y operación comercial.
 
@@ -14,11 +14,11 @@ Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una et
 |---|---:|---|---|
 | Base confiable | 72 % | Operaciones idempotentes, aislamiento por empresa, cola de integraciones, API v1, permisos de base, pruebas, compilación y migraciones activas en Supabase. | Probar instalación limpia y copia anonimizada de forma automática; restauración conjunta de base y archivos; monitoreo de producción; carga de 50 usuarios y datos de volumen. |
 | Entrega 1 — circuito comercial | 68 % | Cotización, venta, cobro idempotente, saldos y devoluciones parciales con efectos financiero, físico y fiscal independientes. Agenda tiene recordatorios del servidor. | Completar importaciones con vista previa por lote; paginación y deduplicación avanzada de CRM; variantes y códigos de barras; cerrar cancelaciones y recuperación completa del recorrido. |
-| Entrega 2 — operaciones internas | 79 % | Traslados atómicos, recepciones parciales idempotentes, cuentas por pagar sobre valor recibido, devoluciones a proveedor, saldo a favor, costo promedio ponderado, conteos físicos, reservas de ventas y despacho móvil con evidencia privada y cola sin conexión. | Completar entregas parciales y devoluciones operativas. RRHH queda pospuesto hasta acordar sus ajustes de alcance. |
+| Entrega 2 — operaciones internas | 92 % | Traslados atómicos, recepciones parciales idempotentes, cuentas por pagar sobre valor recibido, devoluciones a proveedor, saldo a favor, costo promedio ponderado, conteos físicos, reservas de ventas y despacho móvil con evidencia privada, entregas parciales y devoluciones operativas separadas de sus efectos financieros y fiscales. | Completar recorridos reales por rol, pruebas concurrentes de navegador y ajustes de rendimiento del bloque. RRHH queda pospuesto hasta acordar sus ajustes de alcance. |
 | Entrega 3 — facturación e integraciones | 56 % | Documento canónico, XML 4.4, XSD oficial, firma XAdES, Hacienda, conectores declarativos, recuperación, importación XML y REST seguro. | Validar cuentas y contratos reales de GTI, FacturaProfesional y Alegra; completar matrices de tipos por proveedor; homologación y pruebas fiscales de todos los documentos comprometidos. |
 | Entrega 4 — POS y PWA | 48 % | Núcleo POS, cajas, sesiones, reservas e infraestructura de operación sin conexión ya existen. | Verificación completa de varias terminales, IndexedDB, cierres provisionales, impresión, recarga y procedimiento fiscal de contingencia aprobado. |
 | Entrega 5 — atención y publicación | 46 % | Inbox/Whapp tiene operación real de Meta, controles de permisos, campañas, webhooks, reintentos y costos. Autoblog genera y conserva contenido. | Publicación comercial completa en WordPress, Facebook, Instagram y LinkedIn; calendario y reintentos por destino; revisiones y permisos externos. |
-| Entrega 6 — reportes, IA y Brain | 61 % | Brain tiene herramientas, memoria, presupuestos, aprobaciones persistentes, flujos recuperables, métricas y separación por permisos. | Reportes operativos completos con trazabilidad al detalle; validar costos y calidad en carga; cerrar recuperación de efectos parciales y evidencias en toda recomendación. |
+| Entrega 6 — reportes, IA y Brain | 61 % | Brain tiene herramientas, memoria, presupuestos, aprobaciones persistentes, flujos recuperables, métricas y separación por permisos. | Reportes operativos completos con trazabilidad al detalle; validar costos y calidad en carga; reducir el paquete inicial de Brain y cerrar recuperación de efectos parciales y evidencias en toda recomendación. |
 | Preparación y validación comercial | 10 % | Consola y fundamentos de planes, salud y soporte existen parcialmente. | Planes comerciales finales, activación/suspensión, ayuda, soporte, respaldo restaurado, pruebas de volumen y pilotos de diez jornadas con tres negocios. |
 
 ## Entregas recientes comprobadas en Supabase
@@ -41,7 +41,10 @@ Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una et
 - Despacho móvil instalable con receptor, foto o firma, ubicación autorizada, evidencia privada y cola local persistente.
 - Sincronización de entregas idempotente: reintentos seguros, conflicto de contenido bloqueado e incidencia cuando el despacho cambió.
 - Prueba real de despacho en Supabase: inicio de ruta, entrega, evidencia, recibos idempotentes y repetición sin duplicados; cero datos temporales persistidos.
-- Verificación de corte actual: 249 pruebas aprobadas, lint sin errores, tipos correctos y compilación de producción de 131 rutas completada.
+- Entregas parciales por producto, consumo proporcional de reservas y actualización separada de los estados de despacho, venta e inventario.
+- Devolución física desde el despacho vinculada con una devolución formal de venta; la mercancía se reintegra una sola vez y los efectos financieros y fiscales quedan pendientes de confirmación independiente.
+- Prueba real de entrega parcial y devolución en Supabase: 2 de 5 unidades entregadas, 1 devuelta, saldo neto de 1, repetición segura, contenido conflictivo bloqueado y cero datos temporales persistidos.
+- Verificación de corte actual: 252 pruebas aprobadas, lint sin errores, tipos correctos y compilación de producción completada.
 
 ## Criterio para actualizar el avance
 
@@ -56,12 +59,12 @@ Cada bloque aumenta únicamente cuando la funcionalidad:
 
 ## Ruta restante más corta
 
-1. Cerrar el alcance confirmado de Entrega 2 con entregas parciales y devoluciones operativas.
+1. Ejecutar recorridos reales por rol y concurrencia sobre el alcance confirmado de Entrega 2.
 2. Ejecutar en paralelo la homologación externa de GTI, FacturaProfesional, Alegra, Meta y LinkedIn.
 3. Cerrar facturación con pruebas reales por proveedor y tipo documental.
 4. Completar y probar POS/PWA con varias terminales y contingencia fiscal.
 5. Cerrar publicación multicanal y reportes trazables.
-6. Ejecutar carga, restauración y seguridad integral.
+6. Reducir los paquetes iniciales más pesados, empezando por Brain, y ejecutar carga, restauración y seguridad integral.
 7. Operar tres pilotos durante diez jornadas y resolver las incidencias que bloqueen venta.
 
 RRHH se retomará como un bloque separado cuando esté aprobado su alcance ajustado.

@@ -6,6 +6,7 @@ import { hasPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { DispatchForm } from "@/modules/dispatch/components/dispatch-form";
 import { DispatchEvidenceList } from "@/modules/dispatch/components/dispatch-evidence-list";
+import { DispatchFulfillmentPanel } from "@/modules/dispatch/components/dispatch-fulfillment-panel";
 import { DispatchMobileProofPanel } from "@/modules/dispatch/components/dispatch-mobile-proof-panel";
 import { DispatchStatusActions } from "@/modules/dispatch/components/dispatch-status-actions";
 import { DispatchSummaryCard } from "@/modules/dispatch/components/dispatch-summary-card";
@@ -13,6 +14,9 @@ import {
   getAssignableUsersForDispatch,
   getDispatchDeliveryEvidence,
   getDispatchDetail,
+  getDispatchFulfillmentEvents,
+  getDispatchItemProgress,
+  getDispatchWarehouses,
 } from "@/modules/dispatch/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
@@ -39,6 +43,9 @@ export default async function DispatchDetailPage({
   const canUseMobile = canChangeStatus
     && isModuleActive(access.tenant.activeModules, "mobile")
     && hasPermission(access.tenant.permissions, "mobile.access");
+  const canReturn = canChangeStatus
+    && hasPermission(access.tenant.permissions, "sales.orders.edit")
+    && hasPermission(access.tenant.permissions, "inventory.stock.adjust");
 
   if (!canView) {
     return (
@@ -56,10 +63,13 @@ export default async function DispatchDetailPage({
     );
   }
 
-  const [dispatch, users, evidence] = await Promise.all([
+  const [dispatch, users, evidence, items, events, warehouses] = await Promise.all([
     getDispatchDetail(access.tenant, despachoId),
     getAssignableUsersForDispatch(access.tenant),
     getDispatchDeliveryEvidence(access.tenant, despachoId),
+    getDispatchItemProgress(access.tenant, despachoId),
+    getDispatchFulfillmentEvents(access.tenant, despachoId),
+    getDispatchWarehouses(access.tenant),
   ]);
 
   if (!dispatch.ok || !dispatch.data) {
@@ -106,6 +116,15 @@ export default async function DispatchDetailPage({
       />
 
       <DispatchEvidenceList evidence={evidence.ok ? evidence.data : []} />
+
+      <DispatchFulfillmentPanel
+        canDeliver={canChangeStatus}
+        canReturn={canReturn}
+        dispatch={dispatch.data}
+        events={events.ok ? events.data : []}
+        items={items.ok ? items.data : []}
+        warehouses={warehouses.ok ? warehouses.data : []}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border bg-background p-5">

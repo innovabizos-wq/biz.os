@@ -37,11 +37,13 @@ test("worker bridges require service role, active lease and original user permis
 
 test("outbox is scheduled through Workflow and has a protected operator retry", () => {
   const config = JSON.parse(source("vercel.json"));
+  const deploymentStatus = source("docs/estado-implementacion-plan-integral-2026-09-21.md");
   const route = source("src/app/api/integrations/outbox/run/route.ts");
   const workflow = source("src/modules/integrations/outbox/workflow.ts");
   const action = source("src/modules/integrations/outbox/actions.ts");
 
-  assert.ok(config.crons.some((cron) => cron.path === "/api/integrations/outbox/run" && cron.schedule === "* * * * *"));
+  assert.ok(config.crons.some((cron) => cron.path === "/api/integrations/outbox/run" && cron.schedule === "0 5 * * *"));
+  assert.match(deploymentStatus, /criterio comercial de activación dentro de un minuto/);
   assert.match(route, /process\.env\.CRON_SECRET/);
   assert.match(route, /await start\(integrationOutboxWorkflow/);
   assert.match(workflow, /"use workflow"/);

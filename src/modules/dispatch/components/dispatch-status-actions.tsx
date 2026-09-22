@@ -21,7 +21,7 @@ function getNextStatuses(status: DispatchStatus): DispatchStatus[] {
   }
 
   if (status === "en_ruta") {
-    return ["entregado", "fallido", "cancelado"];
+    return ["fallido"];
   }
 
   return [];

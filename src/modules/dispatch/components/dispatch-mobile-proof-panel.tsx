@@ -212,7 +212,7 @@ export function DispatchMobileProofPanel({
     });
   }
 
-  if (!canChangeStatus || !["listo", "en_ruta"].includes(dispatch.estado)) return null;
+  if (!canChangeStatus || !["listo", "en_ruta", "parcial"].includes(dispatch.estado)) return null;
 
   return (
     <section className="space-y-4 rounded-2xl border bg-card p-5">
@@ -274,7 +274,9 @@ export function DispatchMobileProofPanel({
 
           <div className="flex flex-wrap gap-2 lg:col-span-2">
             <Button disabled={pending} onClick={() => submit("entregado")}>Confirmar entrega</Button>
-            <Button disabled={pending} onClick={() => submit("fallido")} variant="destructive">Registrar intento fallido</Button>
+            {dispatch.estado !== "parcial" ? (
+              <Button disabled={pending} onClick={() => submit("fallido")} variant="destructive">Registrar intento fallido</Button>
+            ) : null}
           </div>
         </div>
       )}

@@ -98,11 +98,11 @@ test("Whapp campaign dispatcher is scheduled and protected for production", () =
     },
     {
       path: "/api/integrations/outbox/run",
-      schedule: "* * * * *",
+      schedule: "0 5 * * *",
     },
     {
       path: "/api/notifications/reminders/run",
-      schedule: "* * * * *",
+      schedule: "0 8 * * *",
     },
   ]);
   assert.match(dispatcherRoute, /export async function GET/);

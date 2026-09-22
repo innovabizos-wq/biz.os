@@ -3,6 +3,7 @@ export type DispatchStatus =
   | "preparando"
   | "listo"
   | "en_ruta"
+  | "parcial"
   | "entregado"
   | "fallido"
   | "cancelado";
@@ -61,3 +62,35 @@ export type DispatchAssignableUser = {
 };
 
 export type DispatchStatusFilter = DispatchStatus | "todos";
+
+export type DispatchItemProgress = {
+  deliveredQuantity: number;
+  description: string;
+  dispatchId: string;
+  id: string;
+  netDeliveredQuantity: number;
+  orderedQuantity: number;
+  productId: string | null;
+  returnedQuantity: number;
+  saleItemId: string;
+};
+
+export type DispatchFulfillmentEvent = {
+  createdAt: string;
+  eventType: "delivery" | "return";
+  id: string;
+  items: Array<{
+    description: string;
+    dispatchItemId: string;
+    quantity: number;
+  }>;
+  receiverName: string | null;
+  result: string | null;
+  salesReturnId: string | null;
+  warehouseName: string | null;
+};
+
+export type DispatchWarehouse = {
+  id: string;
+  nombre: string;
+};

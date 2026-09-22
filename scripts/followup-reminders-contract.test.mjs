@@ -13,6 +13,7 @@ const interactive = read("src/modules/notifications/followup-reminders.ts");
 const job = read("src/modules/notifications/followup-reminder-job.ts");
 const route = read("src/app/api/notifications/reminders/run/route.ts");
 const vercel = read("vercel.json");
+const deploymentStatus = read("docs/estado-implementacion-plan-integral-2026-09-21.md");
 
 test("agenda reminders have a protected server schedule independent from browser polling", () => {
   assert.equal(
@@ -20,7 +21,9 @@ test("agenda reminders have a protected server schedule independent from browser
     true,
   );
   assert.match(vercel, /\/api\/notifications\/reminders\/run/);
-  assert.match(vercel, /"schedule": "\* \* \* \* \*"/);
+  assert.match(vercel, /"schedule": "0 8 \* \* \*"/);
+  assert.match(deploymentStatus, /frecuencia diaria del plan Hobby/);
+  assert.match(deploymentStatus, /Vercel Pro o conectar un programador externo/);
   assert.match(route, /process\.env\.CRON_SECRET/);
   assert.match(route, /process\.env\.REMINDER_WORKER_SECRET/);
   assert.match(route, /export async function GET/);

@@ -237,6 +237,25 @@ export async function POST(request: Request) {
     }
   }
 
+  if (parsed.data.targetStatus === "entregado") {
+    const { error: fulfillmentError } = await supabase.rpc(
+      "record_dispatch_full_delivery",
+      {
+        p_dispatch_id: parsed.data.dispatchId,
+        p_operation_id: parsed.data.operationId,
+        p_receiver_name: parsed.data.receiverName ?? null,
+        p_result: parsed.data.result ?? null,
+      },
+    );
+    if (fulfillmentError) {
+      return apiError(
+        fulfillmentError.code === "23505" ? "IDEMPOTENCY_CONFLICT" : "FULFILLMENT_FAILED",
+        fulfillmentError.message || "No se pudieron aplicar las cantidades entregadas.",
+        fulfillmentError.code === "23505" ? 409 : 400,
+      );
+    }
+  }
+
   const { data: completedData, error: completeError } = await supabase.rpc(
     "complete_dispatch_mobile_operation",
     { p_operation_id: parsed.data.operationId },
