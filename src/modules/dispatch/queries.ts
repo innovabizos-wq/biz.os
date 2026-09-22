@@ -10,6 +10,10 @@ import type {
   DispatchStatusFilter,
   DispatchWarehouse,
 } from "@/modules/dispatch/types";
+import type {
+  LogisticsDashboardStats,
+  LogisticsDaySummary,
+} from "@/modules/logistics/types";
 import type { CoreResult, TenantContext } from "@/types/core";
 import { fail, ok } from "@/types/core";
 
@@ -136,6 +140,20 @@ export function canAccessDispatchNav(tenant: TenantContext) {
   ]);
 }
 
+export type DispatchOrdersPage = {
+  items: DispatchOrder[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+export type DispatchOperationalSummary = {
+  stats: LogisticsDashboardStats;
+  summary: LogisticsDaySummary;
+};
+
+const DISPATCH_PAGE_SIZE = 50;
+
 export async function getDispatchOrders(
   tenant: TenantContext,
   status: DispatchStatusFilter = DEFAULT_DISPATCH_STATUS_FILTER,
@@ -164,6 +182,61 @@ export async function getDispatchOrders(
   }
 
   return ok(((data ?? []) as DispatchRow[]).map(mapDispatch));
+}
+
+export async function getDispatchOrdersPage(
+  tenant: TenantContext,
+  page = 1,
+  status: DispatchStatusFilter = DEFAULT_DISPATCH_STATUS_FILTER,
+): Promise<CoreResult<DispatchOrdersPage>> {
+  if (!hasPermission(tenant.permissions, "dispatch.orders.view")) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver despachos.");
+  }
+
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  const from = (safePage - 1) * DISPATCH_PAGE_SIZE;
+  const supabase = await createClient();
+  let query = supabase
+    .from("despachos")
+    .select(
+      "id, venta_id, cliente_id, numero, estado, fecha_programada, hora_programada, responsable_id, direccion_entrega, contacto_entrega, telefono_entrega, notas, resultado, completado_at, created_at, updated_at, crm_clientes!despachos_cliente_empresa_fkey(nombre), ventas!despachos_venta_empresa_fkey(numero, total), responsable:profiles!despachos_responsable_empresa_fkey(nombre)",
+      { count: "exact" },
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, from + DISPATCH_PAGE_SIZE - 1);
+
+  if (status !== "todos") query = query.eq("estado", status);
+  const { count, data, error } = await query;
+
+  if (error) {
+    return fail("QUERY_FAILED", "No se pudieron consultar despachos.", error);
+  }
+
+  return ok({
+    items: ((data ?? []) as DispatchRow[]).map(mapDispatch),
+    page: safePage,
+    pageSize: DISPATCH_PAGE_SIZE,
+    total: count ?? 0,
+  });
+}
+
+export async function getDispatchOperationalSummary(
+  tenant: TenantContext,
+): Promise<CoreResult<DispatchOperationalSummary>> {
+  if (!hasPermission(tenant.permissions, "dispatch.orders.view")) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver despachos.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_dispatch_operational_summary");
+
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    return fail("QUERY_FAILED", "No se pudo calcular el resumen de despacho.", error);
+  }
+
+  return ok(data as unknown as DispatchOperationalSummary);
 }
 
 export async function getDispatchDetail(

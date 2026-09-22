@@ -234,28 +234,30 @@ export async function getInventorySummary(
     return fail("PERMISSION_DENIED", "No tienes permiso para ver inventario.");
   }
 
-  const [warehouses, stock, movements] = await Promise.all([
-    getWarehouses(tenant),
-    getInventoryStock(tenant),
-    getInventoryMovements(tenant),
-  ]);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_inventory_operational_summary");
 
-  const warehouseRows = warehouses.ok ? warehouses.data : [];
-  const stockRows = stock.ok ? stock.data : [];
-  const movementRows = movements.ok ? movements.data : [];
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    return fail("QUERY_FAILED", "No se pudo calcular el resumen de inventario.", error);
+  }
 
+  const summary = data as Record<string, unknown>;
   return ok({
-    bodegasActivas: warehouseRows.filter((warehouse) => warehouse.estado === "activa")
-      .length,
-    movimientosRecientes: movementRows.slice(0, 10).length,
-    productosBajoStock: stockRows.filter(
-      (item) => item.stockMinimo > 0 && item.cantidad < item.stockMinimo,
-    ).length,
-    productosConStock: new Set(
-      stockRows.filter((item) => item.cantidad > 0).map((item) => item.productoId),
-    ).size,
+    bodegasActivas: Number(summary.bodegasActivas ?? 0),
+    movimientosRecientes: Number(summary.movimientosRecientes ?? 0),
+    productosBajoStock: Number(summary.productosBajoStock ?? 0),
+    productosConStock: Number(summary.productosConStock ?? 0),
   });
 }
+
+export type InventoryPageResult<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+const OPERATIONAL_PAGE_SIZE = 50;
 
 export async function getWarehouses(
   tenant: TenantContext,
@@ -339,6 +341,45 @@ export async function getInventoryStock(
   return ok(((data ?? []) as StockRow[]).map(mapStock));
 }
 
+export async function getInventoryStockPage(
+  tenant: TenantContext,
+  page = 1,
+): Promise<CoreResult<InventoryPageResult<InventoryStock>>> {
+  if (
+    !hasAnyPermission(tenant.permissions, [
+      "inventory.stock.view",
+      "inventory.stock.adjust",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver stock.");
+  }
+
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  const from = (safePage - 1) * OPERATIONAL_PAGE_SIZE;
+  const supabase = await createClient();
+  const { count, data, error } = await supabase
+    .from("inventario_stock")
+    .select(
+      "id, producto_id, bodega_id, cantidad, stock_minimo, stock_maximo, average_unit_cost, cost_status, updated_at, catalogo_productos!inventario_stock_producto_empresa_fkey(codigo, nombre), inventario_bodegas!inventario_stock_bodega_empresa_fkey(nombre, estado)",
+      { count: "exact" },
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .order("updated_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, from + OPERATIONAL_PAGE_SIZE - 1);
+
+  if (error) {
+    return fail("QUERY_FAILED", "No se pudo consultar el stock.", error);
+  }
+
+  return ok({
+    items: ((data ?? []) as StockRow[]).map(mapStock),
+    page: safePage,
+    pageSize: OPERATIONAL_PAGE_SIZE,
+    total: count ?? 0,
+  });
+}
+
 export async function getInventoryMovements(
   tenant: TenantContext,
   type: InventoryMovementTypeFilter = DEFAULT_INVENTORY_MOVEMENT_TYPE_FILTER,
@@ -374,8 +415,52 @@ export async function getInventoryMovements(
   return ok(((data ?? []) as MovementRow[]).map(mapMovement));
 }
 
+export async function getInventoryMovementsPage(
+  tenant: TenantContext,
+  type: InventoryMovementTypeFilter = DEFAULT_INVENTORY_MOVEMENT_TYPE_FILTER,
+  page = 1,
+): Promise<CoreResult<InventoryPageResult<InventoryMovement>>> {
+  if (
+    !hasAnyPermission(tenant.permissions, [
+      "inventory.movements.view",
+      "inventory.stock.adjust",
+    ])
+  ) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver movimientos.");
+  }
+
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  const from = (safePage - 1) * OPERATIONAL_PAGE_SIZE;
+  const supabase = await createClient();
+  let query = supabase
+    .from("inventario_movimientos")
+    .select(
+      "id, tipo, cantidad, cantidad_anterior, cantidad_nueva, unit_cost, total_cost, average_cost_before, average_cost_after, cost_status, motivo, referencia_tipo, referencia_id, created_at, catalogo_productos(codigo, nombre), inventario_bodegas(nombre), profiles!inventario_movimientos_created_by_empresa_fkey(nombre)",
+      { count: "exact" },
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, from + OPERATIONAL_PAGE_SIZE - 1);
+
+  if (type !== "todos") query = query.eq("tipo", type);
+  const { count, data, error } = await query;
+
+  if (error) {
+    return fail("QUERY_FAILED", "No se pudieron consultar movimientos.", error);
+  }
+
+  return ok({
+    items: ((data ?? []) as MovementRow[]).map(mapMovement),
+    page: safePage,
+    pageSize: OPERATIONAL_PAGE_SIZE,
+    total: count ?? 0,
+  });
+}
+
 export async function getProductsForInventory(
   tenant: TenantContext,
+  options?: { limit?: number; query?: string },
 ): Promise<CoreResult<InventoryProduct[]>> {
   if (
     !hasAnyPermission(tenant.permissions, [
@@ -387,13 +472,19 @@ export async function getProductsForInventory(
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const safeLimit = Math.min(200, Math.max(1, Math.trunc(options?.limit ?? 200)));
+  let query = supabase
     .from("catalogo_productos")
     .select("id, codigo, nombre, unidad_medida")
     .eq("empresa_id", tenant.empresaId)
     .eq("tipo", "producto")
     .eq("estado", "activo")
-    .order("nombre", { ascending: true });
+    .order("nombre", { ascending: true })
+    .limit(safeLimit);
+
+  const search = options?.query?.trim().replace(/[,%()]/g, " ");
+  if (search) query = query.or(`nombre.ilike.%${search}%,codigo.ilike.%${search}%`);
+  const { data, error } = await query;
 
   if (error) {
     return ok([]);

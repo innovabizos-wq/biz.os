@@ -2,9 +2,9 @@
 
 **Fecha de corte:** 22 de septiembre de 2026
 **Etapa actual:** Entrega 4 — confiabilidad del POS/PWA; homologaciones de Entrega 3 en paralelo
-**Avance estimado de desarrollo:** 66 %
-**Avance estimado hasta salida comercial completa:** 46 %
-**Faltante estimado:** 34 % de construcción y 54 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
+**Avance estimado de desarrollo:** 68 %
+**Avance estimado hasta salida comercial completa:** 48 %
+**Faltante estimado:** 32 % de construcción y 52 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
 
 Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una etapa solo llega al 100 % cuando cubre permisos, fallos, reintentos, documentación, pruebas reales y operación comercial.
 
@@ -12,9 +12,9 @@ Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una et
 
 | Bloque | Avance estimado | Estado comprobado | Trabajo principal pendiente |
 |---|---:|---|---|
-| Base confiable | 72 % | Operaciones idempotentes, aislamiento por empresa, cola de integraciones, API v1, permisos de base, pruebas, compilación y migraciones activas en Supabase. | Probar instalación limpia y copia anonimizada de forma automática; restauración conjunta de base y archivos; monitoreo de producción; carga de 50 usuarios y datos de volumen. |
+| Base confiable | 74 % | Operaciones idempotentes, aislamiento por empresa, cola de integraciones, API v1, permisos de base, pruebas, compilación, lecturas operativas paginadas y migraciones activas en Supabase. | Probar instalación limpia y copia anonimizada de forma automática; restauración conjunta de base y archivos; monitoreo de producción y carga conjunta de 50 usuarios. |
 | Entrega 1 — circuito comercial | 68 % | Cotización, venta, cobro idempotente, saldos y devoluciones parciales con efectos financiero, físico y fiscal independientes. Agenda tiene recordatorios del servidor. | Completar importaciones con vista previa por lote; paginación y deduplicación avanzada de CRM; variantes y códigos de barras; cerrar cancelaciones y recuperación completa del recorrido. |
-| Entrega 2 — operaciones internas | 92 % | Traslados atómicos, recepciones parciales idempotentes, cuentas por pagar sobre valor recibido, devoluciones a proveedor, saldo a favor, costo promedio ponderado, conteos físicos, reservas de ventas y despacho móvil con evidencia privada, entregas parciales y devoluciones operativas separadas de sus efectos financieros y fiscales. | Completar recorridos reales por rol, pruebas concurrentes de navegador y ajustes de rendimiento del bloque. RRHH queda pospuesto hasta acordar sus ajustes de alcance. |
+| Entrega 2 — operaciones internas | 100 % del alcance acordado sin RRHH | Traslados atómicos, recepciones parciales idempotentes, cuentas por pagar sobre valor recibido, devoluciones a proveedor, saldo a favor, costo promedio ponderado, conteos físicos, reservas de ventas y despacho móvil con evidencia privada, entregas parciales y devoluciones operativas separadas de sus efectos financieros y fiscales. Inventario, compras y despacho usan páginas acotadas, búsquedas limitadas e indicadores calculados en la base. Los recorridos de administrador, vendedor y repartidor comprobaron acceso por rol. | RRHH queda fuera de esta medición y se retomará como bloque separado cuando se apruebe su alcance ajustado. La prueba de carga transversal de 50 usuarios permanece en Base confiable y validación comercial. |
 | Entrega 3 — facturación e integraciones | 56 % | Documento canónico, XML 4.4, XSD oficial, firma XAdES, Hacienda, conectores declarativos, recuperación, importación XML y REST seguro. | Validar cuentas y contratos reales de GTI, FacturaProfesional y Alegra; completar matrices de tipos por proveedor; homologación y pruebas fiscales de todos los documentos comprometidos. |
 | Entrega 4 — POS y PWA | 58 % | Núcleo POS, cajas, sesiones, reservas, PWA y recuperación desde IndexedDB. Las ventas pendientes comparten un cupo local acumulado, reciben secuencias atómicas y respetan la vigencia y terminal autorizadas aun después de recargar sin conexión. | Completar cierres provisionales, devoluciones desde caja, prueba real con varias terminales/dispositivos, impresión física y procedimiento fiscal de contingencia aprobado. |
 | Entrega 5 — atención y publicación | 46 % | Inbox/Whapp tiene operación real de Meta, controles de permisos, campañas, webhooks, reintentos y costos. Autoblog genera y conserva contenido. | Publicación comercial completa en WordPress, Facebook, Instagram y LinkedIn; calendario y reintentos por destino; revisiones y permisos externos. |
@@ -46,7 +46,12 @@ Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una et
 - Prueba real de entrega parcial y devolución en Supabase: 2 de 5 unidades entregadas, 1 devuelta, saldo neto de 1, repetición segura, contenido conflictivo bloqueado y cero datos temporales persistidos.
 - POS sin conexión protegido contra sobreventa local acumulada: cada operación pendiente reduce el cupo visible y la reserva se comprueba dentro de la misma transacción que asigna su secuencia.
 - Reapertura del POS sin red vinculada a la terminal seleccionada, bloqueo al vencer la autorización y sincronización del cupo local después de confirmar una venta.
-- Verificación de corte actual: 255 pruebas aprobadas, lint sin errores, tipos correctos y compilación de producción completada.
+- Listados operativos de inventario, movimientos, compras y despacho limitados a 50 registros por página, con orden estable y conteo total.
+- Resúmenes de inventario, compras y despacho calculados en Supabase por empresa y permiso, sin descargar historiales completos al navegador.
+- Búsqueda de productos para compras y ajustes limitada a 100 coincidencias por consulta, adecuada para catálogos de 10.000 productos.
+- Índices de lectura por empresa, fecha e identificador activos en Supabase para sostener la paginación estable.
+- Validación real por rol en producción: administrador y vendedor acceden a sus operaciones autorizadas; el repartidor solo ve Despacho y recibe “Acceso denegado” al abrir Inventario directamente.
+- Verificación de corte actual: 259 pruebas aprobadas, lint sin errores, tipos correctos y compilación de producción completada.
 
 ## Criterio para actualizar el avance
 
@@ -61,13 +66,12 @@ Cada bloque aumenta únicamente cuando la funcionalidad:
 
 ## Ruta restante más corta
 
-1. Ejecutar recorridos reales por rol y concurrencia sobre el alcance confirmado de Entrega 2.
-2. Ejecutar en paralelo la homologación externa de GTI, FacturaProfesional, Alegra, Meta y LinkedIn.
-3. Cerrar facturación con pruebas reales por proveedor y tipo documental.
-4. Completar y probar POS/PWA con varias terminales y contingencia fiscal.
-5. Cerrar publicación multicanal y reportes trazables.
-6. Reducir los paquetes iniciales más pesados, empezando por Brain, y ejecutar carga, restauración y seguridad integral.
-7. Operar tres pilotos durante diez jornadas y resolver las incidencias que bloqueen venta.
+1. Ejecutar en paralelo la homologación externa de GTI, FacturaProfesional, Alegra, Meta y LinkedIn.
+2. Cerrar facturación con pruebas reales por proveedor y tipo documental.
+3. Completar y probar POS/PWA con varias terminales y contingencia fiscal.
+4. Cerrar publicación multicanal y reportes trazables.
+5. Reducir los paquetes iniciales más pesados, empezando por Brain, y ejecutar carga, restauración y seguridad integral.
+6. Operar tres pilotos durante diez jornadas y resolver las incidencias que bloqueen venta.
 
 RRHH se retomará como un bloque separado cuando esté aprobado su alcance ajustado.
 

@@ -1,9 +1,13 @@
 import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
+import { ServerPagination } from "@/components/shared/server-pagination";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { DispatchDatabase } from "@/modules/dispatch/components/dispatch-database";
-import { getDispatchOrders } from "@/modules/dispatch/queries";
+import {
+  getDispatchOperationalSummary,
+  getDispatchOrdersPage,
+} from "@/modules/dispatch/queries";
 import { EMPTY_DRIVER_TRACKING_SUMMARY } from "@/modules/driver-tracking/constants";
 import {
   getDriverTrackingSummary,
@@ -14,11 +18,12 @@ import { buildLogisticsDashboardDataFromDispatches } from "@/modules/logistics/q
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type DispatchPageProps = {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; page?: string }>;
 };
 
 export default async function DispatchPage({ searchParams }: DispatchPageProps) {
   const [params, access] = await Promise.all([searchParams, requireAdminAccess()]);
+  const requestedPage = Math.max(1, Number.parseInt(params?.page ?? "1", 10) || 1);
   const canView = hasPermission(access.tenant.permissions, "dispatch.orders.view");
 
   if (!canView) {
@@ -37,13 +42,17 @@ export default async function DispatchPage({ searchParams }: DispatchPageProps) 
     );
   }
 
-  const [dispatches, liveDrivers, driverSummary] = await Promise.all([
-    getDispatchOrders(access.tenant, "todos"),
+  const [dispatches, operationalSummary, liveDrivers, driverSummary] = await Promise.all([
+    getDispatchOrdersPage(access.tenant, requestedPage, "todos"),
+    getDispatchOperationalSummary(access.tenant),
     getLiveDrivers(),
     getDriverTrackingSummary(),
   ]);
-  const dispatchRows = dispatches.ok ? dispatches.data : [];
-  const logisticsData = buildLogisticsDashboardDataFromDispatches(dispatchRows);
+  const dispatchRows = dispatches.ok ? dispatches.data.items : [];
+  const pageLogisticsData = buildLogisticsDashboardDataFromDispatches(dispatchRows);
+  const logisticsData = operationalSummary.ok
+    ? { ...pageLogisticsData, ...operationalSummary.data }
+    : pageLogisticsData;
 
   return (
     <section className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-4 overflow-hidden">
@@ -67,7 +76,15 @@ export default async function DispatchPage({ searchParams }: DispatchPageProps) 
       {!dispatches.ok ? (
         <EmptyState description={dispatches.error.message} title="No se pudo cargar" />
       ) : dispatchRows.length > 0 ? (
-        <DispatchDatabase className="pt-0" dispatches={dispatchRows} />
+        <>
+          <DispatchDatabase className="pt-0" dispatches={dispatchRows} />
+          <ServerPagination
+            currentPage={dispatches.data.page}
+            pageSize={dispatches.data.pageSize}
+            pathname="/despacho"
+            totalItems={dispatches.data.total}
+          />
+        </>
       ) : (
         <EmptyState
           description="Los despachos se crean desde ventas confirmadas, en proceso o completadas."

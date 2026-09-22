@@ -79,6 +79,15 @@ type ProductRow = NameRow & {
   codigo: string | null;
 };
 
+export type PurchaseOrdersPage = {
+  items: PurchaseOrder[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+const PURCHASES_PAGE_SIZE = 50;
+
 function uniqueIds(ids: Array<string | null | undefined>) {
   return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
 }
@@ -320,6 +329,50 @@ export async function getPurchaseOrders(
   return ok(rows.map((row) => mapOrder(row, suppliersById, warehousesById)));
 }
 
+export async function getPurchaseOrdersPage(
+  tenant: TenantContext,
+  page = 1,
+): Promise<CoreResult<PurchaseOrdersPage>> {
+  if (!isModuleActive(tenant.activeModules, "purchases")) {
+    return fail("MODULE_INACTIVE", "El modulo Compras no esta activo.");
+  }
+
+  if (!canAccessPurchases(tenant)) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver compras.");
+  }
+
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  const from = (safePage - 1) * PURCHASES_PAGE_SIZE;
+  const supabase = await createClient();
+  const { count, data, error } = await supabase
+    .from("purchases_orders")
+    .select(
+      "id, supplier_id, numero, estado, moneda, total, fecha_orden, fecha_recepcion, bodega_id, notas, received_at, created_at",
+      { count: "exact" },
+    )
+    .eq("empresa_id", tenant.empresaId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, from + PURCHASES_PAGE_SIZE - 1);
+
+  if (error) {
+    return fail("QUERY_FAILED", "No se pudieron cargar ordenes.", error);
+  }
+
+  const rows = (data ?? []) as OrderRow[];
+  const [suppliersById, warehousesById] = await Promise.all([
+    getNamesById(tenant, "purchases_suppliers", uniqueIds(rows.map((row) => row.supplier_id))),
+    getNamesById(tenant, "inventario_bodegas", uniqueIds(rows.map((row) => row.bodega_id))),
+  ]);
+
+  return ok({
+    items: rows.map((row) => mapOrder(row, suppliersById, warehousesById)),
+    page: safePage,
+    pageSize: PURCHASES_PAGE_SIZE,
+    total: count ?? 0,
+  });
+}
+
 export async function getPurchaseOrderDetail(
   tenant: TenantContext,
   orderId: string,
@@ -333,7 +386,7 @@ export async function getPurchaseOrderDetail(
 
 export async function getPurchaseOrderItems(
   tenant: TenantContext,
-  orderId?: string,
+  orderId?: string | string[],
 ): Promise<CoreResult<PurchaseOrderItem[]>> {
   if (!canAccessPurchases(tenant)) {
     return ok([]);
@@ -347,7 +400,10 @@ export async function getPurchaseOrderItems(
     )
     .eq("empresa_id", tenant.empresaId);
 
-  if (orderId) {
+  if (Array.isArray(orderId)) {
+    if (orderId.length === 0) return ok([]);
+    query = query.in("order_id", orderId);
+  } else if (orderId) {
     query = query.eq("order_id", orderId);
   }
 
@@ -435,33 +491,25 @@ export async function getPurchaseReceiptItems(
 export async function getPurchasesSummary(
   tenant: TenantContext,
 ): Promise<CoreResult<PurchasesSummary>> {
-  const [suppliers, orders, items] = await Promise.all([
-    getPurchaseSuppliers(tenant),
-    getPurchaseOrders(tenant),
-    getPurchaseOrderItems(tenant),
-  ]);
+  if (!canAccessPurchases(tenant)) {
+    return fail("PERMISSION_DENIED", "No tienes permiso para ver compras.");
+  }
 
-  const supplierRows = suppliers.ok ? suppliers.data : [];
-  const orderRows = orders.ok ? orders.data : [];
-  const itemRows = items.ok ? items.data : [];
-  const openOrderIds = new Set(
-    orderRows
-      .filter((order) => ["emitida", "parcial"].includes(order.estado))
-      .map((order) => order.id),
-  );
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_purchases_operational_summary");
 
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    return fail("QUERY_FAILED", "No se pudo calcular el resumen de compras.", error);
+  }
+
+  const summary = data as Record<string, unknown>;
   return ok({
-    ordenesBorrador: orderRows.filter((order) => order.estado === "borrador").length,
-    ordenesEmitidas: orderRows.filter((order) => order.estado === "emitida").length,
-    ordenesParciales: orderRows.filter((order) => order.estado === "parcial").length,
-    ordenesRecibidas: orderRows.filter((order) => order.estado === "recibida").length,
-    proveedoresActivos: supplierRows.filter((supplier) => supplier.estado === "activo")
-      .length,
-    totalComprado: orderRows
-      .filter((order) => order.estado === "recibida")
-      .reduce((sum, order) => sum + order.total, 0),
-    totalPendienteRecepcion: itemRows
-      .filter((item) => openOrderIds.has(item.orderId))
-      .reduce((sum, item) => sum + item.cantidadPendiente * item.costoUnitario, 0),
+    ordenesBorrador: Number(summary.ordenesBorrador ?? 0),
+    ordenesEmitidas: Number(summary.ordenesEmitidas ?? 0),
+    ordenesParciales: Number(summary.ordenesParciales ?? 0),
+    ordenesRecibidas: Number(summary.ordenesRecibidas ?? 0),
+    proveedoresActivos: Number(summary.proveedoresActivos ?? 0),
+    totalComprado: Number(summary.totalComprado ?? 0),
+    totalPendienteRecepcion: Number(summary.totalPendienteRecepcion ?? 0),
   });
 }

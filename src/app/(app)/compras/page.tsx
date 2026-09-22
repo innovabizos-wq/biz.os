@@ -3,6 +3,7 @@ import { PackagePlus } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ServerPagination } from "@/components/shared/server-pagination";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getCurrentTenantContext } from "@/lib/auth/session";
 import { getProductsForInventory, getWarehouses } from "@/modules/inventory/queries";
@@ -14,19 +15,14 @@ import {
 import {
   canManagePurchases,
   getPurchaseOrderItems,
-  getPurchaseOrders,
+  getPurchaseOrdersPage,
   getPurchaseSuppliers,
+  getPurchasesSummary,
 } from "@/modules/purchases/queries";
-import type {
-  PurchaseOrder,
-  PurchaseOrderItem,
-  PurchaseSupplier,
-  PurchasesSummary,
-} from "@/modules/purchases/types";
 import { redirect } from "next/navigation";
 
 type PurchasesPageProps = {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; page?: string; producto?: string }>;
 };
 
 function formatCurrency(value: number) {
@@ -59,32 +55,6 @@ function statusLabel(status: string) {
   return labels[status] ?? status;
 }
 
-function buildPurchasesSummary(
-  suppliers: PurchaseSupplier[],
-  orders: PurchaseOrder[],
-  items: PurchaseOrderItem[],
-): PurchasesSummary {
-  const openOrderIds = new Set(
-    orders
-      .filter((order) => ["emitida", "parcial"].includes(order.estado))
-      .map((order) => order.id),
-  );
-
-  return {
-    ordenesBorrador: orders.filter((order) => order.estado === "borrador").length,
-    ordenesEmitidas: orders.filter((order) => order.estado === "emitida").length,
-    ordenesParciales: orders.filter((order) => order.estado === "parcial").length,
-    ordenesRecibidas: orders.filter((order) => order.estado === "recibida").length,
-    proveedoresActivos: suppliers.filter((supplier) => supplier.estado === "activo").length,
-    totalComprado: orders
-      .filter((order) => order.estado === "recibida")
-      .reduce((sum, order) => sum + order.total, 0),
-    totalPendienteRecepcion: items
-      .filter((item) => openOrderIds.has(item.orderId))
-      .reduce((sum, item) => sum + item.cantidadPendiente * item.costoUnitario, 0),
-  };
-}
-
 export default async function PurchasesPage({ searchParams }: PurchasesPageProps) {
   const [params, tenantResult] = await Promise.all([
     searchParams,
@@ -100,20 +70,22 @@ export default async function PurchasesPage({ searchParams }: PurchasesPageProps
   }
 
   const tenant = tenantResult.data;
+  const requestedPage = Math.max(1, Number.parseInt(params?.page ?? "1", 10) || 1);
+  const productQuery = params?.producto?.trim() ?? "";
   let suppliersResult;
   let ordersResult;
-  let itemsResult;
   let productsResult;
   let warehousesResult;
+  let summaryResult;
 
   try {
-    [suppliersResult, ordersResult, itemsResult, productsResult, warehousesResult] =
+    [suppliersResult, ordersResult, productsResult, warehousesResult, summaryResult] =
       await Promise.all([
         getPurchaseSuppliers(tenant),
-        getPurchaseOrders(tenant),
-        getPurchaseOrderItems(tenant),
-        getProductsForInventory(tenant),
+        getPurchaseOrdersPage(tenant, requestedPage),
+        getProductsForInventory(tenant, { limit: 100, query: productQuery }),
         getWarehouses(tenant),
+        getPurchasesSummary(tenant),
       ]);
   } catch (error) {
     const message =
@@ -143,13 +115,27 @@ export default async function PurchasesPage({ searchParams }: PurchasesPageProps
   const canManage = canManagePurchases(tenant);
   const suppliers = suppliersResult.data;
   const activeSuppliers = suppliers.filter((supplier) => supplier.estado === "activo");
-  const orders = ordersResult.data;
+  const orders = ordersResult.data.items;
+  const itemsResult = await getPurchaseOrderItems(
+    tenant,
+    orders.map((order) => order.id),
+  );
   const orderItems = itemsResult.ok ? itemsResult.data : [];
   const products = productsResult.ok ? productsResult.data : [];
   const warehouses = warehousesResult.ok
     ? warehousesResult.data.filter((warehouse) => warehouse.estado === "activa")
     : [];
-  const summary = buildPurchasesSummary(suppliers, orders, orderItems);
+  const summary = summaryResult.ok
+    ? summaryResult.data
+    : {
+        ordenesBorrador: 0,
+        ordenesEmitidas: 0,
+        ordenesParciales: 0,
+        ordenesRecibidas: 0,
+        proveedoresActivos: 0,
+        totalComprado: 0,
+        totalPendienteRecepcion: 0,
+      };
 
   return (
     <section className="space-y-6">
@@ -181,6 +167,22 @@ export default async function PurchasesPage({ searchParams }: PurchasesPageProps
           </div>
         ))}
       </div>
+
+      {canManage ? (
+        <form className="flex flex-wrap items-end gap-3 rounded-lg border bg-background p-4" method="get">
+          <label className="min-w-64 flex-1 space-y-1 text-sm">
+            <span className="font-medium">Productos para la nueva orden</span>
+            <input
+              className="h-9 w-full rounded-md border bg-background px-3"
+              defaultValue={productQuery}
+              name="producto"
+              placeholder="Buscar por nombre o codigo"
+              type="search"
+            />
+          </label>
+          <Button type="submit">Buscar productos</Button>
+        </form>
+      ) : null}
 
       {canManage ? (
         <div className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
@@ -359,6 +361,14 @@ export default async function PurchasesPage({ searchParams }: PurchasesPageProps
           </table>
         </div>
       )}
+
+      <ServerPagination
+        currentPage={ordersResult.data.page}
+        pageSize={ordersResult.data.pageSize}
+        pathname="/compras"
+        query={{ producto: productQuery || undefined }}
+        totalItems={ordersResult.data.total}
+      />
     </section>
   );
 }

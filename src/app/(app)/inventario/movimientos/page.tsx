@@ -1,16 +1,17 @@
 import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
+import { ServerPagination } from "@/components/shared/server-pagination";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Button } from "@/components/ui/button";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { DEFAULT_INVENTORY_MOVEMENT_TYPE_FILTER } from "@/modules/inventory/constants";
 import { InventoryMovementsTable } from "@/modules/inventory/components/inventory-movements-table";
-import { getInventoryMovements } from "@/modules/inventory/queries";
+import { getInventoryMovementsPage } from "@/modules/inventory/queries";
 import { inventoryMovementTypeFilterSchema } from "@/modules/inventory/schemas";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type InventoryMovementsPageProps = {
-  searchParams?: Promise<{ error?: string; tipo?: string }>;
+  searchParams?: Promise<{ error?: string; page?: string; tipo?: string }>;
 };
 
 export default async function InventoryMovementsPage({
@@ -23,6 +24,7 @@ export default async function InventoryMovementsPage({
   const type =
     inventoryMovementTypeFilterSchema.safeParse(params?.tipo).data ??
     DEFAULT_INVENTORY_MOVEMENT_TYPE_FILTER;
+  const requestedPage = Math.max(1, Number.parseInt(params?.page ?? "1", 10) || 1);
 
   if (!canView) {
     return (
@@ -40,7 +42,11 @@ export default async function InventoryMovementsPage({
     );
   }
 
-  const movements = await getInventoryMovements(access.tenant, type);
+  const movements = await getInventoryMovementsPage(
+    access.tenant,
+    type,
+    requestedPage,
+  );
 
   return (
     <section className="space-y-6">
@@ -71,8 +77,17 @@ export default async function InventoryMovementsPage({
 
       {!movements.ok ? (
         <EmptyState description={movements.error.message} title="No se pudo cargar" />
-      ) : movements.data.length > 0 ? (
-        <InventoryMovementsTable movements={movements.data} />
+      ) : movements.data.items.length > 0 ? (
+        <>
+          <InventoryMovementsTable movements={movements.data.items} />
+          <ServerPagination
+            currentPage={movements.data.page}
+            pageSize={movements.data.pageSize}
+            pathname="/inventario/movimientos"
+            query={{ tipo: type === "todos" ? undefined : type }}
+            totalItems={movements.data.total}
+          />
+        </>
       ) : (
         <EmptyState
           description="Los movimientos apareceran despues de registrar entradas, salidas o ajustes."

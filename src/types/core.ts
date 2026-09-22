@@ -9,6 +9,7 @@ export type CoreErrorCode =
   | "PLAN_INACTIVE"
   | "PLAN_FEATURE_UNAVAILABLE"
   | "PERMISSION_DENIED"
+  | "QUERY_FAILED"
   | "VALIDATION_ERROR";
 
 export type CoreError = {

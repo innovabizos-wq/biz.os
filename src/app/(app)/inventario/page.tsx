@@ -2,19 +2,20 @@
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
+import { ServerPagination } from "@/components/shared/server-pagination";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { InventoryDatabase } from "@/modules/inventory/components/inventory-database";
 import {
   canAccessInventoryNav,
-  getInventoryStock,
+  getInventoryStockPage,
   getInventorySummary,
 } from "@/modules/inventory/queries";
 import type { InventoryStock, InventorySummary } from "@/modules/inventory/types";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type InventoryPageProps = {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; page?: string }>;
 };
 
 type ChartPoint = {
@@ -311,6 +312,7 @@ function InventoryAnalyticsCharts({
 
 export default async function InventoryPage({ searchParams }: InventoryPageProps) {
   const [params, access] = await Promise.all([searchParams, requireAdminAccess()]);
+  const requestedPage = Math.max(1, Number.parseInt(params?.page ?? "1", 10) || 1);
 
   if (!canAccessInventoryNav(access.tenant)) {
     return (
@@ -330,7 +332,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
 
   const [summary, stock] = await Promise.all([
     getInventorySummary(access.tenant),
-    getInventoryStock(access.tenant),
+    getInventoryStockPage(access.tenant, requestedPage),
   ]);
 
   return (
@@ -373,13 +375,21 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
       {!summary.ok ? (
         <EmptyState description={summary.error.message} title="No se pudo cargar" />
       ) : stock.ok ? (
-        <InventoryAnalyticsCharts stock={stock.data} summary={summary.data} />
+        <InventoryAnalyticsCharts stock={stock.data.items} summary={summary.data} />
       ) : null}
 
       {!stock.ok ? (
         <EmptyState description={stock.error.message} title="No se pudo cargar" />
-      ) : stock.data.length > 0 ? (
-        <InventoryDatabase stock={stock.data} />
+      ) : stock.data.items.length > 0 ? (
+        <>
+          <InventoryDatabase stock={stock.data.items} />
+          <ServerPagination
+            currentPage={stock.data.page}
+            pageSize={stock.data.pageSize}
+            pathname="/inventario"
+            totalItems={stock.data.total}
+          />
+        </>
       ) : (
         <EmptyState
           description="Registra una entrada o ajuste para crear la primera fila de stock."
