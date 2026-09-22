@@ -11,9 +11,9 @@ import {
   submitPosSaleAction,
 } from "@/modules/pos/actions";
 import {
+  completeQueuedPosOperation,
   getQueuedPosOperations,
   queuePosOperation,
-  removeQueuedPosOperation,
   savePosCatalog,
   savePosSession,
 } from "@/modules/pos/offline-store";
@@ -50,8 +50,10 @@ export function PosTerminalScreen({
   const [payments, setPayments] = useState<PosPaymentInput[]>([{ amount: 0, method: "cash", verified: true }]);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingQuantities, setPendingQuantities] = useState<Map<string, number>>(new Map());
   const [preparedOffline, setPreparedOffline] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<PosSaleResult | null>(null);
+  const [localReady, setLocalReady] = useState(false);
   const [nextSequence, setNextSequence] = useState(session.lastSequence + 1);
   const [pending, startTransition] = useTransition();
 
@@ -74,42 +76,98 @@ export function PosTerminalScreen({
 
   async function refreshQueue() {
     const rows = await getQueuedPosOperations(session.id);
+    const quantities = new Map<string, number>();
+    for (const row of rows) {
+      for (const item of row.items) {
+        quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+      }
+    }
     setPendingCount(rows.length);
+    setPendingQuantities(quantities);
     setNextSequence(Math.max(session.lastSequence + 1, ...rows.map((row) => row.sequence + 1)));
+  }
+
+  function applyCatalogAllocations(
+    allocations: Array<{ offlineAvailable: number; productId: string }>,
+  ) {
+    if (allocations.length === 0) return;
+    const byProduct = new Map(
+      allocations.map((allocation) => [allocation.productId, allocation.offlineAvailable]),
+    );
+    setCatalog((current) => current.map((item) => byProduct.has(item.productId)
+      ? { ...item, offlineAvailable: byProduct.get(item.productId) ?? item.offlineAvailable }
+      : item));
+  }
+
+  function consumeConnectedCatalog(items: PosSaleInput["items"]) {
+    const consumed = new Map<string, number>();
+    for (const item of items) {
+      consumed.set(item.productId, (consumed.get(item.productId) ?? 0) + item.quantity);
+    }
+    setCatalog((current) => {
+      const next = current.map((item) => item.productType === "producto" && consumed.has(item.productId)
+        ? {
+            ...item,
+            offlineAvailable: Math.max(
+              0,
+              item.offlineAvailable - (consumed.get(item.productId) ?? 0),
+            ),
+          }
+        : item);
+      void savePosCatalog(session.id, next);
+      return next;
+    });
   }
 
   async function syncQueue() {
     if (!navigator.onLine) return;
     const rows = await getQueuedPosOperations(session.id);
     for (const operation of rows) {
-      const result = await submitPosSaleAction(operation);
-      if (!result.ok) {
-        setMessage(`Pendiente ${operation.sequence}: ${result.error}`);
+      try {
+        const result = await submitPosSaleAction(operation);
+        if (!result.ok) {
+          setMessage(`Pendiente ${operation.sequence}: ${result.error}`);
+          break;
+        }
+        const allocations = await completeQueuedPosOperation(operation);
+        applyCatalogAllocations(allocations);
+        setLastReceipt(result.data);
+      } catch {
+        setMessage(`Pendiente ${operation.sequence}: la sincronización se interrumpió.`);
         break;
       }
-      await removeQueuedPosOperation(operation.clientOperationId);
-      setLastReceipt(result.data);
     }
     await refreshQueue();
   }
 
   useEffect(() => {
     void navigator.serviceWorker?.register("/sw.js");
-    void savePosSession(session, terminal);
-    void savePosCatalog(session.id, initialCatalog);
-    const refreshTimer = window.setTimeout(() => void refreshQueue(), 0);
-    return () => window.clearTimeout(refreshTimer);
+    let cancelled = false;
+    void (async () => {
+      try {
+        await savePosSession(session, terminal);
+        await savePosCatalog(session.id, initialCatalog);
+        await refreshQueue();
+      } catch {
+        if (!cancelled) setMessage("No se pudo preparar el almacenamiento local de la caja.");
+      } finally {
+        if (!cancelled) setLocalReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   // The session identity controls the local cache lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, terminal.id]);
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || !localReady) return;
     const syncTimer = window.setTimeout(() => void syncQueue(), 0);
     return () => window.clearTimeout(syncTimer);
   // syncQueue is intentionally run only when connectivity changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online]);
+  }, [localReady, online]);
 
   function changeQuantity(productId: string, delta: number) {
     setCart((current) => current
@@ -154,7 +212,8 @@ export function PosTerminalScreen({
     const paid = Math.round(effectivePayments.reduce((sum, payment) => sum + payment.amount, 0) * 100) / 100;
     if (paid !== total) return setMessage("Los pagos deben coincidir con el total.");
     if (!online) {
-      const unavailable = cart.find((line) => line.productType === "producto" && line.quantity > line.offlineAvailable);
+      const unavailable = cart.find((line) => line.productType === "producto"
+        && line.quantity > line.offlineAvailable - (pendingQuantities.get(line.productId) ?? 0));
       if (unavailable) return setMessage(`Cupo sin conexión insuficiente para ${unavailable.name}.`);
     }
     const operation: PosSaleInput = {
@@ -173,11 +232,15 @@ export function PosTerminalScreen({
     startTransition(async () => {
       setMessage(null);
       if (!navigator.onLine) {
-        await queuePosOperation(operation);
-        setNextSequence((value) => value + 1);
-        setCart([]);
-        setMessage(`Venta ${operation.sequence} guardada. Se emitirá al recuperar conexión.`);
-        await refreshQueue();
+        try {
+          const stored = await queuePosOperation(operation);
+          setNextSequence(stored.sequence + 1);
+          setCart([]);
+          setMessage(`Venta ${stored.sequence} guardada. Se emitirá al recuperar conexión.`);
+          await refreshQueue();
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : "No se pudo proteger la venta local.");
+        }
         return;
       }
       try {
@@ -185,14 +248,21 @@ export function PosTerminalScreen({
         if (!result.ok) return setMessage(result.error);
         setLastReceipt(result.data);
         setNextSequence((value) => value + 1);
+        consumeConnectedCatalog(operation.items);
         setCart([]);
         setMessage(`Venta ${result.data.saleNumber} registrada correctamente.`);
       } catch {
-        await queuePosOperation({ ...operation, offline: true });
-        setNextSequence((value) => value + 1);
-        setCart([]);
-        setMessage("La conexión se interrumpió. La venta quedó guardada para reintento.");
-        await refreshQueue();
+        try {
+          const stored = await queuePosOperation({ ...operation, offline: true });
+          setNextSequence(stored.sequence + 1);
+          setCart([]);
+          setMessage("La conexión se interrumpió. La venta quedó guardada para reintento.");
+          await refreshQueue();
+        } catch (queueError) {
+          setMessage(queueError instanceof Error
+            ? queueError.message
+            : "La conexión se interrumpió y no se pudo guardar la venta local.");
+        }
       }
     });
   }
@@ -240,7 +310,11 @@ export function PosTerminalScreen({
               <span className="block truncate font-medium">{product.name}</span>
               <span className="text-xs text-muted-foreground">{product.code || product.productType}</span>
               <span className="mt-3 block font-semibold">{currency(product.unitPrice * (1 + product.taxRate / 100))}</span>
-              {terminal.offlineEnabled && product.productType === "producto" ? <span className="text-xs text-muted-foreground">Cupo offline: {product.offlineAvailable}</span> : null}
+              {terminal.offlineEnabled && product.productType === "producto" ? (
+                <span className="text-xs text-muted-foreground">
+                  Cupo offline: {Math.max(0, product.offlineAvailable - (pendingQuantities.get(product.productId) ?? 0))}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>

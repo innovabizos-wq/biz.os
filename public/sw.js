@@ -1,4 +1,4 @@
-const CACHE = "bizos-pos-shell-v1";
+const CACHE = "bizos-pos-shell-v2";
 const OFFLINE_FILES = ["/pos-offline.html", "/icons/bizos.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

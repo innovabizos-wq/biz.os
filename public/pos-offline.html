@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#111827">
   <title>Biz.OS POS sin conexión</title>
   <style>
-    *{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font:15px system-ui,sans-serif}header{display:flex;justify-content:space-between;gap:12px;padding:18px 24px;background:#111827;color:#fff}main{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;padding:18px}.card{background:#fff;border:1px solid #d1d5db;border-radius:16px;padding:16px}.products{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;max-height:65vh;overflow:auto}.product{padding:14px;border:1px solid #d1d5db;border-radius:12px;background:#fff;text-align:left}.product b,.product span{display:block}.product small{color:#6b7280}input,select,button{min-height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:8px 10px;font:inherit}button{cursor:pointer}.primary{background:#111827;color:#fff}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}.line{padding:10px 0;border-bottom:1px solid #e5e7eb}.muted{color:#6b7280}.notice{padding:10px;border-radius:10px;background:#fef3c7;color:#78350f}.total{font-size:22px;font-weight:700}.stack{display:grid;gap:10px}@media(max-width:850px){main{grid-template-columns:1fr}header{padding:14px}main{padding:12px}}
+    *{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font:15px system-ui,sans-serif}header{display:flex;justify-content:space-between;gap:12px;padding:18px 24px;background:#111827;color:#fff}main{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;padding:18px}.card{background:#fff;border:1px solid #d1d5db;border-radius:16px;padding:16px}.products{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;max-height:65vh;overflow:auto}.product{padding:14px;border:1px solid #d1d5db;border-radius:12px;background:#fff;text-align:left}.product b,.product span{display:block}.product small{color:#6b7280}input,select,button{min-height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:8px 10px;font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}.primary{background:#111827;color:#fff}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}.line{padding:10px 0;border-bottom:1px solid #e5e7eb}.muted{color:#6b7280}.notice{padding:10px;border-radius:10px;background:#fef3c7;color:#78350f}.total{font-size:22px;font-weight:700}.stack{display:grid;gap:10px}@media(max-width:850px){main{grid-template-columns:1fr}header{padding:14px}main{padding:12px}}
   </style>
 </head>
 <body>
@@ -16,16 +16,240 @@
     <aside class="card stack"><h2>Venta provisional</h2><div id="cart"></div><div class="row total"><span>Total</span><span id="total">₡0</span></div><select id="method"><option value="cash">Efectivo</option><option value="card">Tarjeta externa autorizada</option><option value="sinpe">SINPE pendiente</option></select><input id="reference" placeholder="Referencia de pago"><button class="primary" id="save">Guardar para sincronizar</button><p class="notice" id="message">Esta constancia no es el comprobante fiscal. Biz.OS emitirá al recuperar conexión.</p></aside>
   </main>
   <script>
-    const state={session:null,catalog:[],cart:new Map(),sequence:1};
-    const money=new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC'});
-    function db(){return new Promise((ok,no)=>{const r=indexedDB.open('bizos-pos',1);r.onerror=()=>no(r.error);r.onsuccess=()=>ok(r.result);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('operations')){const s=d.createObjectStore('operations',{keyPath:'clientOperationId'});s.createIndex('sessionId','sessionId')}if(!d.objectStoreNames.contains('catalog')){const s=d.createObjectStore('catalog',{keyPath:'key'});s.createIndex('sessionId','sessionId')}if(!d.objectStoreNames.contains('sessions'))d.createObjectStore('sessions',{keyPath:'id'})}})}
-    function request(r){return new Promise((ok,no)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
-    async function load(){const d=await db();const sessions=await request(d.transaction('sessions').objectStore('sessions').getAll());state.session=sessions.filter(s=>s.status==='open'||s.status==='pending_sync').sort((a,b)=>b.openedAt.localeCompare(a.openedAt))[0];if(!state.session){document.querySelector('main').innerHTML='<section class="card"><h2>No hay una caja autorizada</h2><p>Abre y prepara la terminal mientras tengas conexión.</p></section>';return}document.getElementById('terminal').textContent=state.session.terminal.name;state.catalog=(await request(d.transaction('catalog').objectStore('catalog').index('sessionId').getAll(state.session.id)));const operations=await request(d.transaction('operations').objectStore('operations').index('sessionId').getAll(state.session.id));state.sequence=Math.max(state.session.lastSequence+1,...operations.map(o=>o.sequence+1));document.getElementById('pending').textContent=operations.length+' pendientes';d.close();renderProducts();renderCart()}
-    function lineTotal(p,q){const sub=p.unitPrice*q;return Math.round((sub+sub*p.taxRate/100)*100)/100}
-    function renderProducts(){const q=document.getElementById('search').value.toLowerCase();document.getElementById('products').innerHTML=state.catalog.filter(p=>!q||p.name.toLowerCase().includes(q)||(p.code||'').toLowerCase().includes(q)).slice(0,120).map(p=>`<button class="product" data-id="${p.productId}"><b>${p.name}</b><small>${p.code||p.productType}</small><span>${money.format(lineTotal(p,1))}</span><small>Cupo offline: ${p.productType==='servicio'?'—':p.offlineAvailable}</small></button>`).join('');document.querySelectorAll('.product').forEach(b=>b.onclick=()=>{const p=state.catalog.find(x=>x.productId===b.dataset.id);state.cart.set(p.productId,{...p,quantity:(state.cart.get(p.productId)?.quantity||0)+1});renderCart()})}
-    function renderCart(){let total=0;document.getElementById('cart').innerHTML=[...state.cart.values()].map(p=>{total+=lineTotal(p,p.quantity);return `<div class="row line"><span><b>${p.name}</b><br><small class="muted">${p.quantity} × ${money.format(lineTotal(p,1))}</small></span><button data-remove="${p.productId}">−</button></div>`}).join('')||'<p class="muted">Selecciona productos.</p>';document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{const p=state.cart.get(b.dataset.remove);if(p.quantity<=1)state.cart.delete(p.productId);else state.cart.set(p.productId,{...p,quantity:p.quantity-1});renderCart()});document.getElementById('total').textContent=money.format(total);return Math.round(total*100)/100}
-    async function save(){if(!state.cart.size)return;const total=renderCart();const unavailable=[...state.cart.values()].find(p=>p.productType==='producto'&&p.quantity>p.offlineAvailable);if(unavailable){document.getElementById('message').textContent='Cupo insuficiente para '+unavailable.name;return}const method=document.getElementById('method').value;const operation={capturedAt:new Date().toISOString(),clientOperationId:crypto.randomUUID(),items:[...state.cart.values()].map(p=>({productId:p.productId,quantity:p.quantity})),offline:true,payments:[{amount:total,method,reference:document.getElementById('reference').value||undefined,verified:method!=='sinpe'}],sequence:state.sequence,sessionId:state.session.id,queuedAt:new Date().toISOString()};const d=await db();const tx=d.transaction('operations','readwrite');tx.objectStore('operations').put(operation);await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onerror=()=>no(tx.error)});d.close();state.sequence++;state.cart.clear();document.getElementById('message').textContent='Venta '+operation.sequence+' guardada. Se sincronizará al recuperar conexión.';renderCart();await load()}
-    document.getElementById('search').oninput=renderProducts;document.getElementById('save').onclick=save;window.addEventListener('online',()=>location.href='/ventas/pos');load().catch(e=>document.getElementById('message').textContent='No se pudo abrir la caja local: '+e.message);
+    const state = { session: null, catalog: [], operations: [], cart: new Map() };
+    const money = new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC" });
+    const terminalId = new URLSearchParams(location.search).get("terminal");
+    const channel = "BroadcastChannel" in window ? new BroadcastChannel("bizos-pos") : null;
+
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("bizos-pos", 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains("operations")) {
+            const operations = database.createObjectStore("operations", { keyPath: "clientOperationId" });
+            operations.createIndex("sessionId", "sessionId", { unique: false });
+          }
+          if (!database.objectStoreNames.contains("catalog")) {
+            const catalog = database.createObjectStore("catalog", { keyPath: "key" });
+            catalog.createIndex("sessionId", "sessionId", { unique: false });
+          }
+          if (!database.objectStoreNames.contains("sessions")) {
+            database.createObjectStore("sessions", { keyPath: "id" });
+          }
+        };
+      });
+    }
+
+    function requestResult(request) {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function transactionDone(transaction) {
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, (character) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;",
+      })[character]);
+    }
+
+    function pendingUsage(operations = state.operations) {
+      const usage = new Map();
+      for (const operation of operations) {
+        for (const item of operation.items) {
+          usage.set(item.productId, (usage.get(item.productId) || 0) + item.quantity);
+        }
+      }
+      return usage;
+    }
+
+    function remainingOffline(product, usage = pendingUsage()) {
+      if (product.productType !== "producto") return Number.POSITIVE_INFINITY;
+      return Math.max(0, product.offlineAvailable - (usage.get(product.productId) || 0));
+    }
+
+    function authorized(session) {
+      return Boolean(
+        session
+        && (session.status === "open" || session.status === "pending_sync")
+        && session.terminal.offlineEnabled
+        && Date.now() <= Date.parse(session.authorizedUntil)
+      );
+    }
+
+    async function load() {
+      const database = await openDatabase();
+      const sessions = await requestResult(database.transaction("sessions").objectStore("sessions").getAll());
+      state.session = sessions
+        .filter((session) => session.status === "open" || session.status === "pending_sync")
+        .filter((session) => !terminalId || session.terminal.id === terminalId)
+        .sort((a, b) => b.openedAt.localeCompare(a.openedAt))[0];
+      if (!state.session) {
+        database.close();
+        document.querySelector("main").innerHTML = '<section class="card"><h2>No hay una caja autorizada</h2><p>Abre y prepara la terminal mientras tengas conexión.</p></section>';
+        return;
+      }
+
+      document.getElementById("terminal").textContent = state.session.terminal.name;
+      state.catalog = await requestResult(
+        database.transaction("catalog").objectStore("catalog").index("sessionId").getAll(state.session.id),
+      );
+      state.operations = await requestResult(
+        database.transaction("operations").objectStore("operations").index("sessionId").getAll(state.session.id),
+      );
+      database.close();
+      document.getElementById("pending").textContent = `${state.operations.length} pendientes`;
+      const canSell = authorized(state.session);
+      document.getElementById("save").disabled = !canSell;
+      if (!canSell) {
+        document.getElementById("message").textContent = "La autorización sin conexión venció. Recupera la conexión antes de vender.";
+      }
+      renderProducts();
+      renderCart();
+    }
+
+    function lineTotal(product, quantity) {
+      const subtotal = product.unitPrice * quantity;
+      return Math.round((subtotal + subtotal * product.taxRate / 100) * 100) / 100;
+    }
+
+    function renderProducts() {
+      const query = document.getElementById("search").value.toLocaleLowerCase("es");
+      document.getElementById("products").innerHTML = state.catalog
+        .filter((product) => !query
+          || product.name.toLocaleLowerCase("es").includes(query)
+          || (product.code || "").toLocaleLowerCase("es").includes(query))
+        .slice(0, 120)
+        .map((product) => {
+          const available = remainingOffline(product);
+          const quota = product.productType === "servicio" ? "—" : available;
+          return `<button class="product" data-id="${product.productId}"><b>${escapeHtml(product.name)}</b><small>${escapeHtml(product.code || product.productType)}</small><span>${money.format(lineTotal(product, 1))}</span><small>Cupo offline disponible: ${quota}</small></button>`;
+        }).join("");
+      document.querySelectorAll(".product").forEach((button) => {
+        button.onclick = () => {
+          const product = state.catalog.find((item) => item.productId === button.dataset.id);
+          state.cart.set(product.productId, {
+            ...product,
+            quantity: (state.cart.get(product.productId)?.quantity || 0) + 1,
+          });
+          renderCart();
+        };
+      });
+    }
+
+    function renderCart() {
+      let total = 0;
+      document.getElementById("cart").innerHTML = [...state.cart.values()].map((product) => {
+        total += lineTotal(product, product.quantity);
+        return `<div class="row line"><span><b>${escapeHtml(product.name)}</b><br><small class="muted">${product.quantity} × ${money.format(lineTotal(product, 1))}</small></span><button data-remove="${product.productId}">−</button></div>`;
+      }).join("") || '<p class="muted">Selecciona productos.</p>';
+      document.querySelectorAll("[data-remove]").forEach((button) => {
+        button.onclick = () => {
+          const product = state.cart.get(button.dataset.remove);
+          if (product.quantity <= 1) state.cart.delete(product.productId);
+          else state.cart.set(product.productId, { ...product, quantity: product.quantity - 1 });
+          renderCart();
+        };
+      });
+      document.getElementById("total").textContent = money.format(total);
+      return Math.round(total * 100) / 100;
+    }
+
+    async function queueOperation(input) {
+      const database = await openDatabase();
+      const transaction = database.transaction(["operations", "catalog", "sessions"], "readwrite");
+      try {
+        const operationsStore = transaction.objectStore("operations");
+        const session = await requestResult(transaction.objectStore("sessions").get(input.sessionId));
+        const capturedTime = Date.parse(input.capturedAt);
+        if (
+          !authorized(session)
+          || capturedTime < Date.parse(session.openedAt)
+          || capturedTime > Date.parse(session.authorizedUntil)
+          || capturedTime > Date.now() + 5 * 60 * 1000
+        ) {
+          throw new Error("La autorización sin conexión venció. Recupera la conexión antes de vender.");
+        }
+        const operations = await requestResult(operationsStore.index("sessionId").getAll(input.sessionId));
+        const usage = pendingUsage(operations);
+        const catalogStore = transaction.objectStore("catalog");
+        for (const item of input.items) {
+          const product = await requestResult(catalogStore.get(`${input.sessionId}:${item.productId}`));
+          if (!product) throw new Error("El producto no pertenece al catálogo local autorizado.");
+          const requested = (usage.get(item.productId) || 0) + item.quantity;
+          if (product.productType === "producto" && requested > product.offlineAvailable) {
+            throw new Error(`Cupo sin conexión insuficiente para ${product.name}.`);
+          }
+          usage.set(item.productId, requested);
+        }
+        const sequence = Math.max(session.lastSequence + 1, ...operations.map((operation) => operation.sequence + 1));
+        const operation = { ...input, sequence, queuedAt: new Date().toISOString() };
+        operationsStore.add(operation);
+        await transactionDone(transaction);
+        return operation;
+      } catch (error) {
+        try { transaction.abort(); } catch { /* La transacción ya terminó. */ }
+        throw error;
+      } finally {
+        database.close();
+      }
+    }
+
+    async function save() {
+      if (!state.cart.size || !state.session) return;
+      const total = renderCart();
+      const method = document.getElementById("method").value;
+      const input = {
+        capturedAt: new Date().toISOString(),
+        clientOperationId: crypto.randomUUID(),
+        items: [...state.cart.values()].map((product) => ({
+          productId: product.productId,
+          quantity: product.quantity,
+        })),
+        offline: true,
+        payments: [{
+          amount: total,
+          method,
+          reference: document.getElementById("reference").value || undefined,
+          verified: method !== "sinpe",
+        }],
+        sessionId: state.session.id,
+      };
+      try {
+        const operation = await queueOperation(input);
+        state.cart.clear();
+        document.getElementById("reference").value = "";
+        document.getElementById("message").textContent = `Venta ${operation.sequence} guardada. Se sincronizará al recuperar conexión.`;
+        channel?.postMessage({ sessionId: operation.sessionId });
+        await load();
+      } catch (error) {
+        document.getElementById("message").textContent = error instanceof Error
+          ? error.message
+          : "No se pudo proteger la venta local.";
+      }
+    }
+
+    document.getElementById("search").oninput = renderProducts;
+    document.getElementById("save").onclick = save;
+    window.addEventListener("online", () => {
+      const target = terminalId ? `/ventas/pos?terminal=${encodeURIComponent(terminalId)}` : "/ventas/pos";
+      location.href = target;
+    });
+    channel && (channel.onmessage = () => load());
+    load().catch((error) => {
+      document.getElementById("message").textContent = `No se pudo abrir la caja local: ${error.message}`;
+    });
   </script>
 </body>
 </html>
