@@ -1,7 +1,7 @@
 "use client";
 
 import { ImageUp, RotateCcw, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { FormEvent, useState, useTransition } from "react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -25,9 +25,18 @@ function TemplateThumbnail({ template }: { template: QuoteDocumentTemplateCode }
 export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSettings }) {
   const [template, setTemplate] = useState<QuoteDocumentTemplateCode>(settings.templateCode);
   const [logoName, setLogoName] = useState<string | null>(null);
+  const [isSaving, startSaving] = useTransition();
+
+  function saveSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startSaving(async () => {
+      await saveQuoteDocumentSettingsAction(formData);
+    });
+  }
 
   return (
-    <form action={saveQuoteDocumentSettingsAction} className="space-y-6" encType="multipart/form-data" method="post">
+    <form className="space-y-6" encType="multipart/form-data" method="post" onSubmit={saveSettings}>
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-slate-100 p-2.5 text-slate-700"><Sparkles aria-hidden="true" size={20} /></span>
@@ -81,7 +90,7 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
         </aside>
       </section>
       <p className="text-sm text-slate-500">Al guardar, esta plantilla se verá de inmediato en una nueva cotización y en el PDF.</p>
-      <div className="flex justify-end"><button className="app-theme-button inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium" type="submit">Guardar y aplicar plantilla</button></div>
+      <div className="flex justify-end"><button className="app-theme-button inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60" disabled={isSaving} type="submit">{isSaving ? "Guardando plantilla…" : "Guardar y aplicar plantilla"}</button></div>
     </form>
   );
 }
