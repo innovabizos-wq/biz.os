@@ -3,6 +3,7 @@ import { SectionHeader } from "@/components/shared/section-header";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { ConnectionsManager } from "@/modules/billing/connectors/components/connections-manager";
 import { getFiscalConnections } from "@/modules/billing/connectors/queries";
+import { getHaciendaRuntimeConfig } from "@/modules/billing/hacienda/config";
 import { IntegrationOutboxPanel } from "@/modules/integrations/outbox/components/integration-outbox-panel";
 import { listIntegrationOutboxJobs } from "@/modules/integrations/outbox/repository";
 import { PublicApiKeysManager } from "@/modules/public-api/components/public-api-keys-manager";
@@ -20,11 +21,16 @@ export default async function ConnectionsPage() {
     listIntegrationOutboxJobs("open", 50).catch(() => []),
     listPublicApiKeys(access.tenant.empresaId).catch(() => []),
   ]);
+  const haciendaRuntime = getHaciendaRuntimeConfig();
   return (
     <section className="space-y-6">
       <SectionHeader description="Conecta y verifica proveedores fiscales con una prueba de lectura antes de activarlos." eyebrow="Configuración" title="Conexiones" />
       <PublicApiKeysManager canManage={canManageApi} keys={apiKeys} />
-      {result.ok ? <ConnectionsManager canManage={canManage} initialConnections={result.data} /> : <EmptyState description={result.error.message} title="No se pudieron cargar las conexiones" />}
+      {result.ok ? <ConnectionsManager canManage={canManage} haciendaRuntime={{
+        environment: haciendaRuntime.environment,
+        sendEnabled: haciendaRuntime.sendEnabled,
+        statusEnabled: haciendaRuntime.statusEnabled,
+      }} initialConnections={result.data} /> : <EmptyState description={result.error.message} title="No se pudieron cargar las conexiones" />}
       <IntegrationOutboxPanel canManage={canManage} jobs={jobs} />
     </section>
   );

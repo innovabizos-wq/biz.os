@@ -2,7 +2,7 @@
 
 ## Estado actual
 
-La configuracion fiscal vive en `/admin/fiscal`. Permite registrar datos de la
+El perfil fiscal vive en `/admin/fiscal`. Permite registrar datos de la
 empresa, ambiente, actividad economica, sucursal, terminal, usuario Hacienda,
 contrasena, llave `.p12` en Base64, PIN y correo emisor.
 
@@ -11,7 +11,9 @@ navegador.
 
 ## Listo para MVP
 
-- Ruta administrativa `/admin/fiscal`.
+- Ruta administrativa `/admin/fiscal` para los datos tributarios del emisor.
+- Ruta administrativa `/admin/conexiones` para configurar la conexión directa
+  a Hacienda con usuario, contraseña, certificado `.p12` y PIN.
 - Permisos `billing.fiscal.*` y `billing.invoices.*` tipados.
 - Checklist de configuracion fiscal.
 - Preparacion local de factura desde venta confirmada.

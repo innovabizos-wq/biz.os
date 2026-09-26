@@ -1,10 +1,12 @@
 import { EmptyState } from "@/components/shared/empty-state";
+import Link from "next/link";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
 import { hasAnyPermission } from "@/lib/permissions/permission-checks";
 import { saveFiscalConfigurationAction } from "@/modules/billing/actions";
 import { getFiscalConfiguration } from "@/modules/billing/queries";
+import { getFiscalConnections } from "@/modules/billing/connectors/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type FiscalPageProps = {
@@ -72,20 +74,26 @@ export default async function FiscalConfigurationPage({
     );
   }
 
-  const fiscal = await getFiscalConfiguration(access.tenant);
+  const [fiscal, connections] = await Promise.all([
+    getFiscalConfiguration(access.tenant),
+    getFiscalConnections(access.tenant),
+  ]);
   const config = fiscal.ok ? fiscal.data : null;
+  const haciendaConnection = connections.ok
+    ? connections.data.find((connection) => connection.providerCode === "hacienda" && connection.status === "active")
+    : null;
 
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Datos fiscales y credenciales requeridas para emitir comprobantes electronicos de Costa Rica."
+        description="Completa el perfil tributario que acompaña cada comprobante electrónico de Costa Rica."
         eyebrow="Admin"
         title="Configuracion fiscal"
       />
 
       <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-        Biz.OS valida el XML 4.4 ya firmado antes de enviarlo. Completa el domicilio fiscal y la
-        identificacion registrada para el proveedor del sistema para habilitar la emision.
+        Biz.OS valida el XML 4.4 firmado antes de enviarlo. Completa el domicilio fiscal y la
+        identificación del proveedor del sistema. El acceso directo a Hacienda se administra por separado en Conexiones.
       </p>
 
       <EphemeralPageAlert error={params?.error} success={params?.success} />
@@ -285,44 +293,10 @@ export default async function FiscalConfigurationPage({
               </label>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1 text-sm font-semibold">
-                <span>Usuario API Hacienda</span>
-                <input
-                  className="h-10 w-full rounded-md border px-3 text-sm"
-                  name="haciendaUsuario"
-                  placeholder={config?.hasHaciendaUsuario ? "Guardado" : ""}
-                />
-              </label>
-              <label className="space-y-1 text-sm font-semibold">
-                <span>Contrasena API Hacienda</span>
-                <input
-                  className="h-10 w-full rounded-md border px-3 text-sm"
-                  name="haciendaPassword"
-                  placeholder={config?.hasHaciendaPassword ? "Guardada" : ""}
-                  type="password"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-[1fr_180px]">
-              <label className="space-y-1 text-sm font-semibold">
-                <span>Llave criptografica .p12 en Base64</span>
-                <textarea
-                  className="min-h-24 w-full rounded-md border px-3 py-2 text-sm"
-                  name="p12Base64"
-                  placeholder={config?.hasP12 ? "Llave guardada" : ""}
-                />
-              </label>
-              <label className="space-y-1 text-sm font-semibold">
-                <span>PIN de llave</span>
-                <input
-                  className="h-10 w-full rounded-md border px-3 text-sm"
-                  name="pin"
-                  placeholder={config?.hasPin ? "Guardado" : ""}
-                  type="password"
-                />
-              </label>
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+              <p className="font-bold">Conexión oficial de Hacienda</p>
+              <p className="mt-1">Guarda el usuario, contraseña, llave .p12 y PIN una sola vez desde Conexiones. Ahí Biz.OS comprueba las credenciales y activa la conexión para cada documento sin duplicar secretos en esta pantalla.</p>
+              <Link className="mt-3 inline-flex font-bold underline underline-offset-4" href="/admin/conexiones">Abrir Conexiones fiscales</Link>
             </div>
 
             <div className="flex justify-end border-t pt-4">
@@ -356,14 +330,7 @@ export default async function FiscalConfigurationPage({
               done={Boolean(config?.provincia && config.canton && config.distrito && config.otrasSenas)}
               label="Domicilio fiscal"
             />
-            <ChecklistItem
-              done={Boolean(config?.hasHaciendaUsuario && config.hasHaciendaPassword)}
-              label="Credenciales Hacienda"
-            />
-            <ChecklistItem
-              done={Boolean(config?.hasP12 && config.hasPin)}
-              label="Llave criptografica"
-            />
+            <ChecklistItem done={Boolean(haciendaConnection)} label="Conexión directa a Hacienda" />
             <ChecklistItem
               done={Boolean(config?.sucursal && config.terminal)}
               label="Sucursal y terminal"
@@ -371,10 +338,10 @@ export default async function FiscalConfigurationPage({
           </ul>
           <div className="mt-4 rounded-lg border bg-white p-3 text-sm">
             <p className="font-bold">
-              Estado: {config?.listoParaEmitir ? "listo para emitir" : "incompleto"}
+              Perfil fiscal: {config?.listoParaEmitir ? "listo" : "incompleto"}
             </p>
             <p className="mt-1 text-muted-foreground">
-              Los secretos se guardan cifrados y no se muestran de vuelta.
+              {haciendaConnection ? `Hacienda ${haciendaConnection.environment === "production" ? "producción" : "pruebas"} está activa.` : "Falta verificar y activar Hacienda desde Conexiones."}
             </p>
           </div>
         </aside>

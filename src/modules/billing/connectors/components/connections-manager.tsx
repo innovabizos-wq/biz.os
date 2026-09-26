@@ -31,11 +31,28 @@ async function certificateToBase64(file: File) {
   return btoa(binary);
 }
 
-export function ConnectionsManager({ canManage, initialConnections }: { canManage: boolean; initialConnections: FiscalConnection[] }) {
+export function ConnectionsManager({
+  canManage,
+  haciendaRuntime,
+  initialConnections,
+}: {
+  canManage: boolean;
+  haciendaRuntime: { environment: "production" | "testing"; sendEnabled: boolean; statusEnabled: boolean };
+  initialConnections: FiscalConnection[];
+}) {
   const [provider, setProvider] = useState<FiscalProviderCode | null>(null);
   const [connections, setConnections] = useState(initialConnections);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const providers = PROVIDERS.map((item) => item.code === "hacienda"
+    ? {
+        ...item,
+        description: haciendaRuntime.sendEnabled && haciendaRuntime.statusEnabled
+          ? "Autenticación directa, firma y documentos XML 4.4. El envío y la consulta están habilitados en este entorno."
+          : "Autenticación directa, firma y documentos XML 4.4. El envío permanece protegido hasta completar la prueba con Hacienda.",
+        status: haciendaRuntime.sendEnabled && haciendaRuntime.statusEnabled ? "Operativo" : "Preparación protegida",
+      }
+    : item);
 
   function refreshConnection(id: string) {
     startTransition(async () => {
@@ -72,7 +89,7 @@ export function ConnectionsManager({ canManage, initialConnections }: { canManag
       <section>
         <h2 className="mb-3 text-lg font-semibold">Agregar conexión</h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {PROVIDERS.map((item) => (
+          {providers.map((item) => (
             <button className={`rounded-2xl border bg-card p-5 text-left transition hover:border-primary ${provider === item.code ? "border-primary ring-2 ring-primary/20" : ""}`} disabled={!canManage} key={item.code} onClick={() => setProvider(item.code)} type="button">
               <div className="flex items-center gap-2"><PlugZap size={18} /><span className="font-semibold">{item.name}</span></div>
               <span className="mt-2 inline-flex rounded-full bg-muted px-2 py-1 text-xs font-medium">{item.status}</span>
@@ -131,8 +148,8 @@ export function ConnectionsManager({ canManage, initialConnections }: { canManag
             }
           });
         }}>
-          <div className="md:col-span-2"><h3 className="font-semibold">Conectar {PROVIDERS.find((item) => item.code === provider)?.name}</h3><p className="text-sm text-muted-foreground">Las credenciales se cifran y la primera prueba solo consulta información.</p></div>
-          <label className="grid gap-1 text-sm">Nombre de la conexión<Input defaultValue={PROVIDERS.find((item) => item.code === provider)?.name} name="name" required /></label>
+          <div className="md:col-span-2"><h3 className="font-semibold">Conectar {providers.find((item) => item.code === provider)?.name}</h3><p className="text-sm text-muted-foreground">Las credenciales se cifran y la primera prueba solo consulta información.</p></div>
+          <label className="grid gap-1 text-sm">Nombre de la conexión<Input defaultValue={providers.find((item) => item.code === provider)?.name} name="name" required /></label>
           <label className="grid gap-1 text-sm">Ambiente<select className="h-8 rounded-lg border bg-background px-2" defaultValue="testing" name="environment"><option value="testing">Pruebas</option><option value="production">Producción</option></select></label>
           {provider === "alegra" ? <><label className="grid gap-1 text-sm">Correo de Alegra<Input name="email" required type="email" /></label><label className="grid gap-1 text-sm">Token API<Input name="token" required type="password" /></label></> : null}
           {provider === "hacienda" ? <>
@@ -140,6 +157,7 @@ export function ConnectionsManager({ canManage, initialConnections }: { canManag
             <label className="grid gap-1 text-sm">Contraseña<Input autoComplete="new-password" name="password" required type="password" /></label>
             <label className="grid gap-1 text-sm">Llave criptográfica .p12<Input accept=".p12,.pfx,application/x-pkcs12" name="certificateFile" required type="file" /></label>
             <label className="grid gap-1 text-sm">PIN de la llave<Input autoComplete="new-password" name="certificatePin" required type="password" /></label>
+            <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground md:col-span-2">La conexión se activa al validar usuario, contraseña y certificado en Hacienda. {haciendaRuntime.sendEnabled && haciendaRuntime.statusEnabled ? "Este entorno ya permite enviar y consultar documentos." : "Este entorno aún no enviará documentos: primero se debe verificar una emisión aceptada en pruebas y habilitar envío y consulta en el servidor."}</p>
           </> : null}
           {provider === "gti" ? <>
             <label className="grid gap-1 text-sm">Número de cuenta GTI<Input autoComplete="off" inputMode="numeric" name="accountNumber" required /></label>
