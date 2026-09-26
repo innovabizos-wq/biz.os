@@ -6,7 +6,9 @@ import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { getFiscalConfiguration, getInvoicesForSales } from "@/modules/billing/queries";
+import { getCurrentEmpresa } from "@/modules/companies/queries";
 import { FloatingQuoteButton } from "@/modules/quotes/components/floating-quote-button";
+import { getQuoteDocumentSettings } from "@/modules/quotes/document-settings";
 import { QuotesDatabase } from "@/modules/quotes/components/quotes-database";
 import {
   getActiveCatalogProductsForQuote,
@@ -487,12 +489,14 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
     );
   }
 
-  const [quotes, quoteCustomers, quoteProducts, fiscalConfiguration] =
+  const [quotes, quoteCustomers, quoteProducts, fiscalConfiguration, company, documentSettings] =
     await Promise.all([
       getQuotes(access.tenant, "todos"),
       canCreate || canEdit ? getCustomersForQuote(access.tenant) : null,
       canCreate || canEdit ? getActiveCatalogProductsForQuote(access.tenant) : null,
       canCreateInvoice ? getFiscalConfiguration(access.tenant) : null,
+      getCurrentEmpresa(access.tenant),
+      getQuoteDocumentSettings(access.tenant),
     ]);
   const quoteRows = quotes.ok ? quotes.data : [];
   const quoteIds = quoteRows.map((quote) => quote.id);
@@ -514,7 +518,7 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
       <SectionHeader
         actions={<div className="flex flex-wrap gap-2">
           {canManageDocumentStyle ? <Link className={buttonVariants({ variant: "outline" })} href="/cotizaciones/ajustes">Diseño de proformas</Link> : null}
-          {canCreate ? <FloatingQuoteButton activeProducts={quoteProducts?.ok ? quoteProducts.data : []} customers={quoteCustomers?.ok ? quoteCustomers.data : []} /> : null}
+          {canCreate ? <FloatingQuoteButton activeProducts={quoteProducts?.ok ? quoteProducts.data : []} company={{ email: company.ok ? company.data?.correo ?? null : null, identification: company.ok ? company.data?.identificacionFiscal ?? null : null, name: company.ok ? company.data?.nombre ?? "Tu empresa" : "Tu empresa", phone: company.ok ? company.data?.telefono ?? null : null, tradeName: company.ok ? company.data?.nombreComercial ?? null : null }} customers={quoteCustomers?.ok ? quoteCustomers.data : []} documentSettings={documentSettings} /> : null}
         </div>}
         title="Cotizaciones"
         titleClassName="app-page-title-compact normal-case"

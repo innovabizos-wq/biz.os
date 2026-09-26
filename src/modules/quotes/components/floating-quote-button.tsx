@@ -11,6 +11,12 @@ import {
   type CreateQuoteModalState,
 } from "@/modules/quotes/actions";
 import { DEFAULT_QUOTE_MONEDA } from "@/modules/quotes/constants";
+import { QuoteDocumentLayout } from "@/modules/quotes/components/quote-document-layout";
+import {
+  DEFAULT_QUOTE_DOCUMENT_SETTINGS,
+  type QuoteDocumentCompany,
+  type QuoteDocumentSettings,
+} from "@/modules/quotes/quote-document-style";
 import {
   searchConsultationSubjectModalAction,
   type ConsultationModalSearchState,
@@ -19,7 +25,9 @@ import type { QuoteCatalogProduct, QuoteCustomer } from "@/modules/quotes/types"
 
 type FloatingQuoteButtonProps = {
   activeProducts: QuoteCatalogProduct[];
+  company?: QuoteDocumentCompany;
   customers: QuoteCustomer[];
+  documentSettings?: QuoteDocumentSettings;
   hideTrigger?: boolean;
   initialOpen?: boolean;
   preselectedClienteId?: string;
@@ -87,7 +95,9 @@ function buildLocalItem(input: {
 
 export function FloatingQuoteButton({
   activeProducts,
+  company,
   customers,
+  documentSettings,
   hideTrigger = false,
   initialOpen = false,
   preselectedClienteId,
@@ -106,7 +116,9 @@ export function FloatingQuoteButton({
       {isOpen ? (
         <QuoteModal
           activeProducts={activeProducts}
+          company={company}
           customers={customers}
+          documentSettings={documentSettings}
           preselectedClienteId={preselectedClienteId}
           onClose={() => setIsOpen(false)}
         />
@@ -117,7 +129,9 @@ export function FloatingQuoteButton({
 
 function QuoteModal({
   activeProducts,
+  company,
   customers,
+  documentSettings,
   onClose,
   preselectedClienteId,
 }: FloatingQuoteButtonProps & {
@@ -146,6 +160,14 @@ function QuoteModal({
   const pathname = usePathname();
   const router = useRouter();
   const moneda = DEFAULT_QUOTE_MONEDA;
+  const previewCompany = company ?? {
+    email: null,
+    identification: null,
+    name: "Tu empresa",
+    phone: null,
+    tradeName: null,
+  };
+  const previewSettings = documentSettings ?? DEFAULT_QUOTE_DOCUMENT_SETTINGS;
 
   const selectedCustomer =
     customers.find((customer) => customer.id === clienteId) ?? null;
@@ -520,95 +542,26 @@ function QuoteModal({
             </div>
           </section>
 
-          <aside className="min-h-0 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <div className="min-h-full rounded-xl border bg-white p-6 shadow-sm">
-              <div className="border-b pb-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                      Proforma
-                    </p>
-                    <h3 className="mt-2 text-3xl font-black">SIN NUMERO</h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      El numero se asigna al crear
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-[#075e54] px-4 py-3 text-right text-white">
-                    <p className="text-xs opacity-80">Total</p>
-                    <p className="text-xl font-black">{formatMoney(total, moneda)}</p>
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-4 rounded-lg bg-slate-50 p-4 text-sm md:grid-cols-2">
-                  <div>
-                    <p className="text-slate-500">Cliente</p>
-                    <p className="font-bold">{effectiveCustomerName}</p>
-                    <p className="text-xs text-slate-500">
-                      {selectedCustomer?.whatsapp ??
-                        selectedCustomer?.telefono ??
-                        searchState.documento ??
-                        "Contacto no definido"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Estado</p>
-                    <p className="font-bold">Proforma sin guardar</p>
-                    <p className="text-xs text-slate-500">Moneda: {moneda}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="py-5">
-                <div className="grid grid-cols-[1fr_58px_90px] border-b bg-slate-50 px-3 py-2 text-xs font-black uppercase text-slate-500">
-                  <span>Descripcion</span>
-                  <span className="text-right">Cant.</span>
-                  <span className="text-right">Total</span>
-                </div>
-                {items.length > 0 ? (
-                  items.map((item, index) => (
-                    <div
-                      className="grid grid-cols-[1fr_58px_90px] border-b px-3 py-3 text-sm"
-                      key={`${item.descripcion}-preview-${index}`}
-                    >
-                      <span>{item.descripcion}</span>
-                      <span className="text-right text-slate-500">
-                        {item.cantidad}
-                      </span>
-                      <span className="text-right font-semibold">
-                        {formatMoney(item.total, moneda)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-3 py-10 text-center text-sm text-slate-500">
-                    Sin items agregados.
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-2 border-t pt-5 text-sm">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <strong>{formatMoney(subtotal, moneda)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Descuento</span>
-                  <strong>{formatMoney(discountTotal, moneda)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Impuesto</span>
-                  <strong>{formatMoney(taxTotal, moneda)}</strong>
-                </div>
-                <div className="mt-2 flex justify-between border-t pt-3 text-lg">
-                  <span className="font-black">Total</span>
-                  <strong>{formatMoney(total, moneda)}</strong>
-                </div>
-              </div>
-
-              <div className="mt-6 rounded-lg border border-dashed p-4 text-xs text-slate-500">
-                Vista previa local. Se guarda y recibe numero solo al presionar
-                Crear cotizacion.
-              </div>
-            </div>
+          <aside className="min-h-0 overflow-y-auto rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/5">
+            <QuoteDocumentLayout
+              compact
+              company={previewCompany}
+              data={{
+                clienteNombre: effectiveCustomerName === "Sin cliente" ? null : effectiveCustomerName,
+                creadoPorNombre: null,
+                descuentoTotal: discountTotal,
+                estado: "borrador",
+                fechaEmision: "draft",
+                fechaVencimiento: null,
+                impuestoTotal: taxTotal,
+                moneda,
+                numero: "SIN NÚMERO",
+                subtotal,
+                total,
+              }}
+              items={items}
+              settings={previewSettings}
+            />
           </aside>
         </div>
       </div>

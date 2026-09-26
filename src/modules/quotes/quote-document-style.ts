@@ -1,9 +1,9 @@
 export const QUOTE_DOCUMENT_TEMPLATES = [
-  { code: "executive", description: "Profesional y equilibrado", name: "Ejecutiva" },
-  { code: "bold", description: "Número y total protagonistas", name: "Impacto" },
-  { code: "minimal", description: "Limpia y sobria", name: "Minimal" },
-  { code: "editorial", description: "Elegante con jerarquía visual", name: "Editorial" },
-  { code: "classic", description: "Formal y tradicional", name: "Clásica" },
+  { code: "executive", description: "Empresa, cliente y datos en bloques precisos", name: "Corporativa" },
+  { code: "bold", description: "Cabecera de marca y total destacado", name: "Franja moderna" },
+  { code: "minimal", description: "Mucho espacio, tipografía y líneas finas", name: "Minimal premium" },
+  { code: "editorial", description: "Columna de marca y propuesta editorial", name: "Editorial" },
+  { code: "classic", description: "Marco formal para propuestas tradicionales", name: "Tradicional" },
 ] as const;
 
 export const QUOTE_DOCUMENT_ACCENT_COLORS = [

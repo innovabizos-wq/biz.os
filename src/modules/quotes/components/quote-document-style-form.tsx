@@ -14,6 +14,15 @@ import {
 } from "@/modules/quotes/quote-document-style";
 import { saveQuoteDocumentSettingsAction } from "@/modules/quotes/document-settings";
 
+function TemplateThumbnail({ template }: { template: QuoteDocumentTemplateCode }) {
+  const line = <span className="block h-1.5 rounded bg-slate-200" />;
+  if (template === "bold") return <span className="block h-24 bg-slate-50 p-3"><span className="flex h-11 items-center justify-between rounded bg-emerald-700 px-2 text-[8px] font-black uppercase tracking-wider text-white"><span>Proforma</span><span>000123</span></span><span className="mt-3 grid grid-cols-[1fr_34px] gap-2">{line}<span className="h-5 rounded bg-emerald-700" /></span><span className="mt-2 block h-1.5 w-full rounded bg-slate-200" /></span>;
+  if (template === "minimal") return <span className="block h-24 bg-white p-3"><span className="flex items-start justify-between"><span className="h-5 w-5 rounded-sm bg-slate-900" /><span className="text-xs font-light text-slate-950">PROFORMA</span></span><span className="mt-5 grid grid-cols-[1fr_26px] gap-2">{line}{line}</span><span className="mt-2 block h-1.5 w-4/5 rounded bg-slate-200" /></span>;
+  if (template === "editorial") return <span className="grid h-24 grid-cols-[28px_1fr] bg-white"><span className="bg-violet-900" /><span className="p-3"><span className="block text-[8px] font-black uppercase tracking-wider text-slate-500">Propuesta</span><span className="mt-2 block h-3 w-4/5 rounded bg-slate-900" /><span className="mt-4 grid grid-cols-[1fr_30px] gap-2">{line}{line}</span></span></span>;
+  if (template === "classic") return <span className="block h-24 bg-stone-50 p-2"><span className="block h-full border-2 border-stone-600 p-2"><span className="flex justify-between border-b-2 border-stone-600 pb-1 text-[8px] font-serif font-bold"><span>PROFORMA</span><span>N.º 000123</span></span><span className="mt-3 grid grid-cols-[1fr_30px] gap-2">{line}{line}</span></span></span>;
+  return <span className="block h-24 bg-white p-3"><span className="flex items-center justify-between border-b-2 border-slate-900 pb-2"><span className="h-6 w-6 rounded bg-slate-900" /><span className="text-[8px] font-black uppercase tracking-wider text-slate-500">Proforma 000123</span></span><span className="mt-3 grid grid-cols-2 gap-2"><span className="h-4 rounded bg-slate-100" /><span className="h-4 rounded border" /></span><span className="mt-2 block h-1.5 w-full rounded bg-slate-200" /></span>;
+}
+
 export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSettings }) {
   const [template, setTemplate] = useState<QuoteDocumentTemplateCode>(settings.templateCode);
   const [logoName, setLogoName] = useState<string | null>(null);
@@ -36,23 +45,7 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
                 "block overflow-hidden rounded-xl border bg-white transition hover:border-slate-400",
                 template === item.code && "border-slate-950 ring-2 ring-slate-900/15",
               )}>
-                <span className={cn(
-                  "block h-20 p-3",
-                  item.code === "executive" && "bg-slate-900",
-                  item.code === "bold" && "bg-emerald-700",
-                  item.code === "minimal" && "bg-slate-100",
-                  item.code === "editorial" && "bg-violet-900",
-                  item.code === "classic" && "bg-stone-700",
-                )}>
-                  <span className={cn(
-                    "block text-[10px] font-bold uppercase tracking-[0.18em]",
-                    item.code === "minimal" ? "text-slate-500" : "text-white/70",
-                  )}>Proforma</span>
-                  <span className={cn(
-                    "mt-2 block text-xl font-black",
-                    item.code === "minimal" ? "text-slate-900" : "text-white",
-                  )}>000123</span>
-                </span>
+                <TemplateThumbnail template={item.code} />
                 <span className="block p-3"><span className="block text-sm font-bold text-slate-900">{item.name}</span><span className="mt-1 block text-xs leading-4 text-slate-500">{item.description}</span></span>
               </span>
             </label>
@@ -88,7 +81,8 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
           <div className="space-y-3 p-5 text-sm"><div className="h-3 w-28 rounded bg-slate-200" /><div className="h-2 w-full rounded bg-slate-100" /><div className="h-2 w-4/5 rounded bg-slate-100" /><div className="ml-auto mt-8 w-28 border-t pt-3 text-right font-black text-slate-900">₡ 125.000</div></div>
         </aside>
       </section>
-      <div className="flex justify-end"><Button type="submit">Guardar diseño de proformas</Button></div>
+      <p className="text-sm text-slate-500">Al guardar, esta plantilla se verá de inmediato en una nueva cotización y en el PDF.</p>
+      <div className="flex justify-end"><Button type="submit">Guardar y aplicar plantilla</Button></div>
     </form>
   );
 }

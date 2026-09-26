@@ -100,10 +100,17 @@ export async function saveQuoteDocumentSettingsAction(formData: FormData) {
     updated_by: access.profile.id,
   };
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: saved, error } = await supabase
     .from("company_quote_document_settings")
-    .upsert(payload, { onConflict: "empresa_id" });
-  if (error) redirectWithError("No se pudo guardar el diseño de cotizaciones.");
+    .upsert(payload, { onConflict: "empresa_id" })
+    .select("empresa_id, template_code")
+    .maybeSingle<{
+      empresa_id: string;
+      template_code: QuoteDocumentSettings["templateCode"];
+    }>();
+  if (error || !saved || saved.empresa_id !== access.tenant.empresaId) {
+    redirectWithError("No se pudo guardar la plantilla. Intenta nuevamente o revisa los permisos de administración.");
+  }
 
   revalidatePath("/cotizaciones");
   revalidatePath("/cotizaciones/ajustes");

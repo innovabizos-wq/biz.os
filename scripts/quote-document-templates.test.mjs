@@ -16,12 +16,22 @@ test("quote document templates are tenant-scoped and writable only by company ad
 
 test("quote document settings apply a company template and commercial identity at print time", () => {
   const printDocument = source("src/modules/quotes/components/quote-print-document.tsx");
+  const documentLayout = source("src/modules/quotes/components/quote-document-layout.tsx");
+  const quoteBuilder = source("src/modules/quotes/components/floating-quote-button.tsx");
   const printPage = source("src/app/(app)/cotizaciones/[cotizacionId]/imprimir/page.tsx");
   const settingsPage = source("src/app/(app)/cotizaciones/ajustes/page.tsx");
 
-  assert.match(printDocument, /settings\.templateCode/);
-  assert.match(printDocument, /settings\.logoDataUrl/);
-  assert.match(printDocument, /settings\.documentLabel/);
+  assert.match(printDocument, /QuoteDocumentLayout/);
+  assert.match(documentLayout, /settings\.templateCode/);
+  assert.match(documentLayout, /settings\.logoDataUrl/);
+  assert.match(documentLayout, /settings\.documentLabel/);
+  assert.match(documentLayout, /function Executive/);
+  assert.match(documentLayout, /function Bold/);
+  assert.match(documentLayout, /function Minimal/);
+  assert.match(documentLayout, /function Editorial/);
+  assert.match(documentLayout, /function Classic/);
+  assert.match(quoteBuilder, /QuoteDocumentLayout/);
+  assert.match(quoteBuilder, /documentSettings/);
   assert.match(printPage, /getQuoteDocumentSettings/);
   assert.match(settingsPage, /admin\.settings\.manage/);
 });

@@ -2,7 +2,9 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
 import { hasPermission } from "@/lib/permissions/permission-checks";
+import { getCurrentEmpresa } from "@/modules/companies/queries";
 import { FloatingQuoteButton } from "@/modules/quotes/components/floating-quote-button";
+import { getQuoteDocumentSettings } from "@/modules/quotes/document-settings";
 import {
   getActiveCatalogProductsForQuote,
   getCustomersForQuote,
@@ -33,9 +35,11 @@ export default async function NewQuotePage({ searchParams }: NewQuotePageProps) 
     );
   }
 
-  const [customers, activeProducts] = await Promise.all([
+  const [customers, activeProducts, company, documentSettings] = await Promise.all([
     getCustomersForQuote(access.tenant),
     getActiveCatalogProductsForQuote(access.tenant),
+    getCurrentEmpresa(access.tenant),
+    getQuoteDocumentSettings(access.tenant),
   ]);
 
   return (
@@ -55,7 +59,15 @@ export default async function NewQuotePage({ searchParams }: NewQuotePageProps) 
 
       <FloatingQuoteButton
         activeProducts={activeProducts.ok ? activeProducts.data : []}
+        company={{
+          email: company.ok ? company.data?.correo ?? null : null,
+          identification: company.ok ? company.data?.identificacionFiscal ?? null : null,
+          name: company.ok ? company.data?.nombre ?? "Tu empresa" : "Tu empresa",
+          phone: company.ok ? company.data?.telefono ?? null : null,
+          tradeName: company.ok ? company.data?.nombreComercial ?? null : null,
+        }}
         customers={customers.ok ? customers.data : []}
+        documentSettings={documentSettings}
         hideTrigger
         initialOpen
         preselectedClienteId={params?.clienteId}
