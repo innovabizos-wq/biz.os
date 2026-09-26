@@ -3,7 +3,6 @@
 import { ImageUp, RotateCcw, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   QUOTE_DOCUMENT_ACCENT_COLORS,
@@ -82,7 +81,7 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
         </aside>
       </section>
       <p className="text-sm text-slate-500">Al guardar, esta plantilla se verá de inmediato en una nueva cotización y en el PDF.</p>
-      <div className="flex justify-end"><Button type="submit">Guardar y aplicar plantilla</Button></div>
+      <div className="flex justify-end"><button className="app-theme-button inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium" type="submit">Guardar y aplicar plantilla</button></div>
     </form>
   );
 }
