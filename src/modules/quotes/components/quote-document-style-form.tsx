@@ -24,6 +24,9 @@ function TemplateThumbnail({ template }: { template: QuoteDocumentTemplateCode }
 
 export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSettings }) {
   const [template, setTemplate] = useState<QuoteDocumentTemplateCode>(settings.templateCode);
+  const [documentLabel, setDocumentLabel] = useState(settings.documentLabel);
+  const [accentColor, setAccentColor] = useState(settings.accentColor);
+  const [footerText, setFooterText] = useState(settings.footerText ?? "");
   const [logoName, setLogoName] = useState<string | null>(null);
   const [isSaving, startSaving] = useTransition();
 
@@ -31,6 +34,9 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     formData.set("templateCode", template);
+    formData.set("documentLabel", documentLabel);
+    formData.set("accentColor", accentColor);
+    formData.set("footerText", footerText);
     startSaving(async () => {
       await saveQuoteDocumentSettingsAction(formData);
     });
@@ -69,10 +75,10 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
             <p className="mt-1 text-sm text-slate-500">Solo unos pocos elementos para que el documento se reconozca como tuyo.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-semibold"><span>Nombre del documento</span><select className="h-10 rounded-lg border bg-white px-3" defaultValue={settings.documentLabel} name="documentLabel">{QUOTE_DOCUMENT_LABELS.map((label) => <option key={label} value={label}>{label}</option>)}</select></label>
-            <label className="grid gap-1.5 text-sm font-semibold"><span>Color principal</span><select className="h-10 rounded-lg border bg-white px-3" defaultValue={settings.accentColor} name="accentColor">{QUOTE_DOCUMENT_ACCENT_COLORS.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}</select></label>
+            <label className="grid gap-1.5 text-sm font-semibold"><span>Nombre del documento</span><select className="h-10 rounded-lg border bg-white px-3" name="documentLabel" onChange={(event) => setDocumentLabel(event.target.value as typeof documentLabel)} value={documentLabel}>{QUOTE_DOCUMENT_LABELS.map((label) => <option key={label} value={label}>{label}</option>)}</select></label>
+            <label className="grid gap-1.5 text-sm font-semibold"><span>Color principal</span><select className="h-10 rounded-lg border bg-white px-3" name="accentColor" onChange={(event) => setAccentColor(event.target.value as typeof accentColor)} value={accentColor}>{QUOTE_DOCUMENT_ACCENT_COLORS.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}</select></label>
           </div>
-          <label className="grid gap-1.5 text-sm font-semibold"><span>Mensaje al pie</span><textarea className="min-h-24 rounded-lg border p-3 font-normal" defaultValue={settings.footerText ?? ""} maxLength={300} name="footerText" placeholder="Ejemplo: Gracias por considerar nuestra propuesta." /></label>
+          <label className="grid gap-1.5 text-sm font-semibold"><span>Mensaje al pie</span><textarea className="min-h-24 rounded-lg border p-3 font-normal" maxLength={300} name="footerText" onChange={(event) => setFooterText(event.target.value)} placeholder="Ejemplo: Gracias por considerar nuestra propuesta." value={footerText} /></label>
           <div className="rounded-xl border bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-slate-900">Logo para cotizaciones</p><p className="mt-1 text-sm text-slate-500">PNG, JPG o WebP de hasta 500 KB.</p></div><label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-100"><ImageUp size={16} /> Elegir logo<input accept="image/png,image/jpeg,image/webp" className="sr-only" name="logo" onChange={(event) => setLogoName(event.target.files?.[0]?.name ?? null)} type="file" /></label></div>
             {logoName ? <p className="mt-3 text-sm text-emerald-700">Logo seleccionado: {logoName}</p> : settings.logoDataUrl ? <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-600"><input name="removeLogo" type="checkbox" value="true" /> <RotateCcw size={14} /> Quitar el logo actual</label> : null}
