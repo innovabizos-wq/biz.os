@@ -135,9 +135,12 @@ export default async function AdminPage() {
       title: "Automatización e IA",
     } : null,
     canViewSettings ? {
-      description: "Logo, colores y recordatorios que ayudan a que Biz.OS se sienta como tu negocio.",
+      description: "Logo, colores, avisos y la presentación comercial que recibe tu cliente.",
       icon: Palette,
-      links: [{ href: "/admin/apariencia", label: "Apariencia y avisos" }],
+      links: [
+        { href: "/admin/apariencia", label: "Apariencia y avisos" },
+        ...(canManageSettings ? [{ href: "/cotizaciones/ajustes", label: "Diseño de proformas" }] : []),
+      ],
       title: "Experiencia",
     } : null,
   ].filter((group): group is SettingsGroup => group !== null);

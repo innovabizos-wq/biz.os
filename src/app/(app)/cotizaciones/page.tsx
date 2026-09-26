@@ -1,6 +1,9 @@
+import Link from "next/link";
+
 import { EmptyState } from "@/components/shared/empty-state";
 import { EphemeralPageAlert } from "@/components/shared/ephemeral-page-alert";
 import { SectionHeader } from "@/components/shared/section-header";
+import { buttonVariants } from "@/components/ui/button";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { getFiscalConfiguration, getInvoicesForSales } from "@/modules/billing/queries";
 import { FloatingQuoteButton } from "@/modules/quotes/components/floating-quote-button";
@@ -462,6 +465,7 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
   const canDeleteQuote =
     hasPermission(access.tenant.permissions, "admin.settings.manage") ||
     hasPermission(access.tenant.permissions, "admin.roles.manage");
+  const canManageDocumentStyle = hasPermission(access.tenant.permissions, "admin.settings.manage");
   const canCreateInvoice = hasPermission(
     access.tenant.permissions,
     "billing.invoices.create",
@@ -508,14 +512,10 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
   return (
     <section className="relative flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
       <SectionHeader
-        actions={
-          canCreate ? (
-            <FloatingQuoteButton
-              activeProducts={quoteProducts?.ok ? quoteProducts.data : []}
-              customers={quoteCustomers?.ok ? quoteCustomers.data : []}
-            />
-          ) : null
-        }
+        actions={<div className="flex flex-wrap gap-2">
+          {canManageDocumentStyle ? <Link className={buttonVariants({ variant: "outline" })} href="/cotizaciones/ajustes">Diseño de proformas</Link> : null}
+          {canCreate ? <FloatingQuoteButton activeProducts={quoteProducts?.ok ? quoteProducts.data : []} customers={quoteCustomers?.ok ? quoteCustomers.data : []} /> : null}
+        </div>}
         title="Cotizaciones"
         titleClassName="app-page-title-compact normal-case"
       />

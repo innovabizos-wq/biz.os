@@ -7,7 +7,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { hasPermission } from "@/lib/permissions/permission-checks";
 import { QuotePrintButton } from "@/modules/quotes/components/quote-print-button";
 import { QuotePrintDocument } from "@/modules/quotes/components/quote-print-document";
+import { getQuoteDocumentSettings } from "@/modules/quotes/document-settings";
 import { getQuoteDetail, getQuoteItems } from "@/modules/quotes/queries";
+import { getCurrentEmpresa } from "@/modules/companies/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
 type QuotePrintPageProps = {
@@ -36,9 +38,11 @@ export default async function QuotePrintPage({ params }: QuotePrintPageProps) {
     );
   }
 
-  const [quote, items] = await Promise.all([
+  const [quote, items, company, settings] = await Promise.all([
     getQuoteDetail(access.tenant, cotizacionId),
     getQuoteItems(access.tenant, cotizacionId),
+    getCurrentEmpresa(access.tenant),
+    getQuoteDocumentSettings(access.tenant),
   ]);
 
   if (!quote.ok || !quote.data) {
@@ -51,6 +55,11 @@ export default async function QuotePrintPage({ params }: QuotePrintPageProps) {
     <section className="space-y-6">
       <style>{`
         @media print {
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+
           body {
             background: #ffffff !important;
           }
@@ -89,7 +98,18 @@ export default async function QuotePrintPage({ params }: QuotePrintPageProps) {
         </div>
       </div>
 
-      <QuotePrintDocument items={itemRows} quote={quote.data} />
+      <QuotePrintDocument
+        company={{
+          email: company.ok ? company.data?.correo ?? null : null,
+          identification: company.ok ? company.data?.identificacionFiscal ?? null : null,
+          name: company.ok ? company.data?.nombre ?? "Biz.OS" : "Biz.OS",
+          phone: company.ok ? company.data?.telefono ?? null : null,
+          tradeName: company.ok ? company.data?.nombreComercial ?? null : null,
+        }}
+        items={itemRows}
+        quote={quote.data}
+        settings={settings}
+      />
     </section>
   );
 }
