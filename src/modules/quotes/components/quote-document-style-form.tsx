@@ -28,7 +28,7 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
   const [logoName, setLogoName] = useState<string | null>(null);
 
   return (
-    <form action={saveQuoteDocumentSettingsAction} className="space-y-6">
+    <form action={saveQuoteDocumentSettingsAction} className="space-y-6" encType="multipart/form-data" method="post">
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-slate-100 p-2.5 text-slate-700"><Sparkles aria-hidden="true" size={20} /></span>

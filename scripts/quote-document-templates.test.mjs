@@ -32,6 +32,7 @@ test("quote document settings apply a company template and commercial identity a
   assert.match(documentLayout, /function Classic/);
   assert.match(quoteBuilder, /QuoteDocumentLayout/);
   assert.match(quoteBuilder, /documentSettings/);
+  assert.match(source("src\/modules\/quotes\/components\/quote-document-style-form.tsx"), /encType="multipart\/form-data"/);
   assert.match(printPage, /getQuoteDocumentSettings/);
   assert.match(settingsPage, /admin\.settings\.manage/);
 });
