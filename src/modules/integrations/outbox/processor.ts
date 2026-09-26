@@ -3,6 +3,7 @@ import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { runWithServiceRoleSupabase } from "@/lib/supabase/service-role-context";
 import { runRestFiscalIssuance } from "@/modules/billing/connectors/rest-issuance";
+import { runGtiFiscalIssuance } from "@/modules/billing/connectors/gti/issuance";
 import {
   ensureFiscalDocumentConnection,
   runImmediateFiscalIssuance,
@@ -124,11 +125,32 @@ async function runRestIssuance(
   };
 }
 
+async function runGtiIssuance(
+  job: IntegrationOutboxJob,
+  document: FiscalDocumentDetail,
+): Promise<JsonRecord> {
+  const result = await runWithServiceRoleSupabase(() => runGtiFiscalIssuance(
+    fiscalWorkerTenant(job),
+    document,
+  ));
+  if (!result.ok) throw new Error(result.message);
+  if (["sent", "processing"].includes(result.finalStatus)) {
+    await enqueueFiscalStatus(job, document.id);
+  }
+  return {
+    documentId: document.id,
+    finalStatus: result.finalStatus,
+    message: result.message,
+    provider: "gti",
+  };
+}
+
 async function runProviderIssuance(
   job: IntegrationOutboxJob,
   document: FiscalDocumentDetail,
 ) {
   if (document.providerCode === "hacienda") return runHaciendaIssuance(job, document.id);
+  if (document.providerCode === "gti") return runGtiIssuance(job, document);
   if (document.providerCode === "rest") return runRestIssuance(job, document);
   throw new PermanentIntegrationError(
     `La conexión ${document.providerCode ?? "desconocida"} no tiene un adaptador de emisión instalado.`,

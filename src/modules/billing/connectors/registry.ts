@@ -6,8 +6,9 @@ import {
   readConnectorJson,
 } from "@/modules/billing/connectors/connector-http";
 import { parseRestFiscalProfile } from "@/modules/billing/connectors/rest-profile";
+import { getGtiRuntimeConfig } from "@/modules/billing/connectors/gti/config";
 import { getHaciendaRuntimeConfig } from "@/modules/billing/hacienda/config";
-import { safeExternalFetch } from "@/modules/billing/connectors/safe-fetch";
+import { assertSafeExternalUrl, safeExternalFetch } from "@/modules/billing/connectors/safe-fetch";
 import { inspectPkcs12Certificate } from "@/modules/billing/signing/pkcs12";
 import type {
   FiscalConnectorAdapter,
@@ -143,6 +144,39 @@ class ManagedProviderConnector implements FiscalConnectorAdapter {
   }
 }
 
+class GtiConnector implements FiscalConnectorAdapter {
+  code = "gti" as const;
+
+  async verify({ credentials, environment, publicConfig }: FiscalConnectorContext) {
+    const username = text(credentials, "username");
+    const password = text(credentials, "password");
+    const accountNumber = text(publicConfig, "accountNumber");
+    if (!username || !password) throw new Error("GTI requiere usuario y contraseña.");
+    if (!accountNumber || !/^\d+$/.test(accountNumber)) {
+      throw new Error("GTI requiere el número de cuenta numérico asignado al comercio.");
+    }
+    const runtime = getGtiRuntimeConfig(environment);
+    await assertSafeExternalUrl(runtime.serviceUrl);
+    if (!runtime.documentUrl) {
+      throw new Error(
+        "GTI debe proporcionar un endpoint HTTPS de pruebas. El endpoint público del plugin usa HTTP y Biz.OS no enviará credenciales por una conexión insegura.",
+      );
+    }
+    await assertSafeExternalUrl(runtime.documentUrl);
+    const response = await safeExternalFetch(runtime.serviceUrl, {
+      headers: { Accept: "text/html, application/xml;q=0.9" },
+      method: "GET",
+    });
+    if (!response.ok) throw new Error(`El servicio oficial de GTI no respondió correctamente (${response.status}).`);
+    return {
+      activatable: false,
+      capabilities: ["endpoint_reachable", "payload_v44", "issue_invoice", "issue_ticket", "artifacts", "duplicate_guard"],
+      detail: `Cuenta ${accountNumber} preparada y servicio GTI accesible en ${environment === "production" ? "producción" : "pruebas"}. Falta ejecutar la homologación con credenciales reales y confirmar el contrato de consulta antes de activar emisiones.`,
+      providerAccountId: accountNumber,
+    };
+  }
+}
+
 class ConfigurableRestConnector implements FiscalConnectorAdapter {
   code = "rest" as const;
 
@@ -178,7 +212,7 @@ class ConfigurableRestConnector implements FiscalConnectorAdapter {
 const CONNECTORS = new Map<FiscalProviderCode, FiscalConnectorAdapter>([
   ["alegra", new AlegraConnector()],
   ["hacienda", new HaciendaConnector()],
-  ["gti", new ManagedProviderConnector("gti", "GTI", "GTI")],
+  ["gti", new GtiConnector()],
   [
     "factura_profesional",
     new ManagedProviderConnector(

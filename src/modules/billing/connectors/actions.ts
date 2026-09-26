@@ -33,6 +33,17 @@ const connectionSchema = z.object({
       context.addIssue({ code: "custom", path: ["credentials", "certificatePin"], message: "Indica el PIN del certificado." });
     }
   }
+  if (value.providerCode === "gti") {
+    if (!/^\d+$/.test(String(value.publicConfig.accountNumber ?? ""))) {
+      context.addIssue({ code: "custom", path: ["publicConfig", "accountNumber"], message: "Indica el número de cuenta GTI." });
+    }
+    if (!value.credentials.username?.trim()) {
+      context.addIssue({ code: "custom", path: ["credentials", "username"], message: "Indica el usuario GTI." });
+    }
+    if (!value.credentials.password?.trim()) {
+      context.addIssue({ code: "custom", path: ["credentials", "password"], message: "Indica la contraseña GTI." });
+    }
+  }
 });
 
 type ActionResult = {

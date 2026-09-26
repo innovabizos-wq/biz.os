@@ -173,6 +173,7 @@ test("service-role client stays server-only and allowlisted", () => {
     "src/modules/auth/actions.ts",
     "src/modules/billing/actions.ts",
     "src/modules/billing/connectors/actions.ts",
+    "src/modules/billing/connectors/gti/client.ts",
     "src/modules/billing/connectors/rest-client.ts",
     "src/modules/billing/hacienda/client.ts",
     "src/modules/billing/signing/signer.ts",

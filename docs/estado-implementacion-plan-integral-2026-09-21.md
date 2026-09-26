@@ -1,10 +1,10 @@
 # Estado de implementación del plan integral de Biz.OS
 
-**Fecha de corte:** 22 de septiembre de 2026
-**Etapa actual:** Entrega 4 — confiabilidad del POS/PWA; homologaciones de Entrega 3 en paralelo
-**Avance estimado de desarrollo:** 68 %
-**Avance estimado hasta salida comercial completa:** 48 %
-**Faltante estimado:** 32 % de construcción y 52 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
+**Fecha de corte:** 26 de septiembre de 2026
+**Etapa actual:** Entrega 3 — cierre del conector GTI; POS/PWA continúa después de esta homologación
+**Avance estimado de desarrollo:** 69 %
+**Avance estimado hasta salida comercial completa:** 49 %
+**Faltante estimado:** 31 % de construcción y 51 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
 
 Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una etapa solo llega al 100 % cuando cubre permisos, fallos, reintentos, documentación, pruebas reales y operación comercial.
 
@@ -15,7 +15,7 @@ Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una et
 | Base confiable | 74 % | Operaciones idempotentes, aislamiento por empresa, cola de integraciones, API v1, permisos de base, pruebas, compilación, lecturas operativas paginadas y migraciones activas en Supabase. | Probar instalación limpia y copia anonimizada de forma automática; restauración conjunta de base y archivos; monitoreo de producción y carga conjunta de 50 usuarios. |
 | Entrega 1 — circuito comercial | 68 % | Cotización, venta, cobro idempotente, saldos y devoluciones parciales con efectos financiero, físico y fiscal independientes. Agenda tiene recordatorios del servidor. | Completar importaciones con vista previa por lote; paginación y deduplicación avanzada de CRM; variantes y códigos de barras; cerrar cancelaciones y recuperación completa del recorrido. |
 | Entrega 2 — operaciones internas | 100 % del alcance acordado sin RRHH | Traslados atómicos, recepciones parciales idempotentes, cuentas por pagar sobre valor recibido, devoluciones a proveedor, saldo a favor, costo promedio ponderado, conteos físicos, reservas de ventas y despacho móvil con evidencia privada, entregas parciales y devoluciones operativas separadas de sus efectos financieros y fiscales. Inventario, compras y despacho usan páginas acotadas, búsquedas limitadas e indicadores calculados en la base. Los recorridos de administrador, vendedor y repartidor comprobaron acceso por rol. | RRHH queda fuera de esta medición y se retomará como bloque separado cuando se apruebe su alcance ajustado. La prueba de carga transversal de 50 usuarios permanece en Base confiable y validación comercial. |
-| Entrega 3 — facturación e integraciones | 56 % | Documento canónico, XML 4.4, XSD oficial, firma XAdES, Hacienda, conectores declarativos, recuperación, importación XML y REST seguro. | Validar cuentas y contratos reales de GTI, FacturaProfesional y Alegra; completar matrices de tipos por proveedor; homologación y pruebas fiscales de todos los documentos comprometidos. |
+| Entrega 3 — facturación e integraciones | 62 % | Documento canónico, XML 4.4, XSD oficial, firma XAdES, Hacienda, importación XML, REST seguro y adaptador GTI 4.4 para factura/tiquete con artefactos y protección contra reenvíos inciertos. | Obtener cuenta sandbox y endpoint HTTPS GTI; probar emisión, consulta recuperable, XML/PDF y activar. Los demás proveedores quedan pausados y se retomarán uno por uno. |
 | Entrega 4 — POS y PWA | 58 % | Núcleo POS, cajas, sesiones, reservas, PWA y recuperación desde IndexedDB. Las ventas pendientes comparten un cupo local acumulado, reciben secuencias atómicas y respetan la vigencia y terminal autorizadas aun después de recargar sin conexión. | Completar cierres provisionales, devoluciones desde caja, prueba real con varias terminales/dispositivos, impresión física y procedimiento fiscal de contingencia aprobado. |
 | Entrega 5 — atención y publicación | 46 % | Inbox/Whapp tiene operación real de Meta, controles de permisos, campañas, webhooks, reintentos y costos. Autoblog genera y conserva contenido. | Publicación comercial completa en WordPress, Facebook, Instagram y LinkedIn; calendario y reintentos por destino; revisiones y permisos externos. |
 | Entrega 6 — reportes, IA y Brain | 61 % | Brain tiene herramientas, memoria, presupuestos, aprobaciones persistentes, flujos recuperables, métricas y separación por permisos. | Reportes operativos completos con trazabilidad al detalle; validar costos y calidad en carga; reducir el paquete inicial de Brain y cerrar recuperación de efectos parciales y evidencias en toda recomendación. |
@@ -66,8 +66,8 @@ Cada bloque aumenta únicamente cuando la funcionalidad:
 
 ## Ruta restante más corta
 
-1. Ejecutar en paralelo la homologación externa de GTI, FacturaProfesional, Alegra, Meta y LinkedIn.
-2. Cerrar facturación con pruebas reales por proveedor y tipo documental.
+1. Completar primero la homologación externa de GTI con credenciales sandbox, emisión y recuperación real.
+2. Retomar los demás conectores fiscales uno por uno, según prioridad comercial.
 3. Completar y probar POS/PWA con varias terminales y contingencia fiscal.
 4. Cerrar publicación multicanal y reportes trazables.
 5. Reducir los paquetes iniciales más pesados, empezando por Brain, y ejecutar carga, restauración y seguridad integral.

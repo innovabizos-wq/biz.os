@@ -19,6 +19,7 @@ test("fiscal connections activate only adapters with an implemented issuance con
 
 test("provider verification uses authoritative endpoints and bounded responses", () => {
   const registry = source("src/modules/billing/connectors/registry.ts");
+  const gtiConfig = source("src/modules/billing/connectors/gti/config.ts");
   const allowlist = source("src/modules/billing/connectors/host-allowlist.ts");
   const connectorHttp = source("src/modules/billing/connectors/connector-http.ts");
 
@@ -27,7 +28,9 @@ test("provider verification uses authoritative endpoints and bounded responses",
   assert.match(registry, /activatable: true[\s\S]*issue_invoice/);
   assert.match(registry, /class ManagedProviderConnector/);
   assert.match(registry, /`\$\{this\.environmentPrefix\}_\$\{suffix\}_API_BASE_URL`/);
-  assert.match(registry, /new ManagedProviderConnector\("gti", "GTI", "GTI"\)/);
+  assert.match(registry, /class GtiConnector/);
+  assert.match(registry, /\["gti", new GtiConnector\(\)\]/);
+  assert.match(gtiConfig, /www\.recaudoenlinea\.co\.cr\/API_WooCommerce\/api\/Documentos\/CargarDocumento/);
   assert.match(registry, /FACTURA_PROFESIONAL/);
   assert.match(allowlist, /BILLING_REST_ALLOWED_HOSTS/);
   assert.match(allowlist, /El dominio REST debe ser autorizado primero/);
@@ -39,11 +42,12 @@ test("connections UI declares commercial readiness without asking customers for 
   const manager = source("src/modules/billing/connectors/components/connections-manager.tsx");
 
   assert.match(manager, /Hacienda directo", status: "Operativo"/);
-  assert.match(manager, /GTI", status: "Requiere contrato"/);
-  assert.match(manager, /Alegra", status: "Verificación disponible"/);
+  assert.match(manager, /GTI", status: "Integración prioritaria"/);
+  assert.match(manager, /Alegra", status: "Pausado"/);
+  assert.match(manager, /name="accountNumber" required/);
   assert.match(manager, /provider === "rest" \? <>[\s\S]*URL base HTTPS/);
   assert.doesNotMatch(manager, /provider === "gti" \|\| provider === "factura_profesional" \|\| provider === "rest" \? <>\s*<label[^>]*>URL base HTTPS/);
-  assert.match(manager, /solo activa automáticamente un conector cuyo contrato de emisión esté implementado/);
+  assert.match(manager, /emisión se activará después de una prueba aceptada/);
 });
 
 test("connector capability migration removes previously unproved active emission claims", () => {

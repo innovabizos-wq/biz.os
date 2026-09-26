@@ -9,9 +9,9 @@ import { reverifyFiscalConnectionAction, saveAndVerifyFiscalConnectionAction } f
 import type { FiscalConnection, FiscalProviderCode } from "@/modules/billing/connectors/types";
 
 const PROVIDERS: Array<{ code: FiscalProviderCode; description: string; name: string; status: string }> = [
-  { code: "gti", description: "Conexión administrada; requiere contrato técnico y cuenta de pruebas de GTI.", name: "GTI", status: "Requiere contrato" },
-  { code: "factura_profesional", description: "Conexión administrada con ComprobantesElectronicosCR.", name: "FacturaProfesional", status: "Requiere contrato" },
-  { code: "alegra", description: "Verifica la cuenta y prepara mapeos de clientes, productos, impuestos y numeración.", name: "Alegra", status: "Verificación disponible" },
+  { code: "gti", description: "Prioridad actual: cuenta, payload 4.4, envío protegido y conciliación sin duplicados.", name: "GTI", status: "Integración prioritaria" },
+  { code: "factura_profesional", description: "Se retomará como conector separado después de GTI.", name: "FacturaProfesional", status: "Pausado" },
+  { code: "alegra", description: "Se retomará como conector separado después de GTI.", name: "Alegra", status: "Pausado" },
   { code: "hacienda", description: "Autenticación directa, firma y documentos XML 4.4.", name: "Hacienda directo", status: "Operativo" },
   { code: "rest", description: "Contrato estándar con emisión idempotente y consulta recuperable, sin ejecutar código del cliente.", name: "REST configurable", status: "Contrato estándar" },
   { code: "tico_factura_import", description: "Importación y deduplicación por clave; no emite por API.", name: "Tico Factura", status: "Importación" },
@@ -109,6 +109,7 @@ export function ConnectionsManager({ canManage, initialConnections }: { canManag
                 name: form.get("name"),
                 providerCode: provider,
                 publicConfig: {
+                  accountNumber: String(form.get("accountNumber") ?? ""),
                   acceptedValues: String(form.get("acceptedValues") ?? "accepted,aceptado"),
                   apiKeyHeader: String(form.get("apiKeyHeader") ?? "X-API-Key"),
                   baseUrl: String(form.get("baseUrl") ?? ""),
@@ -140,6 +141,12 @@ export function ConnectionsManager({ canManage, initialConnections }: { canManag
             <label className="grid gap-1 text-sm">Llave criptográfica .p12<Input accept=".p12,.pfx,application/x-pkcs12" name="certificateFile" required type="file" /></label>
             <label className="grid gap-1 text-sm">PIN de la llave<Input autoComplete="new-password" name="certificatePin" required type="password" /></label>
           </> : null}
+          {provider === "gti" ? <>
+            <label className="grid gap-1 text-sm">Número de cuenta GTI<Input autoComplete="off" inputMode="numeric" name="accountNumber" required /></label>
+            <label className="grid gap-1 text-sm">Usuario GTI<Input autoComplete="off" name="username" required /></label>
+            <label className="grid gap-1 text-sm">Contraseña GTI<Input autoComplete="new-password" name="password" required type="password" /></label>
+            <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground md:col-span-2">La comprobación inicial confirma la configuración y disponibilidad del servicio. La emisión se activará después de una prueba aceptada y una consulta recuperable en la cuenta sandbox de GTI.</p>
+          </> : null}
           {provider === "rest" ? <>
             <label className="grid gap-1 text-sm md:col-span-2">URL base HTTPS<Input name="baseUrl" placeholder="https://api.proveedor.example" required type="url" /></label>
             <label className="grid gap-1 text-sm">Ruta de verificación<Input defaultValue="/fiscal-contract" name="verificationPath" required /></label>
@@ -152,7 +159,7 @@ export function ConnectionsManager({ canManage, initialConnections }: { canManag
             <label className="grid gap-1 text-sm">Estados en proceso<Input defaultValue="received,processing,recibido,procesando" name="processingValues" required /></label>
             <label className="grid gap-1 text-sm">Estados rechazados<Input defaultValue="rejected,rechazado" name="rejectedValues" required /></label>
           </> : null}
-          {provider === "gti" || provider === "factura_profesional" || provider === "rest" ? <>
+          {provider === "factura_profesional" || provider === "rest" ? <>
             <label className="grid gap-1 text-sm">Token Bearer<Input name="token" type="password" /></label>
             <label className="grid gap-1 text-sm">Usuario<Input name="username" /></label><label className="grid gap-1 text-sm">Contraseña<Input name="password" type="password" /></label>
             <label className="grid gap-1 text-sm">API key<Input name="apiKey" type="password" /></label><label className="grid gap-1 text-sm">Header de API key<Input defaultValue="X-API-Key" name="apiKeyHeader" /></label>

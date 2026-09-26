@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { createClient } from "@/lib/supabase/server";
 import { getHaciendaClientForConnection } from "@/modules/billing/hacienda/client";
+import { runGtiFiscalIssuance } from "@/modules/billing/connectors/gti/issuance";
 import { archiveOfficialHaciendaResponseXml } from "@/modules/billing/hacienda/artifacts";
 import type { HaciendaStatusResult } from "@/modules/billing/hacienda/types";
 import { getFiscalDocumentDetail, type FiscalDocumentDetail } from "@/modules/billing/queries";
@@ -18,6 +19,7 @@ export type FiscalIssuanceStep =
   | "validation"
   | "xml"
   | "signing"
+  | "gti_send"
   | "hacienda_send"
   | "hacienda_status";
 
@@ -634,6 +636,24 @@ export async function runImmediateFiscalIssuance(
       steps: [
         ...steps,
         { detail: "La emisión se detuvo antes de usar un proveedor.", status: "blocked", step: "connection" },
+      ],
+    };
+  }
+
+  if (document.providerCode === "gti") {
+    const result = await runGtiFiscalIssuance(tenant, document);
+    return {
+      documentId,
+      finalStatus: result.finalStatus,
+      message: result.message,
+      ok: result.ok,
+      steps: [
+        ...steps,
+        {
+          detail: result.message,
+          status: result.ok ? "completed" : "blocked",
+          step: "gti_send",
+        },
       ],
     };
   }
