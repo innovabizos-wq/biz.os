@@ -30,6 +30,7 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
   function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    formData.set("templateCode", template);
     startSaving(async () => {
       await saveQuoteDocumentSettingsAction(formData);
     });
