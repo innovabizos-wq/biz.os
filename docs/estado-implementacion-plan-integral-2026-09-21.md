@@ -2,9 +2,9 @@
 
 **Fecha de corte:** 26 de septiembre de 2026
 **Etapa actual:** Entrega 3 — Hacienda directo preparado para pruebas externas; GTI queda pendiente de cuenta sandbox
-**Avance estimado de desarrollo:** 69 %
-**Avance estimado hasta salida comercial completa:** 49 %
-**Faltante estimado:** 31 % de construcción y 51 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
+**Avance estimado de desarrollo:** 70 %
+**Avance estimado hasta salida comercial completa:** 50 %
+**Faltante estimado:** 30 % de construcción y 50 % hasta cumplir todos los criterios de venta, pilotos y homologaciones externas.
 
 Los porcentajes representan alcance comprobado, no cantidad de pantallas. Una etapa solo llega al 100 % cuando cubre permisos, fallos, reintentos, documentación, pruebas reales y operación comercial.
 
