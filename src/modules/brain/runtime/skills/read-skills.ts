@@ -19,6 +19,7 @@ import {
   getBrainSignals,
 } from "@/modules/brain/queries";
 import {
+  getCrmCustomerCount,
   getCrmCustomerFollowups,
   getCrmCustomerInteractions,
   getCrmCustomers,
@@ -49,6 +50,7 @@ const nullableText = z.string().nullable();
 const readSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(5000).default(20),
   query: z.string().trim().default(""),
+  summary: z.enum(["count"]).optional(),
 });
 
 const legacySearchSchema = z.object({
@@ -278,6 +280,7 @@ const crmCustomerSchema = z.object({
 
 export const crmCustomerSearchOutputSchema = z.object({
   customers: z.array(crmCustomerSchema),
+  total: z.number().optional(),
 });
 
 export type CrmCustomerSearchOutput = z.infer<
@@ -748,6 +751,18 @@ const crmCustomerSearchSkill = defineBusinessSkill<
   risk: "low",
   version: "1.0.0",
   async execute(input, context) {
+    if (input.summary === "count") {
+      const count = await getCrmCustomerCount(context.tenant);
+      if (!count.ok) return fail(count.error.code, count.error.message);
+
+      return ok({
+        data: { customers: [], total: count.data },
+        evidence: sourceEvidence("crm_clientes", count.data),
+        links: [{ href: "/crm/clientes", label: "Abrir CRM" }],
+        message: `Hay ${count.data} cliente(s) registrado(s) en el CRM de esta empresa.`,
+      });
+    }
+
     const customers = await getCrmCustomers(context.tenant);
     if (!customers.ok) return fail(customers.error.code, customers.error.message);
 

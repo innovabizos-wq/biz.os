@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { CoreResult, TenantContext } from "@/types/core";
-import { ok } from "@/types/core";
+import { fail, ok } from "@/types/core";
 import type {
   CrmAssignableUser,
   CrmCustomer,
@@ -318,6 +318,22 @@ export async function getCrmCustomers(
       ...(metrics.get(row.id) ?? emptyCustomerMetrics()),
     })),
   );
+}
+
+export async function getCrmCustomerCount(
+  tenant: TenantContext,
+): Promise<CoreResult<number>> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("crm_clientes")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", tenant.empresaId);
+
+  if (error) {
+    return fail("QUERY_FAILED", "No pude consultar el total de clientes.", error);
+  }
+
+  return ok(count ?? 0);
 }
 
 export async function getCrmCustomerDetail(

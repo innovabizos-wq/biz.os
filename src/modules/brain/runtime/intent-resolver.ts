@@ -302,6 +302,17 @@ function parseModuleCommand(message: string) {
 function parseSearchAndRead(message: string) {
   const normalized = normalize(message);
 
+  if (
+    /\b(?:cuantos?|cuantas?|total|cantidad)\b/.test(normalized) &&
+    /\b(?:clientes?|prospectos?)\b/.test(normalized)
+  ) {
+    return resolve("crm.customer.search", "crm.customer.search", {
+      limit: 1,
+      query: "",
+      summary: "count",
+    }, 0.96);
+  }
+
   const customerMatch = normalized.match(/\b(?:busca|buscar|encuentra|encontrar)\s+(?:al\s+)?(?:cliente|clientes)\s+(.+)$/);
   if (customerMatch?.[1]) {
     return resolve("crm.customer.search", "crm.customer.search", {
@@ -623,6 +634,15 @@ function parseContextualSearch(
     typeof context?.currentPath === "string" ? context.currentPath : "";
   const moduleContext = normalize(`${currentModule} ${currentPath}`);
 
+  // A page context may disambiguate a bare name, but must not turn questions,
+  // commands, or full sentences into literal CRM/catalog searches.
+  if (
+    /[?¿]/.test(query) ||
+    /\b(?:que|quien|quienes|como|cuando|donde|cuanto|cuantos|cuantas|por que|puedes|quiero|necesito|crea|crear|actualiza|actualizar|muestra|dame|analiza|recomienda|ayuda)\b/.test(normalized)
+  ) {
+    return null;
+  }
+
   if (moduleContext.includes("catalog") || moduleContext.includes("catalogo")) {
     return resolve("catalog.product.search", "catalog.product.search", {
       limit: 8,
@@ -650,7 +670,16 @@ function parseContextualSearch(
 export function createBusinessIntentResolver(registry: BusinessIntentRegistry) {
   return {
     resolve(input: IntentResolverInput): CoreResult<BusinessIntentResolution> {
-      if (isNegativeExecutionRequest(input.message)) {
+      const readOnlyIntent = parseSearchAndRead(input.message);
+      const explicitlyReadOnly =
+        /\b(?:solo\s+consulta(?:r)?|sin\s+(?:hacer|realizar)\s+(?:cambios?|modificaciones?)|no\s+(?:hagas?|realices?|apliques?)\s+(?:ningun[ao]s?\s+)?(?:cambios?|modificaciones?))\b/.test(
+          normalize(input.message),
+        );
+
+      if (
+        isNegativeExecutionRequest(input.message) &&
+        !(explicitlyReadOnly && readOnlyIntent)
+      ) {
         return fail(
           "VALIDATION_ERROR",
           "Entendido. No voy a ejecutar ninguna accion con esa instruccion.",
@@ -663,7 +692,7 @@ export function createBusinessIntentResolver(registry: BusinessIntentRegistry) {
         parseCreateProduct(input.message) ||
         parseModuleCommand(input.message) ||
         parsePlannedCapability(input.message) ||
-        parseSearchAndRead(input.message) ||
+        readOnlyIntent ||
         parseContextualSearch(input.message, input.context) ||
         parseBrainQuestion(input.message);
 

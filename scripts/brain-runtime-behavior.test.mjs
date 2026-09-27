@@ -1101,6 +1101,26 @@ test("Customer search wording never creates a customer", () => {
   assert.equal(parsed.params.query, "nuevo");
 });
 
+test("CRM count questions use a tenant-scoped count instead of contextual text search", () => {
+  const intentRegistry = createBusinessIntentRegistry(initialBusinessIntents);
+  const resolver = createBusinessIntentResolver(intentRegistry);
+
+  const count = resolver.resolve({
+    context: { currentModule: "crm", currentPath: "/crm/clientes" },
+    message: "¿Cuántos clientes hay registrados en mi CRM? Solo consulta, no hagas cambios.",
+  });
+  assert.equal(count.ok, true);
+  assert.equal(count.data.capabilityId, "crm.customer.search");
+  assert.equal(count.data.entities.summary, "count");
+  assert.equal(count.data.entities.query, "");
+
+  const question = resolver.resolve({
+    context: { currentModule: "crm", currentPath: "/crm/clientes" },
+    message: "¿Por qué hay tantos clientes pendientes?",
+  });
+  assert.notEqual(question.data?.capabilityId, "crm.customer.search");
+});
+
 test("Payables wording routes to payables instead of receivables", () => {
   const intentRegistry = createBusinessIntentRegistry(initialBusinessIntents);
   const resolver = createBusinessIntentResolver(intentRegistry);

@@ -24,10 +24,10 @@ const mockSkills = Array.from(
   ).values(),
 );
 
-test("Brain semantic corpus contains 250 unique natural-language prompts", () => {
-  assert.equal(brainSemanticCorpus.length, 250);
-  assert.equal(new Set(brainSemanticCorpus.map((item) => item.id)).size, 250);
-  assert.equal(new Set(brainSemanticCorpus.map((item) => item.message)).size, 250);
+test("Brain semantic corpus contains 260 unique natural-language prompts", () => {
+  assert.equal(brainSemanticCorpus.length, 260);
+  assert.equal(new Set(brainSemanticCorpus.map((item) => item.id)).size, 260);
+  assert.equal(new Set(brainSemanticCorpus.map((item) => item.message)).size, 260);
 });
 
 test("semantic skill search exposes the expected capability for the complete corpus", () => {

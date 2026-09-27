@@ -6,6 +6,7 @@ export type BrainSemanticCorpusCase = {
 };
 
 const seeds = [
+  ["crm.customer.search", "crm", "cuántos clientes hay registrados en mi CRM"],
   ["crm.customer.search", "crm", "busca al cliente Ana Solis"],
   ["crm.customer.create", "crm", "crea un cliente llamado Taller El Roble"],
   ["crm.customer.history", "crm", "muéstrame el historial del cliente Acme"],
