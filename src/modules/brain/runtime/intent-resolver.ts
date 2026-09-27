@@ -483,6 +483,13 @@ function parsePlannedCapability(message: string) {
     return resolve("quotes.expired.query", "quotes.expired.query", {}, 0.84);
   }
 
+  if (
+    /\b(?:cotizaciones|proformas)\b/.test(normalized) &&
+    /\b(?:abiertas|abiertos|pendientes|borrador|enviadas|vigentes)\b/.test(normalized)
+  ) {
+    return resolve("quotes.open.query", "quotes.open.query", {}, 0.84);
+  }
+
   if (/\b(?:agrega|agregar|incluye|incluir)\b.*\b(?:cotizacion|proforma)\b/.test(normalized)) {
     return resolve("quotes.item.add", "quotes.item.add", {}, 0.82);
   }

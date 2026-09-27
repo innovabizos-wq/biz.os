@@ -132,6 +132,14 @@ function outputSummary(output: unknown) {
   return typeof record?.message === "string" ? record.message : null;
 }
 
+function userFacingBrainError(error: Error | undefined) {
+  const message = error?.message.trim();
+  if (!message || /^(an error occurred|internal server error|failed to fetch|network error)$/i.test(message)) {
+    return "Brain tuvo un problema temporal al responder. Tu mensaje sigue en la conversación; puedes reintentarlo.";
+  }
+  return message;
+}
+
 function outputLinks(output: unknown) {
   const record = asRecord(output);
   if (!Array.isArray(record?.links)) return [];
@@ -508,7 +516,7 @@ function BrainChatSession({
         ) : null}
         {error ? (
           <div className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <p>{error.message || "Brain no pudo completar la solicitud."}</p>
+            <p>{userFacingBrainError(error)}</p>
             <button className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 px-2 py-1 font-bold" onClick={() => void regenerate()} type="button">
               <RotateCcw className="size-3.5" /> Reintentar
             </button>

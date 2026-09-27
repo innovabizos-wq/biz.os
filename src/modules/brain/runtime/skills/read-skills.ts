@@ -192,6 +192,24 @@ const quoteExpiredQueryInputSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+const quoteOpenQueryInputSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+const quoteOpenQueryOutputSchema = z.object({
+  quotes: z.array(
+    z.object({
+      clienteNombre: nullableText,
+      estado: z.enum(["borrador", "enviada"]),
+      fechaVencimiento: nullableText,
+      moneda: z.string(),
+      numero: z.string(),
+      total: z.number(),
+    }),
+  ),
+  total: z.number(),
+});
+
 const quoteItemAddInputSchema = z.object({
   descripcion: z.string().trim().optional(),
   descuento: z.coerce.number().min(0).default(0),
@@ -1917,6 +1935,53 @@ const quotesExpiredQuerySkill = defineBusinessSkill<
   },
 });
 
+const quotesOpenQuerySkill = defineBusinessSkill<
+  z.infer<typeof quoteOpenQueryInputSchema>,
+  z.infer<typeof quoteOpenQueryOutputSchema>
+>({
+  description:
+    "Consulta cuantas cotizaciones abiertas o proformas pendientes en borrador o enviadas tiene el negocio, usando datos reales.",
+  enabled: true,
+  id: "quotes.open.query",
+  idempotency: "none",
+  inputSchema: quoteOpenQueryInputSchema,
+  kind: "query",
+  module: "quotes",
+  name: "Consultar cotizaciones abiertas y proformas pendientes",
+  outputSchema: quoteOpenQueryOutputSchema,
+  requiredPermissions: ["quotes.view"],
+  requiresConfirmation: false,
+  risk: "low",
+  version: "1.0.0",
+  async execute(input, context) {
+    const quotes = await getQuotes(context.tenant, "todos");
+    if (!quotes.ok) return fail(quotes.error.code, quotes.error.message);
+
+    const openQuotes = quotes.data
+      .filter((quote) => quote.estado === "borrador" || quote.estado === "enviada");
+    const open = openQuotes.slice(0, input.limit);
+
+    return ok({
+      data: {
+        quotes: open.map((quote) => ({
+          clienteNombre: quote.clienteNombre,
+          estado: quote.estado === "borrador" ? "borrador" : "enviada",
+          fechaVencimiento: quote.fechaVencimiento,
+          moneda: quote.moneda,
+          numero: quote.numero,
+          total: quote.total,
+        })),
+        total: openQuotes.length,
+      },
+      evidence: sourceEvidence("cotizaciones", openQuotes.length),
+      links: [{ href: "/cotizaciones", label: "Abrir cotizaciones" }],
+      message: openQuotes.length > 0
+        ? `Hay ${openQuotes.length} cotizacion(es) abierta(s) en borrador o enviada.`
+        : "No hay cotizaciones abiertas en borrador o enviadas.",
+    });
+  },
+});
+
 const quotesItemAddSkill = defineBusinessSkill<
   z.infer<typeof quoteItemAddInputSchema>,
   z.infer<typeof quoteItemAddOutputSchema>
@@ -2836,6 +2901,7 @@ export function createInitialReadBusinessSkills(): BusinessSkillDefinition[] {
     inboxSlaOverdueQuerySkill,
     quotesItemAddSkill,
     quotesExpiredQuerySkill,
+    quotesOpenQuerySkill,
     quotesSaleConfirmSkill,
     quotesTotalCalculateSkill,
     salesDispatchPrepareSkill,
