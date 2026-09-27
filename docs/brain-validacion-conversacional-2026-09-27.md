@@ -6,6 +6,7 @@
 - La búsqueda de capacidades devolvía habilidades que no estaban registradas como herramientas ejecutables en ese turno.
 - Las aprobaciones enviadas desde el navegador se validaban junto con decisiones automáticas anteriores. Una conversación con consulta y modificación podía bloquearse al continuar.
 - El historial conservaba respuestas vacías y cargaba los primeros 200 mensajes, dejando fuera los más recientes en conversaciones largas.
+- El flujo no asignaba identificadores de respuesta desde el servidor. La interfaz podía mostrar una respuesta cuyo historial no se conservaba correctamente; el siguiente turno perdía lo que Brain acababa de contestar.
 - Los errores del flujo podían quedar registrados como ejecuciones completadas sin respuesta. El mensaje genérico en inglés tampoco se traducía cuando terminaba en punto.
 - Una petición combinada real se detuvo porque el modelo eligió un límite de registros superior al admitido por las herramientas.
 
@@ -16,6 +17,7 @@
 - Las consultas pueden corregir automáticamente un tamaño de página fuera de límites. Esta reparación no modifica importes, cantidades comerciales ni solicitudes de escritura.
 - Las aprobaciones muestran los datos propuestos. El servidor conserva el mensaje original y admite únicamente decisiones nuevas sobre propuestas persistidas; bloquea cambios de argumentos, resultados inventados y repeticiones.
 - Se recuperan los mensajes recientes, se excluyen respuestas vacías y no se repiten navegaciones históricas al recargar. La sincronización entre la barra y la página de Brain no sustituye una respuesta mientras se genera.
+- El servidor asigna un identificador a cada respuesta y lo comparte con el navegador y la persistencia. Una prueba de dos turnos invoca la ruta real y exige que el segundo envío contenga la respuesta anterior.
 - Se registran los fallos del flujo y se muestran mensajes comprensibles. Una herramienta fallida no muestra “Resultado guardado”. El último paso disponible se reserva para responder al usuario.
 
 ## Verificación y límites

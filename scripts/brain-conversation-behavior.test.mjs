@@ -9,13 +9,26 @@ import { MockLanguageModelV4 } from "ai/test";
 import { createAgentUIStreamResponse } from "ai";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const fixture = { skills: [], calls: [] };
+const fixture = { skills: [], calls: [], history: [], runStates: [] };
 globalThis.__brainConversationTest = fixture;
 const modules = {
   "server-only": "export {};",
   "@/lib/supabase/server": "export async function createClient(){return {from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null})})})})};}",
   "@/modules/business-context/queries": "export async function getBusinessContext(){return {ok:false};}",
-  "@/modules/brain/runtime/conversation-repository": "export async function appendBrainRunEvent(){}; export async function recordBrainRunStep(){};",
+  "@/modules/brain/runtime/conversation-repository": `
+    const fixture=globalThis.__brainConversationTest;
+    export async function appendBrainRunEvent(){}; export async function recordBrainRunStep(){};
+    export async function assertBrainDailyLimit(){}; export async function recordBrainUsage(){};
+    export async function createBrainConversationRun(){return crypto.randomUUID();}
+    export async function getOrCreateBrainConversation(i){return i.conversationId;}
+    export async function loadBrainMessages(){return fixture.history;}
+    export async function saveBrainMessages({messages}){const map=new Map(fixture.history.map(m=>[m.id,m]));for(const m of messages)if(m.id)map.set(m.id,m);fixture.history=[...map.values()];}
+    export async function syncBrainApprovals(){}; export async function validateIncomingBrainApprovals(){};
+    export async function updateBrainRun(i){fixture.runStates.push(i.status);}
+  `,
+  "@/lib/auth/session": "export async function getCurrentTenantContext(){return {ok:true,data:{empresaId:'company-1',profileId:'user-1',activeModules:['crm'],permissions:['crm.customers.view']}};}",
+  "@/modules/brain/providers/model-router": "export async function resolveBrainLanguageModel(){return {model:globalThis.__brainConversationTest.model,modelId:'mock',settings:{provider:'gemini',maxTokens:1000,temperature:0.2,dailyLimit:100},routing:{tier:'fast'}};}",
+  "next/server": "export class NextResponse extends Response {static json(data,init){return new Response(JSON.stringify(data),{...init,headers:{'content-type':'application/json'}});}}",
   "@/modules/brain/runtime/default-runtime": "export const businessSkillRegistry={getAvailable:()=>globalThis.__brainConversationTest.skills}; export const brainRuntime={invoke:async(i)=>{globalThis.__brainConversationTest.calls.push(i);return {ok:true,data:{data:{count:3},message:'Hay 3 registros',evidence:[],links:[]}};}};",
   "@/modules/brain/runtime/durable-skill-workflow": "export async function executeBusinessSkillDurably(i){globalThis.__brainConversationTest.calls.push(i);return {result:{ok:true,data:{data:{saved:true},message:'Guardado',evidence:[],links:[]}},workflowRunId:'test'};}",
 };
@@ -33,6 +46,7 @@ const { toSafeToolName } = await import("../src/modules/brain/runtime/skill-sear
 const { prepareIncomingBrainMessage, hasBrainMessageContent } = await import("../src/modules/brain/runtime/conversation-messages.ts");
 const { brainChatFailure } = await import("../src/modules/brain/runtime/chat-errors.ts");
 const { createActiveBrainTools } = await import("../src/modules/brain/runtime/active-tools.ts");
+const { POST } = await import("../src/app/api/brain/chat/route.ts");
 const usage = {inputTokens:{total:10},outputTokens:{total:5}};
 const result = (content, reason="stop") => ({content,finishReason:{unified:reason,raw:reason},usage,warnings:[]});
 const call = (name,input,id="call-1") => ({type:"tool-call",toolCallId:id,toolName:name,input:JSON.stringify(input)});
@@ -133,4 +147,30 @@ test("stream errors reach the UI in Spanish without leaking provider credentials
   assert.equal(failure.code,"PROVIDER_AUTH");
   assert.match(body,/rechazó el acceso/);
   assert(!body.includes("secret"));
+});
+
+test("the real chat route assigns response IDs and preserves assistant context across two streamed turns",async()=>{
+  fixture.skills=[]; fixture.history=[]; fixture.runStates=[];
+  let turn=0;
+  fixture.model=new MockLanguageModelV4({doStream:async(options)=>{
+    turn++;
+    if(turn===2) assert(options.prompt.some(m=>m.role==='assistant' && JSON.stringify(m.content).includes('El total es 17.')),'The second request must contain the previous assistant response');
+    const text=turn===1?'El total es 17.':'Sí, el total anterior era 17.';
+    return {stream:new ReadableStream({start(controller){
+      for(const part of [{type:'stream-start',warnings:[]},{type:'text-start',id:'text-1'},{type:'text-delta',id:'text-1',delta:text},{type:'text-end',id:'text-1'},{type:'finish',usage,finishReason:{unified:'stop',raw:'STOP'}}]) controller.enqueue(part);
+      controller.close();
+    }})};
+  }});
+  const id=crypto.randomUUID();
+  for(const text of ['Cuánto es 8 más 9','¿Cuál era el total?']) {
+    const response=await POST(new Request('http://localhost/api/brain/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,message:{id:crypto.randomUUID(),role:'user',parts:[say(text)]}})}));
+    assert.equal(response.status,200);
+    const stream=await response.text();
+    assert(!stream.includes('"type":"error"'),stream);
+    const start=stream.split('\n').filter(l=>l.startsWith('data: {')).map(l=>JSON.parse(l.slice(6))).find(e=>e.type==='start');
+    assert(start.messageId,'The browser and persistence must receive the same server-generated message ID');
+    assert(fixture.history.some(m=>m.id===start.messageId && m.role==='assistant'));
+  }
+  assert.equal(fixture.history.length,4);
+  assert.deepEqual(fixture.runStates,['completed','completed']);
 });

@@ -631,7 +631,7 @@ function BrainChatSession({
           <span className="px-2 text-xs text-slate-500">Enter para enviar · Shift+Enter para nueva línea</span>
         </PromptInputTools>
         <PromptInputSubmit
-          disabled={!input.trim() || !historyReady}
+          disabled={!busy && (!input.trim() || !historyReady)}
           onStop={stop}
           status={status}
         />

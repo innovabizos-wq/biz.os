@@ -172,6 +172,7 @@ export async function POST(request: Request) {
     const startedAt = performance.now();
     return await createAgentUIStreamResponse({
       agent,
+      generateMessageId: () => crypto.randomUUID(),
       onError: (error) => {
         streamFailure = brainChatFailure(error);
         console.error("[brain.chat.stream]", { runId, code: streamFailure.code });
