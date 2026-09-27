@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
@@ -31,9 +30,10 @@ type QuoteDocumentSettingsRow = {
   template_code: QuoteDocumentSettings["templateCode"];
 };
 
-function redirectWithError(message: string): never {
-  redirect(`/cotizaciones/ajustes?error=${encodeURIComponent(message)}`);
-}
+export type QuoteDocumentSettingsActionState = {
+  error: string | null;
+  success: string | null;
+};
 
 function asSettings(row: QuoteDocumentSettingsRow | null): QuoteDocumentSettings {
   if (!row) return DEFAULT_QUOTE_DOCUMENT_SETTINGS;
@@ -67,10 +67,13 @@ async function fileToDataUrl(file: File) {
   return `data:${file.type};base64,${bytes.toString("base64")}`;
 }
 
-export async function saveQuoteDocumentSettingsAction(formData: FormData) {
+export async function saveQuoteDocumentSettingsAction(
+  _previous: QuoteDocumentSettingsActionState,
+  formData: FormData,
+): Promise<QuoteDocumentSettingsActionState> {
   const access = await requireAdminAccess();
   if (!hasPermission(access.tenant.permissions, "admin.settings.manage")) {
-    redirectWithError("No tienes permiso para cambiar el diseño de cotizaciones.");
+    return { error: "No tienes permiso para cambiar el diseño de cotizaciones.", success: null };
   }
   const parsed = settingsSchema.safeParse({
     accentColor: formData.get("accentColor"),
@@ -79,7 +82,7 @@ export async function saveQuoteDocumentSettingsAction(formData: FormData) {
     removeLogo: formData.get("removeLogo") ?? undefined,
     templateCode: formData.get("templateCode"),
   });
-  if (!parsed.success || !parsed.data) redirectWithError("Revisa los datos del diseño.");
+  if (!parsed.success || !parsed.data) return { error: "Revisa los datos del diseño.", success: null };
   const settings = parsed.data;
 
   const logo = formData.get("logo");
@@ -87,7 +90,7 @@ export async function saveQuoteDocumentSettingsAction(formData: FormData) {
   try {
     logoDataUrl = logo instanceof File ? await fileToDataUrl(logo) : null;
   } catch (error) {
-    redirectWithError(error instanceof Error ? error.message : "No se pudo leer el logo.");
+    return { error: error instanceof Error ? error.message : "No se pudo leer el logo.", success: null };
   }
 
   const payload = {
@@ -109,10 +112,10 @@ export async function saveQuoteDocumentSettingsAction(formData: FormData) {
       template_code: QuoteDocumentSettings["templateCode"];
     }>();
   if (error || !saved || saved.empresa_id !== access.tenant.empresaId) {
-    redirectWithError("No se pudo guardar la plantilla. Intenta nuevamente o revisa los permisos de administración.");
+    return { error: "No se pudo guardar la plantilla. Intenta nuevamente o revisa los permisos de administración.", success: null };
   }
 
   revalidatePath("/cotizaciones");
   revalidatePath("/cotizaciones/ajustes");
-  redirect("/cotizaciones/ajustes?success=Diseño%20de%20cotizaciones%20guardado.");
+  return { error: null, success: "Diseño de cotizaciones guardado." };
 }

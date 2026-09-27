@@ -1,7 +1,7 @@
 "use client";
 
 import { ImageUp, RotateCcw, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -11,7 +11,15 @@ import {
   type QuoteDocumentSettings,
   type QuoteDocumentTemplateCode,
 } from "@/modules/quotes/quote-document-style";
-import { saveQuoteDocumentSettingsAction } from "@/modules/quotes/document-settings";
+import {
+  saveQuoteDocumentSettingsAction,
+  type QuoteDocumentSettingsActionState,
+} from "@/modules/quotes/document-settings";
+
+const initialQuoteDocumentSettingsActionState: QuoteDocumentSettingsActionState = {
+  error: null,
+  success: null,
+};
 
 function TemplateThumbnail({ template }: { template: QuoteDocumentTemplateCode }) {
   const line = <span className="block h-1.5 rounded bg-slate-200" />;
@@ -28,8 +36,12 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
   const [accentColor, setAccentColor] = useState(settings.accentColor);
   const [footerText, setFooterText] = useState(settings.footerText ?? "");
   const [logoName, setLogoName] = useState<string | null>(null);
+  const [saveState, saveAction, isSaving] = useActionState(
+    saveQuoteDocumentSettingsAction,
+    initialQuoteDocumentSettingsActionState,
+  );
   return (
-    <form action={saveQuoteDocumentSettingsAction} className="space-y-6" encType="multipart/form-data">
+    <form action={saveAction} className="space-y-6" encType="multipart/form-data">
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-slate-100 p-2.5 text-slate-700"><Sparkles aria-hidden="true" size={20} /></span>
@@ -83,7 +95,9 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
         </aside>
       </section>
       <p className="text-sm text-slate-500">Al guardar, esta plantilla se verá de inmediato en una nueva cotización y en el PDF.</p>
-      <div className="flex justify-end"><button className="app-theme-button inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium" type="submit">Guardar y aplicar plantilla</button></div>
+      {saveState.error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800">{saveState.error}</p> : null}
+      {saveState.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-900">{saveState.success}</p> : null}
+      <div className="flex justify-end"><button className="app-theme-button inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium disabled:cursor-wait disabled:opacity-60" disabled={isSaving} type="submit">{isSaving ? "Guardando plantilla…" : "Guardar y aplicar plantilla"}</button></div>
     </form>
   );
 }

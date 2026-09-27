@@ -34,7 +34,8 @@ test("quote document settings apply a company template and commercial identity a
   assert.match(quoteBuilder, /documentSettings/);
   assert.match(source("src\/modules\/quotes\/components\/quote-document-style-form.tsx"), /encType="multipart\/form-data"/);
   assert.match(source("src\/modules\/quotes\/components\/quote-document-style-form.tsx"), /<button[^>]+type="submit"/);
-  assert.match(source("src\/modules\/quotes\/components\/quote-document-style-form.tsx"), /action=\{saveQuoteDocumentSettingsAction\}/);
+  assert.match(source("src\/modules\/quotes\/components\/quote-document-style-form.tsx"), /useActionState\(\s*saveQuoteDocumentSettingsAction/);
+  assert.match(source("src\/modules\/quotes\/components\/quote-document-style-form.tsx"), /action=\{saveAction\}/);
   assert.match(source("src\/modules\/quotes\/document-settings.ts"), /removeLogo: formData\.get\("removeLogo"\) \?\? undefined/);
   assert.match(printPage, /getQuoteDocumentSettings/);
   assert.match(settingsPage, /admin\.settings\.manage/);
