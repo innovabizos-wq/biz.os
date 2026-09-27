@@ -362,7 +362,7 @@ export async function syncBrainApprovals(input: {
   const supabase = await createClient();
   const result = await supabase
     .from("brain_approvals")
-    .upsert(rows, { onConflict: "empresa_id,approval_id" });
+    .upsert(rows, { ignoreDuplicates: true, onConflict: "empresa_id,approval_id" });
   if (result.error) throw databaseError("No se pudo registrar la aprobación", result.error);
 }
 

@@ -99,6 +99,7 @@ test("central Brain enforces usage limits, immutable approvals and response feed
   assert.match(repository, /brain_usage_events/);
   assert.match(repository, /pending\.data\.tool_name !== toolName/);
   assert.match(repository, /!sameJson\(pending\.data\.request, part\.input\)/);
+  assert.match(repository, /ignoreDuplicates:\s*true/);
   assert.match(feedbackRoute, /recordBrainFeedback/);
   assert.match(repository, /brain_feedback/);
   assert.match(chat, /\/api\/brain\/feedback/);
