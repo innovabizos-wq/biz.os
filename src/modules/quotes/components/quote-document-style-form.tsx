@@ -1,7 +1,7 @@
 "use client";
 
 import { ImageUp, RotateCcw, Sparkles } from "lucide-react";
-import { useActionState, useState } from "react";
+import { FormEvent, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -11,10 +11,7 @@ import {
   type QuoteDocumentSettings,
   type QuoteDocumentTemplateCode,
 } from "@/modules/quotes/quote-document-style";
-import {
-  saveQuoteDocumentSettingsAction,
-  type QuoteDocumentSettingsActionState,
-} from "@/modules/quotes/document-settings";
+import type { QuoteDocumentSettingsActionState } from "@/modules/quotes/document-settings";
 
 const initialQuoteDocumentSettingsActionState: QuoteDocumentSettingsActionState = {
   error: null,
@@ -36,12 +33,29 @@ export function QuoteDocumentStyleForm({ settings }: { settings: QuoteDocumentSe
   const [accentColor, setAccentColor] = useState(settings.accentColor);
   const [footerText, setFooterText] = useState(settings.footerText ?? "");
   const [logoName, setLogoName] = useState<string | null>(null);
-  const [saveState, saveAction, isSaving] = useActionState(
-    saveQuoteDocumentSettingsAction,
-    initialQuoteDocumentSettingsActionState,
-  );
+  const [saveState, setSaveState] = useState(initialQuoteDocumentSettingsActionState);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function saveSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+    setSaveState(initialQuoteDocumentSettingsActionState);
+    try {
+      const response = await fetch("/api/cotizaciones/diseno", {
+        body: new FormData(event.currentTarget),
+        method: "POST",
+      });
+      const state = await response.json() as QuoteDocumentSettingsActionState;
+      setSaveState(state);
+    } catch {
+      setSaveState({ error: "No se pudo guardar la plantilla. Revisa tu conexión e inténtalo nuevamente.", success: null });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
-    <form action={saveAction} className="space-y-6" encType="multipart/form-data">
+    <form className="space-y-6" encType="multipart/form-data" onSubmit={saveSettings}>
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-slate-100 p-2.5 text-slate-700"><Sparkles aria-hidden="true" size={20} /></span>
