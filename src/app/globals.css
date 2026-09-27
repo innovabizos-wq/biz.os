@@ -3507,21 +3507,27 @@ body:has(.dashboard-screen) {
   .pos-ticket { position: fixed; inset: 0 auto auto 0; width: 80mm; border: 0 !important; }
 }
 
-.brain-chat-popover {
-  position: absolute;
-  top: calc(100% + 10px);
+.brain-chat-dialog {
+  position: fixed;
+  top: 50%;
   left: 50%;
-  z-index: 80;
-  width: min(680px, calc(100vw - 32px));
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  width: min(840px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  height: min(780px, calc(100dvh - 32px));
   overflow: hidden;
-  transform: translateX(-50%);
+  translate: -50% -50%;
   border: 1px solid rgba(15, 23, 42, 0.16);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.99);
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
 }
 
-.brain-chat-popover__header {
+.brain-chat-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3529,25 +3535,27 @@ body:has(.dashboard-screen) {
   background: #071126;
   padding: 12px 14px;
   color: white;
+  flex-shrink: 0;
 }
 
-.brain-chat-popover__header > div:first-child {
+.brain-chat-dialog__header > div:first-child {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 9px;
 }
 
-.brain-chat-popover__header strong {
+.brain-chat-dialog__header h2 {
   font-size: 0.9rem;
 }
 
-.brain-chat-popover__header span {
-  color: #6ee7b7;
+.brain-chat-dialog__header p {
+  color: #cbd5e1;
   font-size: 0.7rem;
   font-weight: 800;
 }
 
-.brain-chat-popover__header button {
+.brain-chat-dialog__header button {
   display: inline-flex;
   height: 30px;
   width: 30px;
@@ -3557,7 +3565,7 @@ body:has(.dashboard-screen) {
   color: white;
 }
 
-.brain-chat-popover__header button:hover {
+.brain-chat-dialog__header button:hover {
   background: rgba(255, 255, 255, 0.12);
 }
 

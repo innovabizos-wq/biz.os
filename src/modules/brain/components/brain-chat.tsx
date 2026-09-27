@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Brain,
   Loader2,
+  MessageSquare,
   Plus,
   RotateCcw,
   Send,
@@ -80,6 +81,7 @@ import {
   type ToolPart,
 } from "@/components/ai-elements/tool";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 const STORAGE_KEY = "biz.brain.conversation-id.v1";
 const SYNC_EVENT = "biz-brain-conversation-updated";
@@ -114,6 +116,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function toolTitle(type: string) {
   const value = type.toLowerCase();
+  if (value.includes("capability_search")) return "Buscar herramientas";
+  if (value.includes("autoblog_article_generate")) return "Preparar artículo";
+  if (value.includes("crm_customer_create")) return "Crear cliente";
+  if (value.includes("crm_customer_update")) return "Actualizar cliente";
+  if (value.includes("agenda_task_create")) return "Crear tarea";
   if (value.includes("navigation")) return "Abrir pantalla";
   if (value.includes("crm") || value.includes("customer")) return "Consultar CRM";
   if (value.includes("catalog") || value.includes("product")) return "Gestionar catálogo";
@@ -127,6 +134,22 @@ function toolTitle(type: string) {
   return "Acción de Brain";
 }
 
+const PROPOSAL_LABELS: Record<string, string> = {
+  nombre: "Nombre", customerQuery: "Cliente", topic: "Tema", title: "Título", description: "Descripción",
+  sourceMode: "Origen del contenido", sourceUrls: "Fuentes", sourceNotes: "Notas", query: "Búsqueda",
+  source: "Origen", tipo: "Tipo", correo: "Correo", telefono: "Teléfono", notas: "Notas",
+  assignedTo: "Responsable", scheduledAt: "Fecha", productQuery: "Producto", quantity: "Cantidad",
+  warehouse: "Bodega", objective: "Objetivo", priority: "Prioridad", assignee: "Responsable",
+};
+
+function ProposalValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") return <span>Sin especificar</span>;
+  if (typeof value === "boolean") return <span>{value ? "Sí" : "No"}</span>;
+  if (Array.isArray(value)) return value.length ? <ul className="space-y-1">{value.map((item, index) => <li key={index}><ProposalValue value={item} /></li>)}</ul> : <span>Ninguno</span>;
+  if (typeof value === "object") return <dl className="space-y-2">{Object.entries(value).map(([key, item]) => <div key={key}><dt className="font-semibold">{PROPOSAL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2")}</dt><dd className="whitespace-pre-wrap break-words"><ProposalValue value={item} /></dd></div>)}</dl>;
+  return <span>{String(value)}</span>;
+}
+
 function outputSummary(output: unknown) {
   const record = asRecord(output);
   return typeof record?.message === "string" ? record.message : null;
@@ -134,7 +157,7 @@ function outputSummary(output: unknown) {
 
 function userFacingBrainError(error: Error | undefined) {
   const message = error?.message.trim();
-  if (!message || /^(an error occurred|internal server error|failed to fetch|network error)$/i.test(message)) {
+  if (!message || /^(an error occurred|internal server error|failed to fetch|network error)[.!]?$/i.test(message)) {
     return "Brain tuvo un problema temporal al responder. Tu mensaje sigue en la conversación; puedes reintentarlo.";
   }
   return message;
@@ -212,20 +235,24 @@ function saveConversationId(value: string) {
 
 function BrainTool({
   addApproval,
+  busy,
   part,
 }: {
   addApproval(input: { approved: boolean; id: string; reason?: string }): void;
+  busy: boolean;
   part: BrainToolPart;
 }) {
   const summary = outputSummary(part.output);
   const links = outputLinks(part.output);
   const evidence = outputEvidence(part.output);
   const output = asRecord(part.output);
+  const failure = asRecord(output?.error);
+  const failed = part.state === "output-error" || output?.ok === false;
   const teamPlan = asRecord(output?.plan);
   return (
-    <Tool defaultOpen={part.state === "approval-requested"}>
+    <Tool defaultOpen={part.state === "approval-requested" || failed}>
       <ToolHeader
-        state={part.state}
+        state={failed ? "output-error" : part.state}
         title={toolTitle(part.type)}
         type={part.type}
       />
@@ -235,11 +262,12 @@ function BrainTool({
             <ConfirmationTitle>
               Brain preparó esta acción y necesita tu autorización antes de cambiar datos o consumir recursos adicionales.
             </ConfirmationTitle>
+            <div className="max-h-64 overflow-auto rounded-lg bg-slate-50 p-3 text-sm text-slate-700"><ProposalValue value={part.input} /></div>
             <ConfirmationActions>
-              <ConfirmationAction onClick={() => addApproval({ approved: false, id: part.approval!.id })} variant="outline">
+              <ConfirmationAction disabled={busy} onClick={() => addApproval({ approved: false, id: part.approval!.id })} variant="outline">
                 Denegar
               </ConfirmationAction>
-              <ConfirmationAction onClick={() => addApproval({ approved: true, id: part.approval!.id })}>
+              <ConfirmationAction disabled={busy} onClick={() => addApproval({ approved: true, id: part.approval!.id })}>
                 Aprobar
               </ConfirmationAction>
             </ConfirmationActions>
@@ -258,6 +286,7 @@ function BrainTool({
           </Agent>
         ) : null}
         {part.errorText ? <p className="text-sm text-red-700">{part.errorText}</p> : null}
+        {typeof failure?.message === "string" ? <p role="alert" className="text-sm text-red-700">{failure.message}</p> : null}
         {links.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {links.map((link) => (
@@ -287,7 +316,7 @@ function BrainTool({
             </SourcesContent>
           </Sources>
         ) : null}
-        {part.state === "output-available" ? (
+        {part.state === "output-available" && output?.ok !== false ? (
           <Checkpoint>
             <CheckpointTrigger disabled tooltip="Resultado persistido en este hilo">
               <CheckpointIcon /> Resultado guardado
@@ -312,10 +341,15 @@ function BrainChatSession({
   const router = useRouter();
   const [input, setInput] = useState("");
   const [historyReady, setHistoryReady] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [emptyResponse, setEmptyResponse] = useState(false);
   const [panelOpen, setPanelOpen] = useState(variant === "page");
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
   const navigatedCalls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const sessionSource = useRef(crypto.randomUUID());
+  const busyRef = useRef(false);
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -344,8 +378,9 @@ function BrainChatSession({
     stop,
   } = useChat({
     id: conversationId,
-    onFinish: () => {
-      window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: conversationId }));
+    onFinish: ({ message, isAbort, isError }) => {
+      setEmptyResponse(!isAbort && !isError && !message.parts.some((part) => isToolPart(part) || (part.type === "text" && part.text.trim())));
+      window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { conversationId, source: sessionSource.current } }));
     },
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     transport,
@@ -367,19 +402,26 @@ function BrainChatSession({
     const loadHistory = async () => {
       try {
         const history = await fetchHistory(controller.signal);
-        if (active) setMessages(history);
+        if (active && !busyRef.current) {
+          // Historic navigation is evidence, not a new instruction to navigate.
+          for (const message of history) for (const part of message.parts) {
+            if (isToolPart(part)) navigatedCalls.current.add(part.toolCallId);
+          }
+          setMessages(history);
+          setHistoryError(null);
+          setHistoryReady(true);
+        }
       } catch (error) {
         if (active && !(error instanceof DOMException && error.name === "AbortError")) {
           console.error("[brain.chat.history]", error);
+          setHistoryError("No pudimos recuperar la conversación. Vuelve a abrir Brain o inicia una conversación nueva.");
         }
-      } finally {
-        if (active) setHistoryReady(true);
       }
     };
     void loadHistory();
     const sync = (event: Event) => {
-      const detail = (event as CustomEvent<string>).detail;
-      if (detail === conversationId) void loadHistory();
+      const detail = (event as CustomEvent<{ conversationId: string; source: string }>).detail;
+      if (detail.conversationId === conversationId && detail.source !== sessionSource.current && !busyRef.current) void loadHistory();
     };
     window.addEventListener(SYNC_EVENT, sync);
     return () => {
@@ -411,7 +453,6 @@ function BrainChatSession({
       if (event.ctrlKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
         inputRef.current?.focus();
-        setPanelOpen(true);
       }
     };
     window.addEventListener("keydown", shortcut);
@@ -419,7 +460,8 @@ function BrainChatSession({
   }, [variant]);
 
   const busy = status === "submitted" || status === "streaming";
-  const visibleMessages = variant === "bar" ? messages.slice(-8) : messages;
+  useEffect(() => { busyRef.current = busy; }, [busy]);
+  const visibleMessages = messages.filter((message) => message.parts.some((part) => isToolPart(part) || (part.type === "text" && part.text.trim())));
   const recordFeedback = async (messageId: string, rating: -1 | 1) => {
     const previous = feedbackByMessage[messageId];
     setFeedbackByMessage((current) => ({ ...current, [messageId]: rating }));
@@ -441,13 +483,17 @@ function BrainChatSession({
     const value = (submittedText ?? input).trim();
     if (!value || busy || !historyReady) return;
     setPanelOpen(true);
-    sendMessage({ text: value });
+    setEmptyResponse(false);
+    busyRef.current = true;
+    void sendMessage({ text: value });
     setInput("");
   };
 
   const conversation = (
-    <Conversation className={variant === "bar" ? "h-[390px]" : "h-[560px]"}>
+    <Conversation className={variant === "bar" ? "min-h-0 flex-1" : "h-[560px]"}>
       <ConversationContent className="gap-5 p-4">
+        {historyError ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{historyError}</p> : null}
+        {emptyResponse ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">Brain terminó sin una respuesta. Envía tu mensaje de nuevo.</p> : null}
         {visibleMessages.length === 0 ? (
           <ConversationEmptyState
             description="Pide datos, acciones, análisis o abre cualquier módulo con lenguaje natural."
@@ -473,6 +519,7 @@ function BrainChatSession({
                     return (
                       <BrainTool
                         addApproval={addToolApprovalResponse}
+                        busy={busy}
                         key={part.toolCallId}
                         part={part}
                       />
@@ -544,12 +591,14 @@ function BrainChatSession({
         disabled={!historyReady}
         id={`brain-input-${variant}`}
         onChange={(event) => setInput(event.target.value)}
-        onFocus={() => variant === "bar" && setPanelOpen(true)}
         placeholder="Pídele cualquier cosa a Brain…"
         ref={inputRef}
         value={input}
       />
       <kbd>Ctrl K</kbd>
+      <button aria-label="Abrir conversación con Brain" onClick={() => setPanelOpen(true)} type="button">
+        <MessageSquare aria-hidden size={17} />
+      </button>
       {busy ? (
         <button aria-label="Detener" onClick={stop} type="button">
           <Square aria-hidden size={16} />
@@ -570,6 +619,7 @@ function BrainChatSession({
       <PromptInputBody>
         <PromptInputTextarea
           aria-label="Hablar con Brain"
+          ref={composerRef}
           disabled={!historyReady}
           onChange={(event) => setInput(event.currentTarget.value)}
           placeholder="Pídele cualquier cosa a Brain…"
@@ -593,15 +643,15 @@ function BrainChatSession({
     return (
       <div className="dashboard-ai-command">
         {compactForm}
-        {panelOpen ? (
-          <div className="brain-chat-popover">
-            <div className="brain-chat-popover__header">
+        <Dialog open={panelOpen} onOpenChange={setPanelOpen}>
+          <DialogContent className="brain-chat-dialog" finalFocus={inputRef} initialFocus={composerRef} showCloseButton={false}>
+            <div className="brain-chat-dialog__header">
               <div>
-                <strong>Brain</strong>
-                <span>{busy ? "Trabajando" : "En línea"}</span>
+                <DialogTitle>Brain</DialogTitle>
+                <DialogDescription>{busy ? "Trabajando en tu solicitud…" : "Consulta, analiza y prepara acciones para tu negocio."}</DialogDescription>
               </div>
               <div className="flex items-center gap-1">
-                <button aria-label="Nueva conversación" onClick={onNewConversation} type="button">
+                <button aria-label="Nueva conversación" disabled={busy} onClick={onNewConversation} type="button">
                   <Plus className="size-4" />
                 </button>
                 <button aria-label="Cerrar" onClick={() => setPanelOpen(false)} type="button">
@@ -610,8 +660,9 @@ function BrainChatSession({
               </div>
             </div>
             {conversation}
-          </div>
-        ) : null}
+            <div className="shrink-0 border-t bg-slate-50 p-3">{pageForm}</div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -628,6 +679,7 @@ function BrainChatSession({
         </div>
         <button
           className="inline-flex items-center gap-1 rounded-md border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10"
+          disabled={busy}
           onClick={onNewConversation}
           type="button"
         >

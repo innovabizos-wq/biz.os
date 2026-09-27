@@ -1241,3 +1241,26 @@ test("Natural language routes recent sales to the sales Skill", () => {
   assert.equal(parsed.actionId, "ventas.buscar_ventas");
   assert.deepEqual(parsed.params, { limit: 10 });
 });
+
+test("every registered skill input serializes through the installed Gemini adapter", async () => {
+  const { generateText, tool } = await import("ai");
+  const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+  const { toSafeToolName } = await import("../src/modules/brain/runtime/skill-search.ts");
+  let serialized = 0;
+  const google = createGoogleGenerativeAI({ apiKey: "test-only", fetch: async (_url, init) => {
+    const declarations = JSON.parse(init.body).tools[0].functionDeclarations;
+    serialized += declarations.length;
+    for (const declaration of declarations) {
+      assert.match(declaration.name, /^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$/);
+      if (declaration.parameters) assert.equal(declaration.parameters.type, "object");
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "ok" }] }, finishReason: "STOP" }] }), { headers: { "content-type": "application/json" } });
+  } });
+  // Exercise adapter conversion in bounded batches; no real provider request or business execution.
+  for (let offset = 0; offset < registeredBusinessSkills.length; offset += 40) {
+    await generateText({ model: google("gemini-2.5-flash-lite"), prompt: "Hola", tools: Object.fromEntries(
+      registeredBusinessSkills.slice(offset, offset + 40).map((skill) => [toSafeToolName(skill.id), tool({ description: skill.description, inputSchema: skill.inputSchema })]),
+    ) });
+  }
+  assert.equal(serialized, registeredBusinessSkills.length);
+});

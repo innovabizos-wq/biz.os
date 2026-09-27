@@ -18,6 +18,8 @@ import { executeBusinessSkillDurably } from "@/modules/brain/runtime/durable-ski
 import { requiresBrainApproval } from "@/modules/brain/runtime/policy-engine";
 import { rankBusinessSkills, toSafeToolName } from "@/modules/brain/runtime/skill-search";
 import { brainRuntime } from "@/modules/brain/runtime/default-runtime";
+import { createActiveBrainTools } from "@/modules/brain/runtime/active-tools";
+import { repairBrainQueryLimit } from "@/modules/brain/runtime/repair-query-limit";
 import type { ConversationLayerSettingsForProvider } from "@/modules/ai/types";
 import type { JsonRecord, ModuleCode, TenantContext } from "@/types/core";
 
@@ -116,7 +118,10 @@ Tu trabajo es comprender la intención del usuario aunque no use nombres técnic
 REGLAS OBLIGATORIAS:
 - Para datos del negocio, cifras, estados o entidades, usa herramientas; nunca inventes información que Biz.OS pueda consultar.
 - Puedes encadenar varias herramientas en una misma petición y sintetizar sus resultados.
+- Responde directamente a saludos, conversación normal, redacción y explicaciones generales. No consultes datos del negocio si no hacen falta.
+- Para una solicitud compuesta, completa cada parte y utiliza los resultados anteriores como entrada del siguiente paso.
 - Si falta un dato imprescindible, pregunta solo por ese dato en lenguaje natural.
+- Si una herramienta rechaza el formato o límite de registros, corrige los parámetros y vuelve a consultar; no pidas al usuario que conozca límites técnicos. Respeta los máximos y explica cuando el resultado es una muestra.
 - No menciones IDs de Skills, nombres internos de tools, schemas ni detalles del runtime.
 - Las herramientas sensibles pedirán aprobación. Explica en una frase qué ocurrirá y espera la decisión.
 - No afirmes que una acción se completó hasta recibir el resultado de la herramienta.
@@ -204,7 +209,9 @@ export async function createCentralBrainAgent(input: {
   const riskByTool: Record<string, BusinessSkillRisk> = {};
   const approvalByTool: Record<string, "approved" | "user-approval"> = {};
 
-  for (const skill of selected) {
+  // All authorized definitions must exist for history validation and discovery.
+  // activeTools controls which schemas are sent to the model at each step.
+  for (const skill of available) {
     const toolName = toSafeToolName(skill.id);
     riskByTool[toolName] = skill.risk;
     approvalByTool[toolName] = shouldRequireApproval(skill) ? "user-approval" : "approved";
@@ -285,25 +292,33 @@ export async function createCentralBrainAgent(input: {
   approvalByTool[navigationToolName] = "approved";
 
   const capabilitySearchToolName = "brain_capability_search";
+  const activeTools = createActiveBrainTools(
+    selected.map((skill) => toSafeToolName(skill.id)),
+    [navigationToolName, capabilitySearchToolName, "brain_team_start", "brain_human_work_assign"],
+  );
   tools[capabilitySearchToolName] = tool({
-    description: "Busca habilidades autorizadas de Biz.OS cuando las tools iniciales no cubren el pedido.",
+    description: "Busca y habilita herramientas autorizadas de Biz.OS para ejecutarlas en el siguiente paso. Úsala cuando necesites una capacidad que no aparece inicialmente.",
     inputSchema: z.object({ query: z.string().trim().min(2).max(2_000) }),
-    execute: async ({ query }) => ({
-      capabilities: rankBusinessSkills({
+    execute: async ({ query }) => {
+      const found = rankBusinessSkills({
         currentModule: input.currentModule,
         limit: 15,
         message: query,
         skills: available,
-      }).map((skill) => ({
+      });
+      activeTools.activate(found.map((skill) => toSafeToolName(skill.id)));
+      return { capabilities: found.map((skill) => ({
         description: skill.description,
         id: skill.id,
         kind: skill.kind,
         module: skill.module,
         name: skill.name,
         requiresApproval: shouldRequireApproval(skill),
+        toolName: toSafeToolName(skill.id),
       })),
-      message: "Capacidades autorizadas encontradas. Usa la herramienta concreta si está disponible o explica el siguiente paso.",
-    }),
+      message: "Herramientas habilitadas. Puedes invocar sus toolName en el siguiente paso; las acciones sensibles requieren aprobación.",
+      };
+    },
   });
   riskByTool[capabilitySearchToolName] = "low";
   approvalByTool[capabilitySearchToolName] = "approved";
@@ -369,6 +384,18 @@ export async function createCentralBrainAgent(input: {
     maxOutputTokens: input.settings.maxTokens,
     maxRetries: 2,
     model: input.model,
+    activeTools: activeTools.list(),
+    prepareStep: ({ stepNumber }) => stepNumber >= 9
+      ? { activeTools: [], toolChoice: "none" as const }
+      : { activeTools: activeTools.list() },
+    repairToolCall: async ({ toolCall, inputSchema }) => {
+      const skill = available.find((candidate) => toSafeToolName(candidate.id) === toolCall.toolName);
+      if (skill?.kind !== "query") return null;
+      const parsed = (() => { try { return JSON.parse(toolCall.input); } catch { return null; } })();
+      const repaired = repairBrainQueryLimit(parsed, await inputSchema({ toolName: toolCall.toolName }));
+      if (!repaired || !skill.inputSchema.safeParse(repaired).success) return null;
+      return { ...toolCall, input: JSON.stringify(repaired) };
+    },
     stopWhen: isStepCount(10),
     temperature: input.settings.temperature,
     toolApproval: ({ toolCall }) => approvalByTool[toolCall.toolName] ?? "user-approval",

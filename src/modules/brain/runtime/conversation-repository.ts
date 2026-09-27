@@ -6,6 +6,7 @@ import type { UIMessage } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import type { BusinessSkillRisk } from "@/modules/brain/runtime/contracts";
 import type { JsonRecord, TenantContext } from "@/types/core";
+import { hasBrainMessageContent } from "@/modules/brain/runtime/conversation-messages";
 
 type ConversationChannel = "api" | "automation" | "bar" | "brain" | "customer" | "internal";
 type RunStatus =
@@ -95,11 +96,11 @@ export async function loadBrainMessages(
     .eq("empresa_id", tenant.empresaId)
     .eq("profile_id", tenant.profileId)
     .eq("conversation_id", conversationId)
-    .order("sequence", { ascending: true })
+    .order("sequence", { ascending: false })
     .limit(200);
 
   if (result.error) throw databaseError("No se pudo cargar el historial", result.error);
-  return (result.data ?? []).map((row) => row.content as unknown as UIMessage);
+  return (result.data ?? []).reverse().map((row) => row.content as unknown as UIMessage).filter(hasBrainMessageContent);
 }
 
 export async function saveBrainMessages(input: {
@@ -113,7 +114,10 @@ export async function saveBrainMessages(input: {
   // finish. Collapse repeated ids before upserting; Postgres rejects a single
   // upsert statement that targets the same unique row more than once.
   const messagesById = new Map<string, UIMessage>();
-  for (const message of input.messages) messagesById.set(message.id, message);
+  for (const message of input.messages) {
+    if (hasBrainMessageContent(message)) messagesById.set(message.id, message);
+  }
+  if (messagesById.size === 0) return;
   const rows = [...messagesById.values()].map((message) => ({
     content: asJson(message),
     conversation_id: input.conversationId,

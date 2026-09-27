@@ -20,6 +20,8 @@ import {
   validateIncomingBrainApprovals,
 } from "@/modules/brain/runtime/conversation-repository";
 import { resolveBrainLanguageModel } from "@/modules/brain/providers/model-router";
+import { brainChatFailure } from "@/modules/brain/runtime/chat-errors";
+import { hasBrainMessageContent, prepareIncomingBrainMessage } from "@/modules/brain/runtime/conversation-messages";
 
 export const maxDuration = 60;
 
@@ -36,7 +38,7 @@ const requestSchema = z.object({
   message: z.object({
     id: z.string().min(1).max(200),
     parts: z.array(z.unknown()),
-    role: z.enum(["system", "user", "assistant"]),
+    role: z.enum(["user", "assistant"]),
   }).passthrough(),
   selection: z.string().max(2_000).nullish(),
   timezone: z.string().trim().max(100).nullish(),
@@ -116,7 +118,7 @@ export async function POST(request: Request) {
   }
 
   const tenant = tenantResult.data;
-  const incoming = body.data.message as UIMessage;
+  let incoming = body.data.message as UIMessage;
   let runId: string | null = null;
 
   try {
@@ -126,8 +128,10 @@ export async function POST(request: Request) {
       currentPath: body.data.currentPath,
       tenant,
     });
-    await validateIncomingBrainApprovals({ conversationId, message: incoming, tenant });
     const previous = await loadBrainMessages(tenant, conversationId);
+    const prepared = prepareIncomingBrainMessage(previous, incoming);
+    incoming = prepared.message;
+    await validateIncomingBrainApprovals({ conversationId, message: { ...incoming, parts: prepared.decisions }, tenant });
     const messages = mergeIncomingMessage(previous, incoming);
     await saveBrainMessages({ conversationId, messages: [incoming], tenant });
     runId = await createBrainConversationRun({
@@ -164,15 +168,24 @@ export async function POST(request: Request) {
     });
 
     let modelStep = 0;
+    let streamFailure: ReturnType<typeof brainChatFailure> | null = null;
     const startedAt = performance.now();
-    return createAgentUIStreamResponse({
+    return await createAgentUIStreamResponse({
       agent,
+      onError: (error) => {
+        streamFailure = brainChatFailure(error);
+        console.error("[brain.chat.stream]", { runId, code: streamFailure.code });
+        return streamFailure.message;
+      },
       headers: {
         "x-brain-conversation-id": conversationId,
         "x-brain-run-id": runId,
       },
-      onFinish: async ({ finishReason, isAborted, messages: completedMessages }) => {
+      onFinish: async ({ finishReason, isAborted, messages: completedMessages, responseMessage }) => {
         try {
+          if (!isAborted && !hasBrainMessageContent(responseMessage) && !streamFailure) {
+            streamFailure = { code: "EMPTY_RESPONSE", message: "Brain terminó sin una respuesta. Puedes reintentar tu mensaje." };
+          }
           await saveBrainMessages({
             conversationId,
             messages: completedMessages,
@@ -185,24 +198,26 @@ export async function POST(request: Request) {
             runId: runId as string,
             tenant,
           });
-          const status = finishReason === "error"
+          const status = streamFailure || finishReason === "error"
             ? "failed"
             : isAborted
               ? "cancelled"
-              : hasPendingApproval(completedMessages)
+              : hasPendingApproval([responseMessage])
                 ? "waiting_approval"
-                : hasDeniedApproval(completedMessages)
+                : hasDeniedApproval([responseMessage])
                   ? "denied"
                   : "completed";
           await updateBrainRun({
-            response: { messageCount: completedMessages.length },
+            response: { messageCount: completedMessages.length, ...(streamFailure ? { error: streamFailure } : {}) },
             runId: runId as string,
             status,
             tenant,
           });
-          await appendBrainRunEvent(tenant, runId as string, `run.${status}`);
+          await appendBrainRunEvent(tenant, runId as string, `run.${status}`, streamFailure ?? {});
         } catch (error) {
-          console.error("[brain.chat.persistence]", error);
+          console.error("[brain.chat.persistence]", { runId, code: "PERSISTENCE_FAILED" });
+          await updateBrainRun({ tenant, runId: runId as string, status: "failed", response: { error: { code: "PERSISTENCE_FAILED", message: "No se pudo guardar la conversación." } } }).catch(() => undefined);
+          throw error;
         }
       },
       onStepEnd: async ({ finishReason, toolCalls, usage }) => {
