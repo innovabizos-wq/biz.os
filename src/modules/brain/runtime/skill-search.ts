@@ -28,8 +28,8 @@ const SEMANTIC_GROUPS = [
   ["venta", "ventas", "pedido", "orden", "sales"],
   ["cobro", "cobros", "cobrar", "cuenta", "receivable", "payments"],
   ["pago", "pagos", "pagar", "proveedor", "payable"],
-  ["compra", "compras", "abastecimiento", "reorden", "purchases"],
-  ["mensaje", "mensajes", "chat", "conversacion", "inbox", "whatsapp"],
+  ["compra", "comprar", "compras", "compro", "abastecimiento", "reorden", "purchases", "proveedor"],
+  ["mensaje", "mensajes", "chat", "chats", "conversacion", "conversaciones", "inbox", "whatsapp"],
   ["tarea", "tareas", "seguimiento", "recordatorio", "agenda"],
   ["factura", "facturacion", "fiscal", "billing"],
   ["despacho", "despachos", "entrega", "logistica", "dispatch"],
@@ -39,9 +39,11 @@ const SEMANTIC_GROUPS = [
   ["crear", "registrar", "agregar", "nuevo", "preparar"],
   ["editar", "actualizar", "cambiar", "modificar"],
   ["eliminar", "borrar", "cancelar", "anular", "cerrar"],
-  ["vencido", "vencidos", "atrasado", "moroso", "expirado"],
+  ["vencido", "vencidos", "atrasado", "atrasados", "moroso", "expirado", "sla"],
   ["abierto", "abiertos", "pendiente", "pendientes", "pipeline"],
   ["resumen", "total", "cuanto", "cuantos", "cantidad", "sumar"],
+  ["conocimiento", "horario", "horarios", "atencion", "politica", "politicas", "devolucion", "devoluciones", "oferta", "ofertas", "ofrecemos", "ofrecen"],
+  ["analiza", "analizar", "analisis", "evaluar", "evaluacion", "negocio", "empresa"],
 ];
 
 const SEMANTIC_INDEX = new Map<string, string[]>();
@@ -85,10 +87,50 @@ function scoreSkill(skill: SearchableSkill, tokens: string[], message: string) {
     else if (description.includes(token)) score += 2;
   }
 
-  if (message.includes("cuant") || message.includes("total") || message.includes("resumen")) {
-    if (["query", "analysis"].includes(skill.kind)) score += 5;
+  if (
+    /\b(?:cuanto|cuanta|cuantos|cuantas|total|cantidad|muestra|mostrar|consulta|consultar|busca|buscar|encuentra|ver|lista|listar|hay|tenemos|existe|tienen)\b/.test(message) &&
+    skill.kind === "query"
+  ) {
+    score += 6;
   }
-  if (/\b(crea|crear|registra|registrar|agrega|prepara)\b/.test(message)) {
+
+  if (/\b(?:analiza|analizar|analisis|revisa|revisar|evalua|evaluar)\b/.test(message) && skill.kind === "analysis") score += 9;
+  if (/\b(?:recomienda|recomendar|recomendacion|recomendaciones|sugiere|sugerir|prioriza|priorizar)\b/.test(message) && skill.name.toLowerCase().includes("recom")) score += 9;
+  if (/\b(?:prepara|preparar|redacta|redactar|arma|armar|borrador|plan)\b/.test(message) && skill.kind === "draft") score += 9;
+  if (/\b(?:monitorea|monitorear|vigila|vigilar|alerta|avisa|avisar)\b/.test(message) && /monitor/.test(id)) score += 9;
+
+  if (
+    skill.id === "brain.analysis.run" &&
+    /\b(?:analiza|analizar|analisis|evalua|evaluar)\b/.test(message)
+  ) score += 30;
+  if (
+    skill.id === "brain.question.answer" &&
+    /\b(?:como va|como esta|que esta pasando|que debo atender|que tengo que atender|prioridades)\b/.test(message)
+  ) score += 30;
+  if (
+    skill.id === "brain.signals.query" &&
+    /\b(?:alerta|alertas|senal|senales|detecta)\b/.test(message)
+  ) score += 30;
+  if (
+    skill.id === "brain.knowledge.search" &&
+    /\b(?:horario|horarios|politica|politicas|devolucion|devoluciones|que ofrecemos|que ofrece|ofertas?)\b/.test(message)
+  ) score += 30;
+  if (
+    skill.id === "quotes.item.add" &&
+    /\b(?:incluye|incluir|agrega|agregar|anade|anadir)\b/.test(message)
+  ) score += 30;
+  if (
+    skill.id === "payments.payment.register" &&
+    /\b(?:aplica|aplicar|registra|registrar|anota|anotar)\b/.test(message) &&
+    /\b(?:pago|pagar|cobro|abono)\b/.test(message)
+  ) score += 30;
+
+  // Specific module skills should win over the broad, generated agent skills
+  // whenever they cover the same request. The generated tools remain available
+  // as fallbacks for work that has no dedicated capability yet.
+  if (!skill.id.startsWith("agent.")) score += 12;
+
+  if (/\b(crea|crear|registra|registrar|agrega|agregar|incluye|incluir|aplica|aplicar|prepara|preparar)\b/.test(message)) {
     if (["command", "draft"].includes(skill.kind)) score += 6;
   }
   if (/\b(busca|buscar|encuentra|consulta|dime|muestra)\b/.test(message)) {
@@ -124,10 +166,26 @@ export function rankBusinessSkills<TSkill extends SearchableSkill>({
       right.score - left.score || left.skill.id.localeCompare(right.skill.id),
     );
 
-  const selected = ranked
-    .filter((candidate) => candidate.score > 0 || ALWAYS_AVAILABLE.has(candidate.skill.id))
-    .slice(0, Math.max(1, limit))
-    .map((candidate) => candidate.skill);
+  const selected: TSkill[] = [];
+  const selectedAgentFamilies = new Set<string>();
+  const maxResults = Math.max(1, limit);
+
+  for (const candidate of ranked) {
+    const { skill } = candidate;
+    if (candidate.score <= 0 && !ALWAYS_AVAILABLE.has(skill.id)) continue;
+
+    // Generated agent skills contain five actions per business area.
+    // Expose only the best fit from each area so near-identical query/analyze/
+    // recommend/prepare/monitor tools cannot crowd specific skills out.
+    const agentFamily = skill.id.startsWith("agent.")
+      ? skill.id.replace(/\.(?:analyze|monitor|prepare|query|recommend)\.skill\.v\d+$/, "")
+      : null;
+    if (agentFamily && selectedAgentFamilies.has(agentFamily)) continue;
+
+    selected.push(skill);
+    if (agentFamily) selectedAgentFamilies.add(agentFamily);
+    if (selected.length >= maxResults) break;
+  }
 
   for (const skill of skills) {
     if (

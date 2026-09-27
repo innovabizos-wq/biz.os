@@ -81,9 +81,36 @@ const { parseProductCreationEntities } = await import(
 const { createInitialReadBusinessSkills } = await import(
   new URL("../src/modules/brain/runtime/skills/read-skills.ts", import.meta.url)
 );
+const { createInventoryPurchasesAgentBusinessSkills } = await import(
+  new URL("../src/modules/brain/runtime/skills/inventory-purchases-agent-skills.ts", import.meta.url)
+);
+const { createRemainingAgentBusinessSkills } = await import(
+  new URL("../src/modules/brain/runtime/skills/remaining-agent-skills.ts", import.meta.url)
+);
+const { createSalesCrmAgentBusinessSkills } = await import(
+  new URL("../src/modules/brain/runtime/skills/sales-crm-agent-skills.ts", import.meta.url)
+);
+const { createBrainKnowledgeSkills } = await import(
+  new URL("../src/modules/brain/runtime/skills/knowledge-skills.ts", import.meta.url)
+);
 const { createLegacyConversationBusinessSkills } = await import(
   new URL("../src/modules/brain/runtime/skills/legacy-action-skills.ts", import.meta.url)
 );
+const { rankBusinessSkills } = await import(
+  new URL("../src/modules/brain/runtime/skill-search.ts", import.meta.url)
+);
+
+const initialReadSkills = createInitialReadBusinessSkills();
+const registeredBusinessSkills = [
+  ...initialReadSkills,
+  ...createInventoryPurchasesAgentBusinessSkills(),
+  ...createRemainingAgentBusinessSkills(),
+  ...createSalesCrmAgentBusinessSkills(),
+  ...createBrainKnowledgeSkills(),
+  ...createLegacyConversationBusinessSkills(
+    initialReadSkills.flatMap((skill) => skill.legacyActionId ? [skill.legacyActionId] : []),
+  ),
+];
 
 function tenant(overrides = {}) {
   return {
@@ -431,6 +458,57 @@ test("Every current Business Skill has an Intent and Capability path", () => {
       `Missing intent for ${capability.id}`,
     );
   }
+});
+
+test("Every intent example can retrieve its real Skill in global and module context", () => {
+  const capabilityRegistry = createCapabilityRegistry(initialCapabilities);
+  const misses = [];
+
+  for (const intent of initialBusinessIntents) {
+    const binding = capabilityRegistry.getImplementedBinding(intent.capabilityId);
+    if (!binding) continue;
+
+    const expectedSkill = binding.skillId;
+    for (const message of intent.examples) {
+      for (const currentModule of [undefined, intent.module]) {
+        const selected = rankBusinessSkills({
+          currentModule,
+          limit: 20,
+          message,
+          skills: registeredBusinessSkills,
+        });
+        if (!selected.some((skill) => skill.id === expectedSkill)) {
+          misses.push({ currentModule: currentModule ?? "global", expectedSkill, message });
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(misses, []);
+});
+
+test("All registered Skills are selectable from their natural-language names", () => {
+  const misses = [];
+
+  for (const skill of registeredBusinessSkills) {
+    for (const currentModule of [undefined, skill.module]) {
+      const selected = rankBusinessSkills({
+        currentModule,
+        limit: 20,
+        message: skill.name,
+        skills: registeredBusinessSkills,
+      });
+      if (!selected.some((candidate) => candidate.id === skill.id)) {
+        misses.push({
+          currentModule: currentModule ?? "global",
+          id: skill.id,
+          name: skill.name,
+        });
+      }
+    }
+  }
+
+  assert.deepEqual(misses, []);
 });
 
 test("Operational Brain questions use a dedicated Business Skill with real evidence", () => {
