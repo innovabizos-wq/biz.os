@@ -240,9 +240,9 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   ]);
 
   return (
-    <div className="grid min-h-screen max-w-screen overflow-hidden bg-muted lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="app-sidebar-shell hidden border-r p-6 lg:block">
-        <div className="flex min-h-[calc(100vh-3rem)] flex-col gap-6">
+    <div className="grid min-h-screen max-w-screen overflow-hidden bg-muted lg:grid-cols-[244px_minmax(0,1fr)]">
+      <aside className="app-sidebar-shell hidden border-r p-4 lg:block">
+        <div className="flex min-h-[calc(100vh-2rem)] flex-col gap-4">
           <SidebarBrandLogo />
           <AppSidebarNav
             showAdmin={Boolean(showAdmin)}
