@@ -76,7 +76,7 @@ export async function saveQuoteDocumentSettingsAction(formData: FormData) {
     accentColor: formData.get("accentColor"),
     documentLabel: formData.get("documentLabel"),
     footerText: formData.get("footerText"),
-    removeLogo: formData.get("removeLogo"),
+    removeLogo: formData.get("removeLogo") ?? undefined,
     templateCode: formData.get("templateCode"),
   });
   if (!parsed.success || !parsed.data) redirectWithError("Revisa los datos del diseño.");
