@@ -170,7 +170,7 @@ test("Business Skill Registry prevents duplicate ids and legacy mappings", () =>
   assert.equal(registry.register(searchSkill("crm.customer.search.v2")).ok, false);
 });
 
-test("Business Skill Registry exposes only authorized active-module skills", () => {
+test("Business Skill Registry exposes authorized included-module skills", () => {
   const registry = createBusinessSkillRegistry([searchSkill()]);
   const optionalRegistry = createBusinessSkillRegistry([
     searchSkill("billing.customer.search", {
@@ -186,7 +186,7 @@ test("Business Skill Registry exposes only authorized active-module skills", () 
     optionalRegistry.getAvailable(
       tenant({ activeModules: [], permissions: ["billing.view"] }),
     ).length,
-    0,
+    1,
   );
 });
 
@@ -227,7 +227,7 @@ test("Business Skill Executor validates policy, input and output", async () => {
   assert.equal(denied.ok, false);
   assert.equal(denied.error.code, "PERMISSION_DENIED");
 
-  const inactiveExecutor = createBusinessSkillExecutor(
+  const includedExecutor = createBusinessSkillExecutor(
     createBusinessSkillRegistry([
       searchSkill("billing.customer.search", {
         legacyActionId: "billing.customer.search",
@@ -238,18 +238,18 @@ test("Business Skill Executor validates policy, input and output", async () => {
     undefined,
     { async record(event) { traces.push(event); } },
   );
-  const inactive = await inactiveExecutor.invoke({
+  const included = await includedExecutor.invoke({
     input: { query: "customer-1" },
     skillId: "billing.customer.search",
     source: { channel: "module", module: "billing", surface: "test" },
     tenant: tenant({ activeModules: ["crm"], permissions: ["billing.view"] }),
   });
-  assert.equal(inactive.ok, false);
-  assert.equal(inactive.error.code, "MODULE_INACTIVE");
+  assert.equal(included.ok, true);
+  assert.deepEqual(included.data.data, { customers: [{ id: "customer-1" }] });
 
   assert.deepEqual(
     traces.map((event) => event.status),
-    ["success", "blocked", "blocked", "blocked"],
+    ["success", "blocked", "blocked", "success"],
   );
 });
 

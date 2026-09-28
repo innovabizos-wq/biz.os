@@ -77,6 +77,10 @@ const paymentIdempotencyMigration = readFileSync(
   ),
   "utf8",
 );
+const migration0076 = readFileSync(
+  new URL("../database/migrations/0076_all_modules_active_by_default.sql", import.meta.url),
+  "utf8",
+);
 
 const expectedCoreModules = [
   "admin",
@@ -88,9 +92,6 @@ const expectedCoreModules = [
   "inventory",
   "dispatch",
   "hr",
-];
-
-const expectedOptionalModules = [
   "billing",
   "whapp",
   "reports",
@@ -99,6 +100,7 @@ const expectedOptionalModules = [
   "purchases",
   "payments",
   "mobile",
+  "brain",
 ];
 
 function moduleBlock(code) {
@@ -111,7 +113,7 @@ function moduleBlock(code) {
 }
 
 test("platform contract declares every expected module in ModuleCode", () => {
-  for (const code of [...expectedCoreModules, ...expectedOptionalModules]) {
+  for (const code of expectedCoreModules) {
     assert.match(coreSource, new RegExp(String.raw`\| "${code}"`));
   }
 });
@@ -122,13 +124,10 @@ test("core modules are locked in the central module catalog", () => {
   }
 });
 
-test("optional modules stay toggleable in the central module catalog", () => {
-  for (const code of expectedOptionalModules) {
-    assert.match(
-      moduleBlock(code),
-      /kind: "optional"/,
-      `${code} must be optional`,
-    );
+test("no platform module starts as optional or disabled", () => {
+  assert.doesNotMatch(catalogSource, /kind: "optional"/);
+  for (const code of expectedCoreModules) {
+    assert.match(moduleBlock(code), /kind: "core"/, code + " must be included from the start");
   }
 });
 
@@ -226,7 +225,7 @@ test("AI module declares its administration route in the platform catalog", () =
   assert.match(moduleBlock("ai"), /routes: \["\/admin\/ia"\]/);
 });
 
-test("optional module activation restores admin access after emergency permission unassignment", () => {
+test("all module activation restores admin access after emergency permission unassignment", () => {
   assert.match(migration0044, /delete from public\.rol_permisos rp/);
   assert.match(migration0044, /purchases\.orders\.view/);
   assert.match(migration0044, /payments\.accounts\.view/);
@@ -241,6 +240,16 @@ test("optional module activation restores admin access after emergency permissio
   assert.match(migration0045, /em\.estado = 'activo'/);
   assert.match(migration0045, /m\.codigo not in \(/);
   assert.doesNotMatch(migration0045, /delete from public\.rol_permisos/i);
+});
+
+test("all modules active migration backfills existing companies and new tenant plans", () => {
+  assert.match(migration0076, /where m\.estado = 'activo'/);
+  assert.match(migration0076, /estado = 'activo'/);
+  assert.match(migration0076, /fecha_desactivacion = null/);
+  assert.match(migration0076, /activar_todos_modulos_empresa/);
+  assert.match(migration0076, /create trigger empresa_plan_activar_todos_modulos/);
+  assert.doesNotMatch(migration0076, /m\.codigo in \('admin', 'crm', 'hr', 'reports'\)/);
+  assert.doesNotMatch(migration0076, /insert into public\.rol_permisos/);
 });
 
 test("unused module health writer is not exposed to authenticated users", () => {

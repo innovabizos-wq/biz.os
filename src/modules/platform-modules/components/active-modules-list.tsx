@@ -42,7 +42,7 @@ export function ActiveModulesList({ modules }: ActiveModulesListProps) {
           <tr>
             <th className="px-4 py-3">Modulo</th>
             <th className="px-4 py-3">Descripcion</th>
-            <th className="px-4 py-3">Tipo</th>
+            <th className="px-4 py-3">Disponibilidad</th>
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3 text-right">Accion</th>
           </tr>
@@ -67,11 +67,11 @@ export function ActiveModulesList({ modules }: ActiveModulesListProps) {
                       : "inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-800"
                   }
                 >
-                  {module.isCore ? "Madre" : "Opcional"}
+                  {module.isCore ? "Incluido" : "Configurable"}
                 </span>
                 {module.isCore ? (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Bloqueado por arquitectura
+                    Activo desde el inicio
                   </p>
                 ) : null}
                 {module.requiredConfigKeys.length > 0 ? (

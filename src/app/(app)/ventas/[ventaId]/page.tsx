@@ -256,7 +256,7 @@ export default async function SaleDetailPage({
             .
           </>
         ) : (
-          "Pagos se activa desde el modulo opcional cuando la empresa lo necesite."
+          "Pagos esta incluido desde el inicio, pero este usuario no tiene permiso para verlo."
         )}{" "}
         {canViewBilling
           ? "Facturacion fiscal esta disponible desde el modulo Facturacion."

@@ -290,7 +290,7 @@ export const getCurrentTenantContext = cache(async function getCurrentTenantCont
     .map((permiso) => permiso?.codigo)
     .filter(isKnownPermissionCode);
 
-  const activeModules = (modulesResult.data ?? [])
+  const persistedActiveModules = (modulesResult.data ?? [])
     .map((row) =>
       getSingleRelation(
         row.modulos as CodigoRelation<ModuleCode> | CodigoRelation<ModuleCode>[],
@@ -298,6 +298,10 @@ export const getCurrentTenantContext = cache(async function getCurrentTenantCont
     )
     .map((modulo) => modulo?.codigo)
     .filter(isKnownModuleCode);
+
+  const activeModules = Array.from(
+    new Set<ModuleCode>([...MODULE_CODES, ...persistedActiveModules]),
+  );
 
   const planRelation = getSingleRelation(
     planResult.data?.planes as

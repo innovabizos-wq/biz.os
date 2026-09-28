@@ -40,7 +40,7 @@ export default async function AdminModulosPage({
   return (
     <section className="space-y-6">
       <SectionHeader
-        description="Activa o desactiva los modulos disponibles para esta empresa."
+        description="Todos los modulos incluidos quedan activos desde el inicio para cada empresa."
         eyebrow="Administracion"
         title="Modulos activos"
       />
@@ -48,11 +48,9 @@ export default async function AdminModulosPage({
       <EphemeralPageAlert error={params?.error} success={params?.success} />
 
       <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-        Los modulos activos definen que funciones estan disponibles para esta
-        empresa. Los permisos definen que usuarios pueden usar esas funciones.
-        Al activar un modulo opcional, los roles Administrador y Super Admin
-        reciben automaticamente los permisos base para que sea visible y usable
-        sin editar roles manualmente.
+        Los modulos de biz.os quedan disponibles desde el primer inicio. Los
+        permisos siguen definiendo que usuarios pueden usar cada funcion, y las
+        conexiones o credenciales pendientes se configuran dentro de cada modulo.
       </p>
 
       {modules.ok && modules.data.length > 0 ? (
@@ -69,9 +67,9 @@ export default async function AdminModulosPage({
       )}
 
       <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-        Mobile se mantiene como modulo API-only. Reports queda disponible como
-        Reportes dentro de la navegacion principal cuando el modulo y permisos
-        estan activos.
+        Mobile se mantiene como modulo API-only. Reportes, Facturacion, Pagos,
+        Compras, Whapp, Autoblog, IA y Brain aparecen desde el inicio cuando el
+        usuario tiene permisos para verlos.
       </p>
     </section>
   );

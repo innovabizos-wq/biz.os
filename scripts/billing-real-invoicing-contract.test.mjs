@@ -39,12 +39,12 @@ test("billing routes exist and are protected by module and permission guards", (
   assert.match(guards, /billing\.invoices\.create/);
 });
 
-test("billing module contract declares optional module routes and granular permissions", () => {
+test("billing module contract declares included module routes and granular permissions", () => {
   const catalog = source("src/modules/platform-modules/module-catalog.ts");
   const permissions = source("src/modules/permissions/permissions.ts");
 
   assert.match(catalog, /code: "billing"/);
-  assert.match(catalog, /kind: "optional"/);
+  assert.match(catalog, /kind: "core"/);
   assert.match(catalog, /"\/facturacion\/documentos"/);
   assert.match(catalog, /requiredPermissions: \["billing\.view", "billing\.config\.view"\]/);
 
