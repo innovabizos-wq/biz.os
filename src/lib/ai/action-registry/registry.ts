@@ -5,6 +5,7 @@ import { z } from "zod";
 import { hasEveryPermission, hasPermission } from "@/lib/permissions/permission-checks";
 import { createClient } from "@/lib/supabase/server";
 import { getProducts } from "@/modules/catalog/queries";
+import { getCrmCustomers } from "@/modules/crm/queries";
 import {
   isValidCrmIdentification,
   normalizeCrmIdentification,
@@ -17,7 +18,6 @@ import {
 import { generateAutoblogDraft } from "@/modules/autoblog/ai";
 import { getBusinessContext } from "@/modules/business-context/queries";
 import { getQuoteModalItemValidationMessage } from "@/modules/quotes/quote-validation";
-import { quoteModalItemsSchema } from "@/modules/quotes/schemas";
 import type {
   ConversationActionDefinition,
   PublicConversationAction,
@@ -145,13 +145,32 @@ const createProductSchema = z.object({
   }
 });
 
+const brainQuoteDraftItemSchema = z.object({
+  cantidad: z.coerce.number().positive(),
+  descripcion: z.string().trim().min(1),
+  descuento: z.coerce.number().min(0).default(0),
+  impuestoPorcentaje: z.coerce.number().min(0).max(100).optional(),
+  precioUnitario: z.coerce.number().positive().optional(),
+  productoId: z.string().uuid().optional(),
+  productQuery: optionalText,
+});
+
 const createQuoteDraftSchema = z.object({
   clienteId: z.string().uuid().optional(),
+  customerQuery: optionalText,
   condiciones: optionalText,
   fechaVencimiento: optionalText,
-  items: quoteModalItemsSchema,
+  items: z.array(brainQuoteDraftItemSchema).min(1),
   moneda: z.enum(["CRC", "USD"]).default("CRC"),
   notas: optionalText,
+}).superRefine((value, context) => {
+  if (!value.clienteId && !value.customerQuery) {
+    context.addIssue({
+      code: "custom",
+      message: "Indica el cliente por nombre, cedula o identificacion.",
+      path: ["customerQuery"],
+    });
+  }
 });
 
 function normalizeSearch(value: string) {
@@ -208,6 +227,46 @@ function fuzzyIncludesSearch(value: string | null | undefined, query: string) {
         queryToken.includes(valueToken) ||
         levenshteinDistance(valueToken, queryToken) <= 2,
     ),
+  );
+}
+
+function normalizedDigits(value: string | null | undefined) {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+function customerMatchesSearch(customer: {
+  correo?: string | null;
+  id: string;
+  identificacion?: string | null;
+  nombre: string;
+  telefono?: string | null;
+  whatsapp?: string | null;
+}, query: string) {
+  const normalizedQuery = normalizeSearch(query);
+  const queryDigits = normalizedDigits(query);
+
+  if (queryDigits.length >= 6 && normalizedDigits(customer.identificacion) === queryDigits) {
+    return true;
+  }
+
+  return [
+    customer.id,
+    customer.identificacion,
+    customer.nombre,
+    customer.correo,
+    customer.telefono,
+    customer.whatsapp,
+  ].some((value) => fuzzyIncludesSearch(value, normalizedQuery));
+}
+
+function productMatchesSearch(product: {
+  codigo?: string | null;
+  descripcion?: string | null;
+  nombre: string;
+}, query: string) {
+  const normalizedQuery = normalizeSearch(query);
+  return [product.codigo, product.nombre, product.descripcion].some((value) =>
+    fuzzyIncludesSearch(value, normalizedQuery),
   );
 }
 
@@ -649,16 +708,60 @@ export const conversationActionRegistry: ConversationActionDefinition[] = [
     requiresConfirmation: true,
     risk: "high",
     schema: createQuoteDraftSchema,
-    async handler(params: z.infer<typeof createQuoteDraftSchema>) {
-      const itemMessage = getQuoteModalItemValidationMessage(params.items);
+    async handler(params: z.infer<typeof createQuoteDraftSchema>, { tenant }) {
+      const [customersResult, productsResult] = await Promise.all([
+        getCrmCustomers(tenant),
+        getProducts(tenant, "todos", "activo"),
+      ]);
+      if (!customersResult.ok) throw new Error(customersResult.error.message);
+      if (!productsResult.ok) throw new Error(productsResult.error.message);
+
+      const customer = params.clienteId
+        ? customersResult.data.find((item) => item.id === params.clienteId)
+        : customersResult.data.find((item) =>
+            customerMatchesSearch(item, params.customerQuery ?? ""),
+          );
+
+      if (!customer) {
+        throw new Error(
+          params.customerQuery
+            ? `No encontre un cliente con "${params.customerQuery}". Puedes crearlo primero o revisar la cedula.`
+            : "No encontre el cliente seleccionado.",
+        );
+      }
+
+      const normalizedItems = params.items.map((item) => {
+        const productQuery = item.productQuery ?? item.descripcion;
+        const product = item.productoId
+          ? productsResult.data.find((candidate) => candidate.id === item.productoId)
+          : productsResult.data.find((candidate) => productMatchesSearch(candidate, productQuery));
+        const precioUnitario = item.precioUnitario ?? product?.precioBase;
+
+        if (!precioUnitario || precioUnitario <= 0) {
+          throw new Error(
+            `Indica el precio unitario de ${item.descripcion}; no encontre un precio activo en catalogo.`,
+          );
+        }
+
+        return {
+          cantidad: item.cantidad,
+          descripcion: product?.nombre ?? item.descripcion,
+          descuento: item.descuento,
+          impuestoPorcentaje: item.impuestoPorcentaje ?? product?.impuestoPorcentaje ?? 0,
+          precioUnitario,
+          productoId: product?.id ?? item.productoId,
+        };
+      });
+
+      const itemMessage = getQuoteModalItemValidationMessage(normalizedItems);
       if (itemMessage) throw new Error(itemMessage);
 
       const supabase = await createClient();
       const { data, error } = await supabase.rpc("crear_cotizacion", {
-        p_cliente_id: params.clienteId ?? null,
+        p_cliente_id: customer.id,
         p_condiciones: params.condiciones ?? null,
         p_fecha_vencimiento: params.fechaVencimiento ?? null,
-        p_items: params.items.map((item, index) => ({
+        p_items: normalizedItems.map((item, index) => ({
           cantidad: item.cantidad,
           descripcion: item.descripcion,
           descuento: item.descuento,
@@ -676,7 +779,7 @@ export const conversationActionRegistry: ConversationActionDefinition[] = [
       const created = (data as { cotizacion_id?: string; numero?: string }[] | null)?.[0] ?? null;
       return {
         entityId: created?.cotizacion_id ?? null,
-        message: "Proforma creada correctamente.",
+        message: `Proforma creada correctamente para ${customer.nombre}.`,
         result: {
           quoteId: created?.cotizacion_id ?? null,
           quoteNumber: created?.numero ?? null,

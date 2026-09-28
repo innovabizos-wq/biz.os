@@ -1160,10 +1160,14 @@ export const initialBusinessIntents: BusinessIntentDefinition[] = [
     capabilityId: "quotes.draft.create",
     description: "Crear borrador de cotizacion.",
     enabled: true,
-    examples: ["crear cotizacion", "preparar proforma"],
+    examples: [
+      "crear cotizacion",
+      "preparar proforma",
+      "crea una proforma para cedula 115450430 por 200 guantes",
+    ],
     id: "quotes.draft.create",
     module: "quotes",
-    requiredSlots: [quoteItemsSlot],
+    requiredSlots: [customerQuerySlot, quoteItemsSlot],
   },
   {
     capabilityId: "agenda.task.create",

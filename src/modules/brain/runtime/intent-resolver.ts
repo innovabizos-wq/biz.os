@@ -204,28 +204,29 @@ function parseQuoteDraftEntities(message: string) {
   const normalized = normalize(message);
   const customerQuery = firstMatch(
     normalized,
-    /\b(?:para|cliente)\s+([\w\s.'-]+?)(?=\s+(?:con|incluyendo|que|por)\b|$)/i,
+    /\b(?:para|cliente)\s+(?:id|cedula|c(?:e|\u00e9)dula|identificacion|identificaci(?:o|\u00f3)n)?\s*([\w\s.'-]+?)(?=\s+(?:con|incluyendo|incluye|que|por)\b|$)/i,
   );
   const itemText = firstMatch(
     message,
-    /\b(?:con|incluyendo|incluye)\s+(.+)$/i,
+    /\b(?:con|incluyendo|incluye|por)\s+(.+)$/i,
   );
   const quantity = parseQuantity(
     itemText?.match(/^\s*(\d+(?:[.,]\d+)?|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i)?.[1],
   );
   const price = parseMoney(
-    itemText?.match(/\b(?:precio|a|por|de)\s*(?:crc|₡|\$)?\s*([0-9][0-9.,]*)\b/i)?.[1],
+    itemText?.match(/\b(?:precio|a|valor|unitario)\s*(?:crc|₡|\$)?\s*([0-9][0-9.,]*)\b/i)?.[1],
   );
   const description = itemText
     ?.replace(/^\s*(\d+(?:[.,]\d+)?|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+/i, "")
-    .replace(/\b(?:precio|a|por|de)\s*(?:crc|₡|\$)?\s*[0-9][0-9.,]*\b.*$/i, "")
+    .replace(/^(?:pares?|unidades?|uds?|cajas?|paquetes?)\s+(?:de\s+)?/i, "")
+    .replace(/\b(?:precio|a|valor|unitario)\s*(?:crc|₡|\$)?\s*[0-9][0-9.,]*\b.*$/i, "")
     .trim();
   const productDescription = description ? normalize(description) : "";
   const isGenericProduct =
     /^(guante|guantes|lente|lentes|casco|cascos|producto|productos|servicio|servicios)$/.test(
       productDescription,
     );
-  const hasCompleteItem = Boolean(description && quantity && price && !isGenericProduct);
+  const hasCompleteItem = Boolean(description && quantity && !isGenericProduct);
 
   return {
     content: message,
@@ -237,7 +238,8 @@ function parseQuoteDraftEntities(message: string) {
             descripcion: description,
             descuento: 0,
             impuestoPorcentaje: 0,
-            precioUnitario: price,
+            ...(price ? { precioUnitario: price } : {}),
+            productQuery: description,
           },
         ]
       : undefined,
@@ -319,6 +321,16 @@ function parseSearchAndRead(message: string) {
       limit: 8,
       query: customerMatch[1].trim(),
     });
+  }
+
+  const quoteCustomerMatch = normalized.match(
+    /\b(?:busca|buscar|encuentra|encontrar|muestra|muestrame|consulta|consultar|lista|listar)\s+(?:las\s+)?(?:cotizaciones|proformas)\s+(?:del|de|para|asociadas?\s+(?:al|a)|cliente|cedula|id|identificacion)\s+(?:cliente\s+)?(?:con\s+)?(?:cedula|id|identificacion)?\s*([0-9][0-9\s-]{5,20}|[\w\s.'-]{2,80})$/,
+  );
+  if (quoteCustomerMatch?.[1]) {
+    return resolve("quotes.open.query", "quotes.open.query", {
+      customerQuery: quoteCustomerMatch[1].trim(),
+      limit: 20,
+    }, 0.9);
   }
 
   const productMatch = normalized.match(/\b(?:busca|buscar|encuentra|encontrar)\s+(?:el\s+)?(?:producto|productos|servicio|servicios)\s+(.+)$/);
@@ -467,7 +479,7 @@ function parsePlannedCapability(message: string) {
     return resolve("inventory.stock.transfer", "inventory.stock.transfer", {}, 0.8);
   }
 
-  if (/\b(?:crea|crear|prepara|preparar|arma|armar)\b.*\b(?:cotizacion|proforma)\b/.test(normalized)) {
+  if (/\b(?:crea|cree|crear|prepara|preparar|arma|armar)\b.*\b(?:cotizacion|proforma)\b/.test(normalized)) {
     return resolve(
       "quotes.draft.create",
       "quotes.draft.create",

@@ -193,6 +193,7 @@ const quoteExpiredQueryInputSchema = z.object({
 });
 
 const quoteOpenQueryInputSchema = z.object({
+  customerQuery: z.string().trim().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
@@ -200,7 +201,14 @@ const quoteOpenQueryOutputSchema = z.object({
   quotes: z.array(
     z.object({
       clienteNombre: nullableText,
-      estado: z.enum(["borrador", "enviada"]),
+      estado: z.enum([
+        "anulada",
+        "aceptada",
+        "borrador",
+        "enviada",
+        "rechazada",
+        "vencida",
+      ]),
       fechaVencimiento: nullableText,
       moneda: z.string(),
       numero: z.string(),
@@ -512,8 +520,22 @@ function normalize(value: string | null | undefined) {
     .trim();
 }
 
+function normalizedDigits(value: string | null | undefined) {
+  return (value ?? "").replace(/\D/g, "");
+}
+
 function customerMatches(customer: CrmCustomer, query: string) {
   if (!query) return true;
+
+  const queryDigits = normalizedDigits(query);
+  if (queryDigits) {
+    const exactDigitMatch = [
+      customer.identificacion,
+      customer.telefono,
+      customer.whatsapp,
+    ].some((value) => normalizedDigits(value) === queryDigits);
+    if (exactDigitMatch) return true;
+  }
 
   return [
     customer.nombre,
@@ -1954,18 +1976,39 @@ const quotesOpenQuerySkill = defineBusinessSkill<
   risk: "low",
   version: "1.0.0",
   async execute(input, context) {
-    const quotes = await getQuotes(context.tenant, "todos");
+    const [quotes, customers] = await Promise.all([
+      getQuotes(context.tenant, "todos"),
+      input.customerQuery ? getCrmCustomers(context.tenant) : Promise.resolve(ok([] as CrmCustomer[])),
+    ]);
     if (!quotes.ok) return fail(quotes.error.code, quotes.error.message);
+    if (!customers.ok) return fail(customers.error.code, customers.error.message);
 
-    const openQuotes = quotes.data
-      .filter((quote) => quote.estado === "borrador" || quote.estado === "enviada");
+    const customerQuery = normalize(input.customerQuery);
+    const matchingCustomers = customerQuery
+      ? customers.data.filter((customer) => customerMatches(customer, customerQuery))
+      : [];
+    if (customerQuery && matchingCustomers.length === 0) {
+      return ok({
+        data: { quotes: [], total: 0 },
+        evidence: sourceEvidence("crm_clientes", 0),
+        links: [{ href: "/cotizaciones", label: "Abrir cotizaciones" }],
+        message: `No encontre un cliente con "${input.customerQuery}" para consultar cotizaciones.`,
+      });
+    }
+
+    const customerIds = new Set(matchingCustomers.map((customer) => customer.id));
+
+    const openQuotes = quotes.data.filter((quote) => {
+      if (customerQuery) return quote.clienteId ? customerIds.has(quote.clienteId) : false;
+      return quote.estado === "borrador" || quote.estado === "enviada";
+    });
     const open = openQuotes.slice(0, input.limit);
 
     return ok({
       data: {
         quotes: open.map((quote) => ({
           clienteNombre: quote.clienteNombre,
-          estado: quote.estado === "borrador" ? "borrador" : "enviada",
+          estado: quote.estado,
           fechaVencimiento: quote.fechaVencimiento,
           moneda: quote.moneda,
           numero: quote.numero,
@@ -1973,11 +2016,24 @@ const quotesOpenQuerySkill = defineBusinessSkill<
         })),
         total: openQuotes.length,
       },
-      evidence: sourceEvidence("cotizaciones", openQuotes.length),
-      links: [{ href: "/cotizaciones", label: "Abrir cotizaciones" }],
-      message: openQuotes.length > 0
-        ? `Hay ${openQuotes.length} cotizacion(es) abierta(s) en borrador o enviada.`
-        : "No hay cotizaciones abiertas en borrador o enviadas.",
+      evidence: [
+        ...sourceEvidence("cotizaciones", openQuotes.length),
+        ...(customerQuery ? sourceEvidence("crm_clientes", matchingCustomers.length) : []),
+      ],
+      links: [
+        { href: "/cotizaciones", label: "Abrir cotizaciones" },
+        ...open.slice(0, 5).map((quote) => ({
+          href: `/cotizaciones/${quote.id}`,
+          label: quote.numero,
+        })),
+      ],
+      message: customerQuery
+        ? openQuotes.length > 0
+          ? `Encontre ${openQuotes.length} cotizacion(es) para ${matchingCustomers.map((customer) => customer.nombre).join(", ")}.`
+          : `No encontre cotizaciones para ${matchingCustomers.map((customer) => customer.nombre).join(", ")}.`
+        : openQuotes.length > 0
+          ? `Hay ${openQuotes.length} cotizacion(es) abierta(s) en borrador o enviada.`
+          : "No hay cotizaciones abiertas en borrador o enviadas.",
     });
   },
 });

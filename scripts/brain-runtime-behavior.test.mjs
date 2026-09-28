@@ -907,6 +907,7 @@ test("Quote draft intent extracts complete item details when present", () => {
       descuento: 0,
       impuestoPorcentaje: 0,
       precioUnitario: 1500,
+      productQuery: "Guante nitrilo talla M",
     },
   ]);
 
@@ -916,6 +917,53 @@ test("Quote draft intent extracts complete item details when present", () => {
   assert.equal(validation.ok, true);
   assert.equal(isClarificationResult(validation.data), false);
   assert.equal(validation.data.params.items[0].descripcion, "Guante nitrilo talla M");
+});
+
+test("Quote draft intent treats cedula as customer query and uses catalog price when price is omitted", () => {
+  const intentRegistry = createBusinessIntentRegistry(initialBusinessIntents);
+  const resolver = createBusinessIntentResolver(intentRegistry);
+  const resolved = resolver.resolve({
+    message:
+      "Cree una proforma para id 115450430 por 200 pares de guantes de nitrilo palma",
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.data.intentId, "quotes.draft.create");
+  assert.equal(resolved.data.entities.customerQuery, "115450430");
+  assert.deepEqual(resolved.data.entities.items, [
+    {
+      cantidad: 200,
+      descripcion: "guantes de nitrilo palma",
+      descuento: 0,
+      impuestoPorcentaje: 0,
+      productQuery: "guantes de nitrilo palma",
+    },
+  ]);
+
+  const intent = intentRegistry.get(resolved.data.intentId);
+  const validation = validateIntentSlots(intent, resolved.data.entities);
+
+  assert.equal(validation.ok, true);
+  assert.equal(isClarificationResult(validation.data), false);
+});
+
+test("Quote search intent uses cedula as customer filter without asking status first", () => {
+  const intentRegistry = createBusinessIntentRegistry(initialBusinessIntents);
+  const resolver = createBusinessIntentResolver(intentRegistry);
+  const resolved = resolver.resolve({
+    message: "busca las cotizaciones de id 115450430",
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.data.intentId, "quotes.open.query");
+  assert.equal(resolved.data.entities.customerQuery, "115450430");
+  assert.equal(resolved.data.entities.limit, 20);
+
+  const intent = intentRegistry.get(resolved.data.intentId);
+  const validation = validateIntentSlots(intent, resolved.data.entities);
+
+  assert.equal(validation.ok, true);
+  assert.equal(isClarificationResult(validation.data), false);
 });
 
 test("Slot Validator canonicalizes aliases before execution", () => {
