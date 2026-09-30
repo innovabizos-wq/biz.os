@@ -316,6 +316,13 @@ function CustomerStep({
     window.requestAnimationFrame(() => continueRef.current?.focus());
   }
 
+  function focusContinueAfterOrigin() {
+    window.setTimeout(() => {
+      originRef.current?.blur();
+      continueRef.current?.focus();
+    }, 0);
+  }
+
   return (
     <div className="space-y-4">
       <form
@@ -444,11 +451,9 @@ function CustomerStep({
                   originVisitedRef.current = true;
                   phoneRef.current?.focus();
                 }
-              }}
-              onKeyUp={(event) => {
                 if (event.key === "Enter") {
                   originVisitedRef.current = true;
-                  focusContinue();
+                  focusContinueAfterOrigin();
                 }
               }}
               ref={originRef}
