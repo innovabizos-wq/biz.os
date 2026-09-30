@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { DashboardBoardNavigation } from "@/app/(app)/dashboard/dashboard-board-navigation";
 import {
   Dashboard2Experience,
   type Dashboard2Agent,
@@ -447,7 +446,6 @@ export default async function DireccionDashboardPage() {
 
   return (
     <>
-      <DashboardBoardNavigation />
       <Dashboard2Experience data={payload} />
     </>
   );

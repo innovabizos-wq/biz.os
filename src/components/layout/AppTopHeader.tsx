@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import Link from "next/link";
+import { Brain } from "lucide-react";
 
 import {
   DashboardAiSearch,
@@ -60,6 +62,16 @@ export default function AppTopHeader({
         <Suspense fallback={<span className="post-note-launcher-placeholder" />}>
           <PostNotes />
         </Suspense>
+        {aiSearchCapabilities.showBrain ? (
+          <Link
+            aria-label="Abrir modo IA"
+            className="ai-mode-launcher"
+            href="/dashboard/direccion"
+            title="Modo IA"
+          >
+            <Brain aria-hidden="true" size={22} strokeWidth={1.9} />
+          </Link>
+        ) : null}
         <NotificationBell
           initialCount={unreadNotificationCount}
           notifications={notifications}

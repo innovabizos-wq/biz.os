@@ -7,6 +7,7 @@ import { hasPermission } from "@/lib/permissions/permission-checks";
 import { createClient } from "@/lib/supabase/server";
 import {
   consultationCustomerStepSchema,
+  consultationModalSaveSchema,
   consultationSaveSchema,
   consultationSearchSchema,
 } from "@/modules/consultations/schemas";
@@ -404,7 +405,7 @@ export async function saveConsultationModalAction(
   _previousState: ConsultationModalSaveState,
   formData: FormData,
 ): Promise<ConsultationModalSaveState> {
-  const parsed = consultationSaveSchema.safeParse(getFormData(formData));
+  const parsed = consultationModalSaveSchema.safeParse(getFormData(formData));
 
   if (!parsed.success) {
     return {
@@ -524,7 +525,7 @@ export async function saveConsultationModalAction(
         ? "Gestion guardada. Cotizacion iniciada desde registro rapido."
         : "Gestion registrada desde registro rapido."),
     p_resumen: buildInteractionSummary({
-      descripcionGestion: parsed.data.descripcionGestion,
+      descripcionGestion: parsed.data.descripcionGestion ?? "Sin nota adicional.",
       documento: parsed.data.documento,
       intent: parsed.data.intent,
       source: parsed.data.source,

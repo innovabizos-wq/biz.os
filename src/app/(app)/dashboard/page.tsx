@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 
-import { DashboardBoardNavigation } from "@/app/(app)/dashboard/dashboard-board-navigation";
 import {
   DashboardTop3Chart,
   type DashboardTop3Option,
@@ -400,8 +399,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <section className="dashboard-screen">
-      <DashboardBoardNavigation />
-
       <div className="dashboard-kpi-row">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.title} {...kpi} />

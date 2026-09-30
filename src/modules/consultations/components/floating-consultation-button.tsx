@@ -245,6 +245,7 @@ function ConsultationModal({
                 onCancel={onClose}
                 result={result}
                 searchAction={searchAction}
+                searchStatus={searchState.status}
               />
             )}
           </div>
@@ -262,6 +263,7 @@ function CustomerStep({
   onCancel,
   result,
   searchAction,
+  searchStatus,
 }: {
   canCreateCustomer: boolean;
   customerAction: (formData: FormData) => void;
@@ -270,7 +272,13 @@ function CustomerStep({
   onCancel: () => void;
   result: ConsultationSearchResult;
   searchAction: (formData: FormData) => void;
+  searchStatus: ConsultationModalSearchState["status"];
 }) {
+  const emailRef = useRef<HTMLInputElement>(null);
+  const originRef = useRef<HTMLSelectElement>(null);
+  const originVisitedRef = useRef(false);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const continueRef = useRef<HTMLButtonElement>(null);
   const isInternal = result.source === "internal";
   const cliente = isInternal ? result.cliente : null;
   const hacienda = result.source === "hacienda" ? result.hacienda : null;
@@ -282,6 +290,30 @@ function CustomerStep({
   const tipo = isInternal ? result.tipoAutomatico : "prospecto";
   const needsCreate = !isInternal;
   const formKey = `${result.source}-${documento}`;
+
+  useEffect(() => {
+    if (searchStatus !== "success") return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      originVisitedRef.current = false;
+      const origin = originRef.current;
+      origin?.focus();
+
+      if (origin && typeof origin.showPicker === "function") {
+        try {
+          origin.showPicker();
+        } catch {
+          // Algunos navegadores solo permiten abrir el selector por accion directa.
+        }
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [formKey, searchStatus]);
+
+  function focusContinue() {
+    window.requestAnimationFrame(() => continueRef.current?.focus());
+  }
 
   return (
     <div className="space-y-4">
@@ -336,6 +368,7 @@ function CustomerStep({
             name="nombre"
             readOnly={isInternal}
             required
+            tabIndex={-1}
           />
           <FieldInput
             defaultValue={documento}
@@ -343,25 +376,43 @@ function CustomerStep({
             name="documento"
             readOnly={isInternal}
             required
+            tabIndex={-1}
           />
           <FieldInput
             defaultValue={cliente?.telefono ?? ""}
             label="Telefono"
             name="telefono"
+            inputRef={phoneRef}
             readOnly={isInternal}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                focusContinue();
+              }
+            }}
+            tabIndex={0}
           />
           <FieldInput
             defaultValue={cliente?.whatsapp ?? ""}
             label="WhatsApp"
             name="whatsapp"
             readOnly={isInternal}
+            tabIndex={-1}
           />
           <FieldInput
             defaultValue={cliente?.correo ?? ""}
             label="Correo"
             name="correo"
+            inputRef={emailRef}
             readOnly={isInternal}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                focusContinue();
+              }
+            }}
             type="email"
+            tabIndex={0}
           />
           <label className="space-y-1.5 text-sm font-semibold text-slate-800">
             <span>Origen</span>
@@ -369,7 +420,21 @@ function CustomerStep({
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
               defaultValue={cliente?.origen ?? "Cliente fisico"}
               name="origen"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") focusContinue();
+                if (
+                  event.key === "Tab" &&
+                  !event.shiftKey &&
+                  !originVisitedRef.current
+                ) {
+                  event.preventDefault();
+                  originVisitedRef.current = true;
+                  phoneRef.current?.focus();
+                }
+              }}
+              ref={originRef}
               required
+              tabIndex={0}
             >
               {originOptions.map((origin) => (
                 <option key={origin} value={origin}>
@@ -380,18 +445,26 @@ function CustomerStep({
           </label>
         </div>
 
-        <FieldInput label="Direccion" name="direccion" />
+        <FieldInput label="Direccion" name="direccion" tabIndex={-1} />
 
         <div className="sticky bottom-0 -mx-6 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 pt-4">
           <Button
             className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
             onClick={onCancel}
+            tabIndex={-1}
             type="button"
           >
             Cancelar
           </Button>
           <Button
             disabled={(needsCreate && !canCreateCustomer) || isCreatingCustomer}
+            onKeyDown={(event) => {
+              if (event.key === "Tab" && !event.shiftKey) {
+                event.preventDefault();
+                phoneRef.current?.focus();
+              }
+            }}
+            ref={continueRef}
             type="submit"
           >
             <ArrowRight aria-hidden="true" />
@@ -407,15 +480,21 @@ function FieldInput({
   defaultValue = "",
   label,
   name,
+  inputRef,
+  onKeyDown,
   readOnly = false,
   required = false,
+  tabIndex,
   type = "text",
 }: {
   defaultValue?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
   label: string;
   name: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   readOnly?: boolean;
   required?: boolean;
+  tabIndex?: number;
   type?: string;
 }) {
   return (
@@ -425,8 +504,11 @@ function FieldInput({
         className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100 read-only:text-slate-500"
         defaultValue={defaultValue}
         name={name}
+        onKeyDown={onKeyDown}
+        ref={inputRef}
         readOnly={readOnly}
         required={required}
+        tabIndex={tabIndex}
         type={type}
       />
     </label>
@@ -452,8 +534,6 @@ function InteractionStep({
     useState<CrmInteraccionTipo>("nota");
   const [intent, setIntent] = useState<"quote" | "save">("save");
   const [result, setResult] = useState("");
-  const formRef = useRef<HTMLFormElement>(null);
-  const intentInputRef = useRef<HTMLInputElement>(null);
   const summaryRef = useRef<HTMLTextAreaElement>(null);
   const resultSuggestions = useMemo(() => quickResults, []);
 
@@ -461,18 +541,8 @@ function InteractionStep({
     summaryRef.current?.focus();
   }, []);
 
-  function submitWithIntent(nextIntent: "quote" | "save") {
-    setIntent(nextIntent);
-
-    if (intentInputRef.current) {
-      intentInputRef.current.value = nextIntent;
-    }
-
-    formRef.current?.requestSubmit();
-  }
-
   return (
-    <form action={saveAction} className="space-y-4" ref={formRef}>
+    <form action={saveAction} className="space-y-4">
       <input name="clienteId" type="hidden" value={customer.clienteId} />
       <input name="correo" type="hidden" value={customer.correo ?? ""} />
       <input name="direccion" type="hidden" value={customer.direccion ?? ""} />
@@ -483,13 +553,6 @@ function InteractionStep({
       <input name="telefono" type="hidden" value={customer.telefono ?? ""} />
       <input name="tipo" type="hidden" value={customer.tipo} />
       <input name="whatsapp" type="hidden" value={customer.whatsapp ?? ""} />
-      <input
-        defaultValue={intent}
-        name="intent"
-        ref={intentInputRef}
-        type="hidden"
-      />
-
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
         <div className="flex items-center gap-2 font-bold">
           <Check aria-hidden="true" size={17} />
@@ -557,7 +620,6 @@ function InteractionStep({
           name="descripcionGestion"
           placeholder="Escribe la gestion realizada. Ejemplo: Cliente llama y solicita informacion; queda pendiente enviar cotizacion."
           ref={summaryRef}
-          required
         />
       </label>
 
@@ -565,6 +627,7 @@ function InteractionStep({
         <Button
           className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           onClick={onCancel}
+          tabIndex={-1}
           type="button"
         >
           Cancelar
@@ -572,8 +635,10 @@ function InteractionStep({
         <Button
           className="bg-black text-white hover:bg-black/90"
           disabled={!canSaveInteraction || isSaving}
-          onClick={() => submitWithIntent("save")}
-          type="button"
+          name="intent"
+          onClick={() => setIntent("save")}
+          type="submit"
+          value="save"
         >
           <Save aria-hidden="true" />
           {isSaving && intent === "save" ? "Guardando" : "Guardar"}
@@ -581,13 +646,15 @@ function InteractionStep({
         <Button
           className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
           disabled={!canSaveInteraction || !canCreateQuote || isSaving}
-          onClick={() => submitWithIntent("quote")}
+          name="intent"
+          onClick={() => setIntent("quote")}
           title={
             canCreateQuote
               ? "Guardar gestion y crear una cotizacion"
               : "Necesitas permiso para crear cotizaciones"
           }
-          type="button"
+          type="submit"
+          value="quote"
           variant="outline"
         >
           <FileText aria-hidden="true" />

@@ -56,6 +56,10 @@ export const consultationSaveSchema = z.object({
   whatsapp: optionalTextSchema,
 });
 
+export const consultationModalSaveSchema = consultationSaveSchema.extend({
+  descripcionGestion: optionalTextSchema,
+});
+
 export const consultationCustomerStepSchema = consultationSaveSchema
   .omit({
     descripcionGestion: true,
