@@ -274,12 +274,6 @@ function CustomerStep({
   searchAction: (formData: FormData) => void;
   searchStatus: ConsultationModalSearchState["status"];
 }) {
-  const emailRef = useRef<HTMLInputElement>(null);
-  const originRef = useRef<HTMLSelectElement>(null);
-  const originVisitedRef = useRef(false);
-  const phoneRef = useRef<HTMLInputElement>(null);
-  const addressRef = useRef<HTMLInputElement>(null);
-  const continueRef = useRef<HTMLButtonElement>(null);
   const isInternal = result.source === "internal";
   const cliente = isInternal ? result.cliente : null;
   const hacienda = result.source === "hacienda" ? result.hacienda : null;
@@ -291,36 +285,88 @@ function CustomerStep({
   const tipo = isInternal ? result.tipoAutomatico : "prospecto";
   const needsCreate = !isInternal;
   const formKey = `${result.source}-${documento}`;
+  const defaultOrigin = cliente?.origen ?? originOptions[0];
+  const defaultOriginIndex = Math.max(
+    originOptions.indexOf(defaultOrigin),
+    0,
+  );
+
+  const emailRef = useRef<HTMLInputElement>(null);
+  const originButtonRef = useRef<HTMLButtonElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const [selectedOrigin, setSelectedOrigin] = useState(defaultOrigin);
+  const [activeOriginIndex, setActiveOriginIndex] = useState(
+    defaultOriginIndex,
+  );
+  const [isOriginOpen, setIsOriginOpen] = useState(false);
 
   useEffect(() => {
     if (searchStatus !== "success") return;
 
     const frameId = window.requestAnimationFrame(() => {
-      originVisitedRef.current = false;
-      const origin = originRef.current;
-      origin?.focus();
-
-      if (origin && typeof origin.showPicker === "function") {
-        try {
-          origin.showPicker();
-        } catch {
-          // Algunos navegadores solo permiten abrir el selector por accion directa.
-        }
-      }
+      setSelectedOrigin(defaultOrigin);
+      setActiveOriginIndex(defaultOriginIndex);
+      setIsOriginOpen(true);
+      originButtonRef.current?.focus();
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [formKey, searchStatus]);
+  }, [defaultOrigin, defaultOriginIndex, formKey, searchStatus]);
 
   function focusContinue() {
     window.requestAnimationFrame(() => continueRef.current?.focus());
   }
 
-  function focusContinueAfterOrigin() {
-    window.setTimeout(() => {
-      originRef.current?.blur();
-      continueRef.current?.focus();
-    }, 0);
+  function selectOrigin(index: number) {
+    setSelectedOrigin(originOptions[index]);
+    setActiveOriginIndex(index);
+    setIsOriginOpen(false);
+    window.requestAnimationFrame(() => continueRef.current?.focus());
+  }
+
+  function handleOriginKeyDown(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+  ) {
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault();
+      setIsOriginOpen(false);
+      phoneRef.current?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsOriginOpen(true);
+      setActiveOriginIndex((currentIndex) => {
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        return Math.min(
+          Math.max(currentIndex + direction, 0),
+          originOptions.length - 1,
+        );
+      });
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsOriginOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+
+      if (isOriginOpen) {
+        selectOrigin(activeOriginIndex);
+      } else {
+        setActiveOriginIndex(
+          Math.max(originOptions.indexOf(selectedOrigin), 0),
+        );
+        setIsOriginOpen(true);
+      }
+    }
   }
 
   return (
@@ -437,35 +483,53 @@ function CustomerStep({
           />
           <label className="space-y-1.5 text-sm font-semibold text-slate-800">
             <span>Origen</span>
-            <select
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-              defaultValue={cliente?.origen ?? "Cliente fisico"}
-              name="origen"
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Tab" &&
-                  !event.shiftKey &&
-                  !originVisitedRef.current
-                ) {
-                  event.preventDefault();
-                  originVisitedRef.current = true;
-                  phoneRef.current?.focus();
-                }
-                if (event.key === "Enter") {
-                  originVisitedRef.current = true;
-                  focusContinueAfterOrigin();
-                }
-              }}
-              ref={originRef}
-              required
-              tabIndex={0}
-            >
-              {originOptions.map((origin) => (
-                <option key={origin} value={origin}>
-                  {origin}
-                </option>
-              ))}
-            </select>
+            <input name="origen" type="hidden" value={selectedOrigin} />
+            <div className="relative">
+              <button
+                aria-controls="consultation-origin-options"
+                aria-expanded={isOriginOpen}
+                aria-haspopup="listbox"
+                className="flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-left font-normal outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                onClick={() => {
+                  setActiveOriginIndex(
+                    Math.max(originOptions.indexOf(selectedOrigin), 0),
+                  );
+                  setIsOriginOpen((isOpen) => !isOpen);
+                }}
+                onKeyDown={handleOriginKeyDown}
+                ref={originButtonRef}
+                type="button"
+              >
+                {selectedOrigin}
+                <span aria-hidden="true" className="text-slate-400">
+                  ▾
+                </span>
+              </button>
+              {isOriginOpen ? (
+                <div
+                  className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+                  id="consultation-origin-options"
+                  role="listbox"
+                >
+                  {originOptions.map((origin, index) => (
+                    <button
+                      aria-selected={index === activeOriginIndex}
+                      className={`flex w-full rounded-lg px-3 py-2 text-left font-normal transition ${
+                        index === activeOriginIndex
+                          ? "bg-blue-50 text-blue-800"
+                          : "hover:bg-slate-50"
+                      }`}
+                      key={origin}
+                      onClick={() => selectOrigin(index)}
+                      role="option"
+                      type="button"
+                    >
+                      {origin}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </label>
         </div>
 
