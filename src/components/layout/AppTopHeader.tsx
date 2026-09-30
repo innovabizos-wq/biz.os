@@ -1,6 +1,9 @@
-import { Suspense } from "react";
+"use client";
+
 import Link from "next/link";
-import { Brain } from "lucide-react";
+import { Brain, LayoutDashboard } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 import {
   DashboardAiSearch,
@@ -42,6 +45,8 @@ export default function AppTopHeader({
   unreadNotificationCount,
 }: AppTopHeaderProps) {
   const firstName = getFirstName(profileName);
+  const pathname = usePathname();
+  const isBrainMode = pathname === "/dashboard/direccion";
 
   return (
     <header className="dashboard-topbar-shell">
@@ -64,12 +69,16 @@ export default function AppTopHeader({
         </Suspense>
         {aiSearchCapabilities.showBrain ? (
           <Link
-            aria-label="Abrir modo IA"
+            aria-label={isBrainMode ? "Volver al dashboard principal" : "Abrir modo IA"}
             className="ai-mode-launcher"
-            href="/dashboard/direccion"
-            title="Modo IA"
+            href={isBrainMode ? "/dashboard" : "/dashboard/direccion"}
+            title={isBrainMode ? "Volver al dashboard" : "Modo IA"}
           >
-            <Brain aria-hidden="true" size={22} strokeWidth={1.9} />
+            {isBrainMode ? (
+              <LayoutDashboard aria-hidden="true" size={22} strokeWidth={1.9} />
+            ) : (
+              <Brain aria-hidden="true" size={22} strokeWidth={1.9} />
+            )}
           </Link>
         ) : null}
         <NotificationBell

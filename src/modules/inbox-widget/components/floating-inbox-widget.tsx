@@ -286,8 +286,27 @@ export function FloatingInboxWidget({
   }, [quickReplies, quickReplySearch]);
 
   useEffect(() => {
-    window.setTimeout(() => widgetRef.current?.focus(), 0);
-  }, []);
+    if (!isOpen) return;
+
+    const timeoutId = window.setTimeout(() => widgetRef.current?.focus(), 0);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      if (isCustomerDialogOpen) {
+        setIsCustomerDialogOpen(false);
+        return;
+      }
+
+      onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isCustomerDialogOpen, isOpen, onClose]);
 
   useEffect(() => {
     startTransition(async () => {
@@ -528,8 +547,18 @@ export function FloatingInboxWidget({
   if (!isOpen) return null;
 
   return (
-    <section className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-md">
-      <div className="absolute inset-0 flex items-center justify-center px-2 py-4">
+    <section
+      className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-md"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="absolute inset-0 flex items-center justify-center px-2 py-4"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
         <div
           aria-label="Widget de mensajeria WhatsApp"
           className="relative grid h-[calc(100vh-2rem)] w-[min(1500px,calc(100vw-1rem))] grid-cols-[390px_minmax(760px,1fr)] gap-5 rounded-[24px] border border-white/45 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,246,255,0.94))] p-3 shadow-[0_36px_110px_rgba(2,6,23,0.46),0_0_0_1px_rgba(255,255,255,0.5)_inset] outline-none max-[1280px]:grid-cols-[340px_minmax(420px,1fr)] max-[1280px]:[&_.whapp-tools]:hidden"
@@ -760,6 +789,7 @@ export function FloatingInboxWidget({
                     aria-label="Cerrar widget"
                     className="flex size-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                     onClick={onClose}
+                    title="Cerrar mensajería"
                     type="button"
                   >
                     <X aria-hidden="true" size={17} />

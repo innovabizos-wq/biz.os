@@ -278,6 +278,7 @@ function CustomerStep({
   const originRef = useRef<HTMLSelectElement>(null);
   const originVisitedRef = useRef(false);
   const phoneRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const isInternal = result.source === "internal";
   const cliente = isInternal ? result.cliente : null;
@@ -414,6 +415,19 @@ function CustomerStep({
             type="email"
             tabIndex={0}
           />
+          <FieldInput
+            defaultValue=""
+            inputRef={addressRef}
+            label="Direccion"
+            name="direccion"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                focusContinue();
+              }
+            }}
+            tabIndex={0}
+          />
           <label className="space-y-1.5 text-sm font-semibold text-slate-800">
             <span>Origen</span>
             <select
@@ -421,7 +435,6 @@ function CustomerStep({
               defaultValue={cliente?.origen ?? "Cliente fisico"}
               name="origen"
               onKeyDown={(event) => {
-                if (event.key === "Enter") focusContinue();
                 if (
                   event.key === "Tab" &&
                   !event.shiftKey &&
@@ -430,6 +443,12 @@ function CustomerStep({
                   event.preventDefault();
                   originVisitedRef.current = true;
                   phoneRef.current?.focus();
+                }
+              }}
+              onKeyUp={(event) => {
+                if (event.key === "Enter") {
+                  originVisitedRef.current = true;
+                  focusContinue();
                 }
               }}
               ref={originRef}
@@ -444,8 +463,6 @@ function CustomerStep({
             </select>
           </label>
         </div>
-
-        <FieldInput label="Direccion" name="direccion" tabIndex={-1} />
 
         <div className="sticky bottom-0 -mx-6 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 pt-4">
           <Button
@@ -535,6 +552,8 @@ function InteractionStep({
   const [intent, setIntent] = useState<"quote" | "save">("save");
   const [result, setResult] = useState("");
   const summaryRef = useRef<HTMLTextAreaElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const quoteRef = useRef<HTMLButtonElement>(null);
   const resultSuggestions = useMemo(() => quickResults, []);
 
   useEffect(() => {
@@ -618,6 +637,12 @@ function InteractionStep({
         <textarea
           className="min-h-32 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
           name="descripcionGestion"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              saveRef.current?.focus();
+            }
+          }}
           placeholder="Escribe la gestion realizada. Ejemplo: Cliente llama y solicita informacion; queda pendiente enviar cotizacion."
           ref={summaryRef}
         />
@@ -637,6 +662,7 @@ function InteractionStep({
           disabled={!canSaveInteraction || isSaving}
           name="intent"
           onClick={() => setIntent("save")}
+          ref={saveRef}
           type="submit"
           value="save"
         >
@@ -648,6 +674,7 @@ function InteractionStep({
           disabled={!canSaveInteraction || !canCreateQuote || isSaving}
           name="intent"
           onClick={() => setIntent("quote")}
+          ref={quoteRef}
           title={
             canCreateQuote
               ? "Guardar gestion y crear una cotizacion"
