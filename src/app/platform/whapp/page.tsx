@@ -59,6 +59,21 @@ export default async function PlatformWhappPage({ searchParams }: PlatformWhappP
       {query?.error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{query.error}</p> : null}
       {query?.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{query.success}</p> : null}
 
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
+        <p className="font-black">Facturacion Meta vigente desde el 1 de octubre de 2026</p>
+        <p className="mt-1">
+          Service incluye 1.000 mensajes sin cargo por numero comercial cada mes y
+          luego se cobra por entrega. Utility se cobra tambien dentro de la ventana
+          de 24 horas. La ventana gratuita de anuncios Click-to-WhatsApp puede durar
+          hasta 7 dias. Mantenga un metodo de pago activo para evitar interrupciones.
+        </p>
+        <p className="mt-1">
+          En numeros compartidos con otro proveedor, el cupo tambien es compartido.
+          Por eso el costo definitivo se toma de <code>pricing.billable</code> enviado
+          por Meta, no de un contador local.
+        </p>
+      </div>
+
       <PlatformCard>
         <h2 className="text-lg font-black text-slate-950">Tarifas oficiales de Meta</h2>
         <p className="mt-1 text-sm text-slate-500">Registra cada vigencia desde la tabla oficial. Whapp bloquea campanas cuyo mercado o categoria no tenga tarifa vigente.</p>

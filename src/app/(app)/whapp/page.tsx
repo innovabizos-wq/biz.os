@@ -114,10 +114,22 @@ export default async function WhappPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        Cumplimiento Meta: usa texto libre solo dentro de la ventana operativa de
-        24 horas. Para conversaciones fuera de ventana se requiere plantilla
-        aprobada antes de enviar.
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+        <p className="font-semibold">
+          Cumplimiento Meta: reglas y cobros vigentes desde el 1 de octubre de 2026
+        </p>
+        <p className="mt-1">
+          Cada mensaje o llamada del cliente abre o reinicia la ventana de 24 horas.
+          Dentro de ella se permite texto libre: los primeros 1.000 mensajes Service
+          por numero comercial al mes no tienen cargo y los siguientes se cobran por
+          entrega. Las plantillas Utility se cobran incluso dentro de la ventana.
+          Fuera de las 24 horas solo se puede enviar una plantilla aprobada.
+        </p>
+        <p className="mt-1">
+          Una conversacion iniciada desde un anuncio Click-to-WhatsApp puede mantener
+          una ventana gratuita de hasta 7 dias; biz.os usa la confirmacion de cobro que
+          Meta incluye en cada entrega.
+        </p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">

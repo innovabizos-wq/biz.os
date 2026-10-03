@@ -63,8 +63,9 @@ export function InboxReplyForm({
       ) : null}
       {isMetaChannel && realMetaReady ? (
         <p className="mt-2 text-xs text-emerald-700">
-          Cumplimiento Meta: envio real habilitado dentro de la ventana de
-          respuesta de 24 horas.
+          {channel === "whatsapp"
+            ? "Ventana de 24 horas abierta. Meta permite texto libre; los primeros 1.000 mensajes Service por numero comercial al mes no tienen cargo y los siguientes se cobran por entrega."
+            : "Cumplimiento Meta: envio real habilitado dentro de la ventana de respuesta de 24 horas."}
         </p>
       ) : null}
       <Button className="mt-3" disabled={!canSubmit} type="submit">
