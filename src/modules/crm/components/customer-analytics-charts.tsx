@@ -159,19 +159,17 @@ export function CustomerAnalyticsCharts({
         <div className="mt-3 grid items-center gap-3 sm:grid-cols-[132px_1fr]">
           <GenderPictogram />
 
-          <div className="flex flex-col items-end space-y-3 text-right">
+          <div className="flex flex-col items-end space-y-2 text-right">
             {genderRows.map((row) => (
-              <div className="flex items-start justify-end gap-2" key={row.label}>
-                <div>
-                  <p className="text-sm font-black leading-none text-slate-700">
+              <div className="flex items-center justify-end gap-2" key={row.label}>
+                <p className="whitespace-nowrap text-xs font-bold text-slate-600">
+                  <span className="mr-1 text-sm font-black text-slate-700">
                     {formatPercent(row.value, total)}
-                  </p>
-                  <p className="mt-0.5 text-xs font-bold leading-none text-slate-600">
-                    {row.label}
-                  </p>
-                </div>
+                  </span>
+                  {row.label}
+                </p>
                 <span
-                  className="mt-0.5 size-2 rounded-full"
+                  className="size-2 shrink-0 rounded-full"
                   style={{ backgroundColor: row.color }}
                 />
               </div>
