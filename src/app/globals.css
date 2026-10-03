@@ -5694,10 +5694,10 @@ th {
 
 .crm-customers-heading {
   font-family: var(--font-sans) !important;
-  font-size: 0.68rem !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.01em !important;
-  line-height: 1.1 !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.025em !important;
+  line-height: 1.2 !important;
   text-transform: none;
 }
 

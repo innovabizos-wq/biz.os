@@ -32,16 +32,16 @@ export function CustomersTable({ className, customers }: CustomersTableProps) {
           <col className="w-[10%]" />
           <col className="w-[7%]" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-cyan-200/80 bg-gradient-to-r from-cyan-200/80 via-sky-50 to-amber-200/70 text-slate-700">
-          <tr>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">Nombre</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">Identificación</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">Teléfono</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">WhatsApp</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">Correo</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">Último movimiento</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2">Asignado</th>
-            <th className="crm-customers-heading whitespace-nowrap px-3 py-2 text-center">Acción</th>
+        <thead className="sticky top-0 z-10 border-b border-cyan-300/90 bg-gradient-to-r from-cyan-300/90 via-sky-100 to-amber-300/85 text-slate-700 shadow-sm">
+          <tr className="h-11">
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">Nombre</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">Identificación</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">Teléfono</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">WhatsApp</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">Correo</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">Último movimiento</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3">Asignado</th>
+            <th className="crm-customers-heading whitespace-nowrap px-3 py-3 text-center">Acción</th>
           </tr>
         </thead>
         <tbody>

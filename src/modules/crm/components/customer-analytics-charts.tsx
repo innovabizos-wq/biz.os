@@ -26,27 +26,22 @@ const generoColors: Record<CrmCustomer["genero"], string> = {
   o: "#64748b",
 };
 
-const estadoLabels: Record<CrmCustomer["estado"], string> = {
-  calificado: "Calificados",
-  contactado: "Contactados",
-  cotizado: "Cotizados",
-  ganado: "Ganados",
-  inactivo: "Inactivos",
-  nuevo: "Nuevos",
-  perdido: "Perdidos",
-};
-
-const estadoColors: Record<CrmCustomer["estado"], string> = {
-  calificado: "#14b8a6",
-  contactado: "#0ea5e9",
-  cotizado: "#facc15",
-  ganado: "#22c55e",
-  inactivo: "#94a3b8",
-  nuevo: "#6366f1",
-  perdido: "#ef4444",
-};
-
 const barColors = ["#14b8a6", "#0f766e", "#facc15", "#334155", "#38bdf8"];
+const activityLabels = {
+  interactions: "Con interacción",
+  quotes: "Cotizando",
+  sales: "Con ventas",
+  followups: "Seguimiento pendiente",
+  inactive: "Sin actividad",
+} as const;
+
+const activityColors = {
+  interactions: "#38bdf8",
+  quotes: "#8b5cf6",
+  sales: "#14b8a6",
+  followups: "#f59e0b",
+  inactive: "#94a3b8",
+} as const;
 
 function countBy<T extends string>(
   rows: CrmCustomer[],
@@ -73,13 +68,20 @@ function getGenderRows(customers: CrmCustomer[]): ChartSlice[] {
   }));
 }
 
-function getStatusDonutSlices(customers: CrmCustomer[]): ChartSlice[] {
-  const counts = countBy(customers, (customer) => customer.estado);
+function getActivityDonutSlices(customers: CrmCustomer[]): ChartSlice[] {
+  const counts = countBy(customers, (customer) => {
+    if (customer.salesCount > 0) return "sales";
+    if (customer.quotesCount > 0) return "quotes";
+    if (customer.pendingFollowupsCount > 0) return "followups";
+    if (customer.interactionsCount > 0) return "interactions";
+
+    return "inactive";
+  });
 
   return Object.entries(counts)
-    .map(([estado, value]) => ({
-      color: estadoColors[estado as CrmCustomer["estado"]],
-      label: estadoLabels[estado as CrmCustomer["estado"]],
+    .map(([activity, value]) => ({
+      color: activityColors[activity as keyof typeof activityColors],
+      label: activityLabels[activity as keyof typeof activityLabels],
       value,
     }))
     .filter((slice) => slice.value > 0)
@@ -134,7 +136,7 @@ export function CustomerAnalyticsCharts({
   customers: CrmCustomer[];
 }) {
   const genderRows = getGenderRows(customers);
-  const statusDonutSlices = getStatusDonutSlices(customers);
+  const activityDonutSlices = getActivityDonutSlices(customers);
   const barRows = getBarRows(customers);
   const total = customers.length;
   const maxBarValue = Math.max(...barRows.map((row) => row.value), 1);
@@ -182,11 +184,8 @@ export function CustomerAnalyticsCharts({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-sm font-black text-slate-900">
-              Clientes por estado
+              Clientes por actividad
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Avance comercial actual
-            </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
             {total}
@@ -198,7 +197,7 @@ export function CustomerAnalyticsCharts({
             <div
               aria-hidden="true"
               className="size-32 rounded-full"
-              style={{ background: buildConicGradient(statusDonutSlices) }}
+              style={{ background: buildConicGradient(activityDonutSlices) }}
             />
             <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-background text-center shadow-inner">
               <span className="text-2xl font-black">{total}</span>
@@ -209,8 +208,8 @@ export function CustomerAnalyticsCharts({
           </div>
 
           <div className="space-y-2">
-            {statusDonutSlices.length > 0 ? (
-              statusDonutSlices.map((slice) => (
+            {activityDonutSlices.length > 0 ? (
+              activityDonutSlices.map((slice) => (
                 <div className="flex items-center justify-between gap-3" key={slice.label}>
                   <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700">
                     <span
