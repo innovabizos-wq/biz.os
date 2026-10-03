@@ -129,11 +129,11 @@ function SalesAnalyticsCards({
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 xl:grid-cols-4">
+    <div className="space-y-2">
+      <div className="grid gap-2 xl:grid-cols-4">
         {kpis.map((kpi) => (
           <section
-            className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_12px_26px_rgba(15,23,42,0.06)]"
+            className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_12px_26px_rgba(15,23,42,0.06)]"
             key={kpi.label}
           >
             <div className="flex items-center justify-between">
@@ -143,7 +143,7 @@ function SalesAnalyticsCards({
               </p>
               <span className="text-lg font-black leading-none text-slate-500">...</span>
             </div>
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-3 flex items-center gap-3">
               <strong className="text-2xl font-black tracking-tight text-slate-950">
                 {kpi.value}
               </strong>
@@ -161,11 +161,11 @@ function SalesAnalyticsCards({
         ))}
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_12px_26px_rgba(15,23,42,0.06)]">
+      <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_26px_rgba(15,23,42,0.06)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-2xl font-semibold text-slate-950">Analitica de ventas</h2>
-            <div className="flex items-center gap-6 text-sm font-semibold text-slate-600">
+            <h2 className="text-lg font-semibold text-slate-950">Analitica de ventas</h2>
+            <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
               <span className="inline-flex items-center gap-2">
                 <span className="size-2.5 rounded-full bg-emerald-500" />
                 Completadas
@@ -175,14 +175,14 @@ function SalesAnalyticsCards({
                 Activas
               </span>
               <button
-                className="rounded-lg border border-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+                className="rounded-lg border border-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm"
                 type="button"
               >
                 Mensual v
               </button>
             </div>
           </div>
-          <svg className="mt-3 h-48 w-full" viewBox="0 0 560 240">
+          <svg className="mt-2 h-36 w-full" viewBox="0 0 560 240">
             {[0, 1, 2, 3, 4, 5].map((line) => (
               <g key={line}>
                 <text
@@ -282,7 +282,7 @@ function SalesAnalyticsCards({
           </svg>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_12px_26px_rgba(15,23,42,0.06)]">
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_26px_rgba(15,23,42,0.06)]">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-950">Conversion de ventas</h2>
             <button
@@ -292,7 +292,7 @@ function SalesAnalyticsCards({
               Export
             </button>
           </div>
-          <div className="relative mx-auto mt-5 size-44">
+          <div className="relative mx-auto mt-2 size-32">
             <div
               className="absolute inset-0 rounded-full"
               style={{
@@ -311,14 +311,14 @@ function SalesAnalyticsCards({
                 background: `conic-gradient(#ef4444 0 ${Math.max((sales.filter((sale) => sale.estado !== "cancelada").length / Math.max(total, 1)) * 100, 1)}%, #ffffff 0 100%)`,
               }}
             />
-            <div className="absolute inset-14 grid place-items-center rounded-full bg-white text-center shadow-inner">
-              <strong className="text-4xl font-black text-slate-950">
+            <div className="absolute inset-8 grid place-items-center rounded-full bg-white text-center shadow-inner">
+              <strong className="text-3xl font-black text-slate-950">
                 {total.toLocaleString("en-US")}
               </strong>
               <span className="text-xs font-bold text-slate-400">ventas</span>
             </div>
           </div>
-          <div className="mt-6 grid gap-2 text-sm font-semibold text-slate-600">
+          <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-600">
             <p className="flex items-center justify-between">
               <span className="inline-flex items-center gap-2">
                 <span className="size-2.5 rounded-full bg-red-500" />
@@ -368,12 +368,10 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const completedSales = saleRows.filter((sale) => sale.estado === "completada");
 
   return (
-    <section className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
-      <SectionHeader
-        actions={hasPermission(access.tenant.permissions, "sales.pos.use") ? <Link className={buttonVariants()} href="/ventas/pos">Abrir punto de venta</Link> : undefined}
-        title="Ventas"
-        titleClassName="app-page-title-compact normal-case"
-      />
+    <section className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="flex shrink-0 justify-end">
+        {hasPermission(access.tenant.permissions, "sales.pos.use") ? <Link className={buttonVariants({ size: "sm" })} href="/ventas/pos">Abrir punto de venta</Link> : null}
+      </div>
 
       <EphemeralPageAlert error={params?.error} />
 

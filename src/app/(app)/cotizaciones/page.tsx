@@ -172,7 +172,7 @@ function Gauge({
 
   return (
     <div className="text-center">
-      <svg className="mx-auto h-20 w-32" viewBox="0 0 120 72">
+      <svg className="mx-auto h-16 w-28" viewBox="0 0 120 72">
         <path
           d="M18 60a42 42 0 0 1 84 0"
           fill="none"
@@ -218,7 +218,7 @@ function Gauge({
           {value}
         </text>
       </svg>
-      <p className="mt-1 text-sm font-black text-slate-700">{label}</p>
+      <p className="mt-0.5 text-xs font-black text-slate-700">{label}</p>
     </div>
   );
 }
@@ -233,15 +233,15 @@ function Donut({
   subtitle: string;
 }) {
   return (
-    <div className="relative mx-auto size-44">
+    <div className="relative mx-auto size-36">
       <div
         aria-hidden="true"
-        className="size-44 rounded-full"
+        className="size-36 rounded-full"
         style={{ background: buildConicGradient(segments) }}
       />
-      <div className="absolute inset-10 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner">
-        <span className="text-4xl font-light text-slate-900">{center}</span>
-        <span className="mt-1 text-[11px] font-bold text-slate-500">{subtitle}</span>
+      <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner">
+        <span className="text-3xl font-light text-slate-900">{center}</span>
+        <span className="mt-0.5 text-[10px] font-bold text-slate-500">{subtitle}</span>
       </div>
     </div>
   );
@@ -278,7 +278,7 @@ function DailyQuoteAmountChart({ points }: { points: DailyQuotePoint[] }) {
           Aceptacion %
         </span>
       </div>
-      <svg className="mt-1 h-56 w-full" viewBox="0 0 350 220">
+      <svg className="mt-1 h-40 w-full" viewBox="0 0 350 220">
         {[0, 1, 2, 3, 4].map((line) => (
           <line
             key={line}
@@ -361,7 +361,7 @@ function AgingBarsCard({
           <span className="text-sm text-slate-800">{formatCurrency(openAmount)}</span>
         </p>
       </div>
-      <div className="mt-2 grid grid-cols-4 items-end gap-4">
+      <div className="mt-2 grid grid-cols-4 items-end gap-3">
         {buckets.map((bucket) => (
           <div className="text-center" key={bucket.label}>
             <p className="mb-1 text-[10px] font-bold text-slate-500">
@@ -369,7 +369,7 @@ function AgingBarsCard({
             </p>
             <div
               className="mx-auto w-8 bg-[#ffc229]"
-              style={{ height: `${Math.max((bucket.value / maxBucket) * 88, 10)}px` }}
+                style={{ height: `${Math.max((bucket.value / maxBucket) * 64, 8)}px` }}
             />
             <p className="mt-1 text-[10px] font-bold text-slate-500">
               {bucket.label}
@@ -419,24 +419,24 @@ function QuoteAnalyticsCharts({
   const statusSegments = getStatusSegments(quotes);
 
   return (
-    <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(220px,0.95fr)_minmax(240px,1.25fr)_minmax(220px,1.05fr)]">
+    <div className="grid items-stretch gap-2 xl:grid-cols-[minmax(0,1.65fr)_minmax(220px,0.95fr)_minmax(240px,1.25fr)_minmax(220px,1.05fr)]">
       <DailyQuoteAmountChart points={dailyPoints} />
 
-      <section className="rounded-sm border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
         <h2 className="text-center text-sm font-black text-slate-600">
           Estado de cotizaciones
         </h2>
-        <div className="mt-4">
+        <div className="mt-2">
           <Donut
             center={`${total}`}
             segments={statusSegments}
             subtitle={`Abiertas ${openPercent}`}
           />
         </div>
-        <p className="mt-2 text-center text-xs font-bold text-slate-500">
+        <p className="mt-1 text-center text-[11px] font-bold text-slate-500">
           Aceptadas {acceptedPercent}
         </p>
-        <div className="mt-3 flex justify-center gap-4 text-xs font-bold text-slate-500">
+        <div className="mt-2 flex justify-center gap-3 text-[11px] font-bold text-slate-500">
           <span className="inline-flex items-center gap-1">
             <span className="size-2 rounded-full bg-[#35c4bf]" />
             Aceptadas
@@ -514,19 +514,15 @@ export default async function QuotesPage({ searchParams }: QuotesPageProps) {
   const openAmount = draftAndSentQuotes.reduce((sum, quote) => sum + quote.total, 0);
 
   return (
-    <section className="relative flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
-      <SectionHeader
-        actions={<div className="flex flex-wrap gap-2">
-          {canManageDocumentStyle ? <Link className={buttonVariants({ variant: "outline" })} href="/cotizaciones/ajustes">Diseño de proformas</Link> : null}
-          {canCreate ? <FloatingQuoteButton activeProducts={quoteProducts?.ok ? quoteProducts.data : []} company={{ email: company.ok ? company.data?.correo ?? null : null, identification: company.ok ? company.data?.identificacionFiscal ?? null : null, name: company.ok ? company.data?.nombre ?? "Tu empresa" : "Tu empresa", phone: company.ok ? company.data?.telefono ?? null : null, tradeName: company.ok ? company.data?.nombreComercial ?? null : null }} customers={quoteCustomers?.ok ? quoteCustomers.data : []} documentSettings={documentSettings} /> : null}
-        </div>}
-        title="Cotizaciones"
-        titleClassName="app-page-title-compact normal-case"
-      />
+    <section className="relative flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="flex shrink-0 justify-end gap-2">
+        {canManageDocumentStyle ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/cotizaciones/ajustes">Diseño de proformas</Link> : null}
+        {canCreate ? <FloatingQuoteButton activeProducts={quoteProducts?.ok ? quoteProducts.data : []} company={{ email: company.ok ? company.data?.correo ?? null : null, identification: company.ok ? company.data?.identificacionFiscal ?? null : null, name: company.ok ? company.data?.nombre ?? "Tu empresa" : "Tu empresa", phone: company.ok ? company.data?.telefono ?? null : null, tradeName: company.ok ? company.data?.nombreComercial ?? null : null }} customers={quoteCustomers?.ok ? quoteCustomers.data : []} documentSettings={documentSettings} /> : null}
+      </div>
 
       <EphemeralPageAlert error={params?.error} success={params?.success} />
 
-      <div className="-mt-2" data-quotes-charts-region>
+      <div className="shrink-0" data-quotes-charts-region>
         <QuoteAnalyticsCharts
           acceptedQuotes={acceptedQuotes}
           draftAndSentQuotes={draftAndSentQuotes}
