@@ -15,26 +15,35 @@ import {
 } from "@/components/ui/dialog";
 import { createFollowupAction } from "@/modules/crm/actions";
 import type { CrmAssignableUser } from "@/modules/crm/types";
+import { cn } from "@/lib/utils";
 
 type FollowupFormProps = {
   assignableUsers: CrmAssignableUser[];
+  buttonClassName?: string;
+  buttonLabel?: string;
   clienteId: string;
 };
 
-export function FollowupForm({ assignableUsers, clienteId }: FollowupFormProps) {
+export function FollowupForm({
+  assignableUsers,
+  buttonClassName,
+  buttonLabel = "Nuevo seguimiento",
+  clienteId,
+}: FollowupFormProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <Button
         aria-haspopup="dialog"
+        className={cn(buttonClassName)}
         onClick={() => setOpen(true)}
         size="sm"
         type="button"
         variant="outline"
       >
         <CalendarPlus aria-hidden={true} />
-        Nuevo seguimiento
+        {buttonLabel}
       </Button>
       <DialogContent className="max-w-lg rounded-[26px] p-0">
         <DialogHeader className="border-b border-slate-200 px-6 py-5">

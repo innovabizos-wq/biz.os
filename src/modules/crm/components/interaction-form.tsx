@@ -15,8 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { createInteractionAction } from "@/modules/crm/actions";
 import { CRM_INTERACCION_TIPOS } from "@/modules/crm/constants";
+import { cn } from "@/lib/utils";
 
 type InteractionFormProps = {
+  buttonClassName?: string;
+  buttonLabel?: string;
   clienteId: string;
 };
 
@@ -29,20 +32,25 @@ const interactionTypeLabels: Record<(typeof CRM_INTERACCION_TIPOS)[number], stri
   whatsapp: "WhatsApp",
 };
 
-export function InteractionForm({ clienteId }: InteractionFormProps) {
+export function InteractionForm({
+  buttonClassName,
+  buttonLabel = "Nueva interacción",
+  clienteId,
+}: InteractionFormProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <Button
         aria-haspopup="dialog"
+        className={cn(buttonClassName)}
         onClick={() => setOpen(true)}
         size="sm"
         type="button"
         variant="outline"
       >
         <FilePlus2 aria-hidden={true} />
-        Nueva interacción
+        {buttonLabel}
       </Button>
       <DialogContent className="max-w-lg rounded-[26px] p-0">
         <DialogHeader className="border-b border-slate-200 px-6 py-5">

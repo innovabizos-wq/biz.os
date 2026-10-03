@@ -140,8 +140,8 @@ export function CustomerAnalyticsCharts({
   const maxBarValue = Math.max(...barRows.map((row) => row.value), 1);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[0.75fr_0.82fr_1.15fr]">
-      <section className="rounded-lg border bg-background p-5 shadow-sm">
+    <div className="grid gap-3 xl:grid-cols-[0.75fr_0.82fr_1.15fr]">
+      <section className="rounded-lg border bg-background p-4 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-sm font-black text-slate-900">
@@ -156,7 +156,7 @@ export function CustomerAnalyticsCharts({
           </span>
         </div>
 
-        <div className="mt-4 grid items-center gap-4 sm:grid-cols-[150px_1fr]">
+        <div className="mt-3 grid items-center gap-3 sm:grid-cols-[132px_1fr]">
           <GenderPictogram />
 
           <div className="flex flex-col items-end space-y-3 text-right">
@@ -180,7 +180,7 @@ export function CustomerAnalyticsCharts({
         </div>
       </section>
 
-      <section className="rounded-lg border bg-background p-5 shadow-sm">
+      <section className="rounded-lg border bg-background p-4 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-sm font-black text-slate-900">
@@ -195,14 +195,14 @@ export function CustomerAnalyticsCharts({
           </span>
         </div>
 
-        <div className="mt-4 grid items-center gap-5 sm:grid-cols-[150px_1fr]">
-          <div className="relative mx-auto size-36">
+        <div className="mt-3 grid items-center gap-4 sm:grid-cols-[132px_1fr]">
+          <div className="relative mx-auto size-32">
             <div
               aria-hidden="true"
-              className="size-36 rounded-full"
+              className="size-32 rounded-full"
               style={{ background: buildConicGradient(statusDonutSlices) }}
             />
-            <div className="absolute inset-9 flex flex-col items-center justify-center rounded-full bg-background text-center shadow-inner">
+            <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-background text-center shadow-inner">
               <span className="text-2xl font-black">{total}</span>
               <span className="text-[10px] font-bold uppercase text-muted-foreground">
                 registros
@@ -233,7 +233,7 @@ export function CustomerAnalyticsCharts({
         </div>
       </section>
 
-      <section className="rounded-lg border bg-background p-5 shadow-sm">
+      <section className="rounded-lg border bg-background p-4 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-sm font-black text-slate-900">
@@ -248,14 +248,14 @@ export function CustomerAnalyticsCharts({
           </span>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-2.5">
           {barRows.length > 0 ? (
             barRows.map((row) => (
-              <div className="grid items-center gap-3 md:grid-cols-[150px_1fr_52px]" key={row.label}>
+              <div className="grid items-center gap-3 md:grid-cols-[140px_1fr_52px]" key={row.label}>
                 <p className="truncate text-xs font-bold text-slate-700">{row.label}</p>
-                <div className="h-7 rounded-sm bg-slate-100">
+                <div className="h-6 rounded-sm bg-slate-100">
                   <div
-                    className="flex h-7 items-center justify-end rounded-sm px-2 text-[11px] font-black text-white"
+                    className="flex h-6 items-center justify-end rounded-sm px-2 text-[11px] font-black text-white"
                     style={{
                       backgroundColor: row.color,
                       width: `${Math.max((row.value / maxBarValue) * 100, 8)}%`,
@@ -280,13 +280,13 @@ export function CustomerAnalyticsCharts({
 
 function GenderPictogram() {
   return (
-    <div className="mx-auto flex h-32 w-[132px] items-center justify-center overflow-hidden">
+    <div className="mx-auto flex h-28 w-[120px] items-center justify-center overflow-hidden">
       <Image
         alt=""
-        className="h-32 w-32 object-contain"
-        height={128}
+        className="h-28 w-28 object-contain"
+        height={112}
         src="/images/simbolos-femeninos-masculinos-diseno-plano.png"
-        width={128}
+        width={112}
       />
     </div>
   );

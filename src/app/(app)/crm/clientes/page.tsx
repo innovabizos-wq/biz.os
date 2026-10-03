@@ -58,15 +58,11 @@ export default async function CrmCustomersPage({
   const customerRows = customers.ok ? customers.data.data.customers : [];
 
   return (
-    <section className="relative flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-6 overflow-hidden">
-      <SectionHeader
-        title="Base de datos"
-        titleClassName="app-page-title-compact normal-case"
-      />
+    <section className="relative flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-4 overflow-hidden">
 
       <EphemeralPageAlert error={params?.error} />
 
-      <div className="-mt-2" data-crm-charts-region>
+      <div className="shrink-0" data-crm-charts-region>
         <CustomerAnalyticsCharts customers={customerRows} />
       </div>
 

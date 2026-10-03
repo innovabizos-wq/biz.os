@@ -79,13 +79,17 @@ function formatMoney(value: number, currency: string) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-CR", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  const date = new Date(value);
+
+  return {
+    day: new Intl.DateTimeFormat("es-CR", { day: "2-digit" }).format(date),
+    month: new Intl.DateTimeFormat("es-CR", { month: "short" }).format(date),
+    time: new Intl.DateTimeFormat("es-CR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date),
+    year: new Intl.DateTimeFormat("es-CR", { year: "numeric" }).format(date),
+  };
 }
 
 function buildTimelineEvents(input: CustomerTimelineProps): TimelineEvent[] {
@@ -220,46 +224,55 @@ export function CustomerTimeline({
         <div className="relative px-5 py-6 sm:px-6">
           <div
             aria-hidden={true}
-            className="absolute bottom-8 left-[37px] top-8 w-px bg-gradient-to-b from-slate-200 via-slate-200 to-transparent sm:left-[43px]"
+            className="absolute bottom-8 left-[91px] top-8 w-px bg-gradient-to-b from-slate-300 via-slate-200 to-transparent sm:left-[122px]"
           />
           <div className="space-y-5">
             {events.map((event) => {
               const Icon = event.icon;
+              const eventDate = formatDate(event.date);
 
               return (
-                <div className="relative flex gap-3 sm:gap-4" key={`${event.kind}-${event.id}`}>
+                <div
+                  className="relative grid grid-cols-[68px_30px_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[92px_36px_minmax(0,1fr)] sm:gap-3"
+                  key={`${event.kind}-${event.id}`}
+                >
+                  <time
+                    className="pt-1 text-right text-[11px] font-semibold leading-tight text-slate-400"
+                    dateTime={event.date}
+                  >
+                    <span className="block text-xs font-black text-slate-700">
+                      {eventDate.day} {eventDate.month}
+                    </span>
+                    <span className="mt-1 block">{eventDate.year}</span>
+                    <span className="mt-1 block text-slate-500">{eventDate.time}</span>
+                  </time>
                   <div
-                    className={`relative z-10 mt-1 flex size-8 shrink-0 items-center justify-center rounded-xl border sm:size-9 ${event.accent}`}
+                    className={`relative z-10 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border-4 border-white shadow-sm sm:size-9 ${event.accent}`}
                   >
                     <Icon aria-hidden={true} size={16} />
                   </div>
-                  <article className="min-w-0 flex-1 rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 transition hover:border-slate-300 hover:shadow-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                          {event.label}
-                        </p>
-                        {event.href ? (
-                          <Link
-                            className="mt-1 inline-flex max-w-full items-center gap-1 truncate text-sm font-bold text-slate-900 transition hover:text-emerald-700"
-                            href={event.href}
-                          >
-                            {event.title}
-                            <ArrowUpRight aria-hidden={true} size={14} />
-                          </Link>
-                        ) : (
-                          <p className="mt-1 text-sm font-bold text-slate-900">{event.title}</p>
-                        )}
-                      </div>
-                      <time className="shrink-0 text-xs font-medium text-slate-400" dateTime={event.date}>
-                        {formatDate(event.date)}
-                      </time>
+                  <article className="min-w-0 rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 transition hover:border-slate-300 hover:shadow-sm">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        {event.label}
+                      </p>
+                      <span aria-hidden={true} className="text-slate-300">·</span>
+                      <p className="text-xs font-semibold text-slate-600">{event.meta}</p>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-600">{event.meta}</span>
-                      {event.detail ? <span aria-hidden={true}>·</span> : null}
-                      {event.detail ? <span>{event.detail}</span> : null}
-                    </div>
+                    {event.href ? (
+                      <Link
+                        className="mt-1 inline-flex max-w-full items-center gap-1 truncate text-sm font-bold text-slate-900 transition hover:text-emerald-700"
+                        href={event.href}
+                      >
+                        {event.title}
+                        <ArrowUpRight aria-hidden={true} size={14} />
+                      </Link>
+                    ) : (
+                      <p className="mt-1 text-sm font-bold text-slate-900">{event.title}</p>
+                    )}
+                    {event.detail ? (
+                      <p className="mt-2 text-xs text-slate-500">{event.detail}</p>
+                    ) : null}
                   </article>
                 </div>
               );

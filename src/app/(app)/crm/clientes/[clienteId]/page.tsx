@@ -4,15 +4,12 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SectionHeader } from "@/components/shared/section-header";
 import { buttonVariants } from "@/components/ui/button";
-import { hasAnyPermission, hasPermission } from "@/lib/permissions/permission-checks";
+import { hasPermission } from "@/lib/permissions/permission-checks";
 import { isModuleActive } from "@/lib/platform-modules/module-checks";
-import { CustomerForm } from "@/modules/crm/components/customer-form";
 import { CustomerSummaryCard } from "@/modules/crm/components/customer-summary-card";
 import { CustomerTimeline } from "@/modules/crm/components/customer-timeline";
 import { FollowupForm } from "@/modules/crm/components/followup-form";
-import { FollowupsList } from "@/modules/crm/components/followups-list";
 import { InteractionForm } from "@/modules/crm/components/interaction-form";
-import { InteractionsList } from "@/modules/crm/components/interactions-list";
 import {
   getAssignableUsersForCrm,
   getCrmCustomerDetail,
@@ -20,8 +17,6 @@ import {
   getCrmCustomerInteractions,
 } from "@/modules/crm/queries";
 import { getQuotesForCustomer } from "@/modules/quotes/queries";
-import { CustomerQuotesList } from "@/modules/quotes/components/customer-quotes-list";
-import { CustomerSalesList } from "@/modules/sales/components/customer-sales-list";
 import { getSalesForCustomer } from "@/modules/sales/queries";
 import { requireAdminAccess } from "@/modules/tenant/admin-access";
 
@@ -46,20 +41,8 @@ export default async function CustomerDetailPage({
     crmActive && hasPermission(access.tenant.permissions, "crm.interactions.create");
   const canCreateFollowup =
     crmActive && hasPermission(access.tenant.permissions, "crm.followups.create");
-  const canEditFollowup =
-    crmActive && hasPermission(access.tenant.permissions, "crm.followups.edit");
-  const canViewQuotes = hasPermission(access.tenant.permissions, "quotes.view");
   const canCreateQuotes = hasPermission(access.tenant.permissions, "quotes.create");
   const canViewSales = hasPermission(access.tenant.permissions, "sales.orders.view");
-  const canViewActivity =
-    crmActive &&
-    hasAnyPermission(access.tenant.permissions, [
-      "crm.interactions.view",
-      "crm.interactions.create",
-      "crm.followups.view",
-      "crm.followups.create",
-      "crm.followups.edit",
-    ]);
 
   if (!canView) {
     return (
@@ -111,34 +94,40 @@ export default async function CustomerDetailPage({
       ) : null}
 
       <CustomerSummaryCard
+        assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
         actions={
           <>
             {canCreateQuotes ? (
               <Link
-                className={buttonVariants({ size: "sm", variant: "outline" })}
+                className={buttonVariants({
+                  className:
+                    "h-8 border-white/20 bg-white/10 px-2.5 text-[11px] text-white hover:bg-white/20 hover:text-white",
+                  size: "sm",
+                  variant: "outline",
+                })}
                 href={`/cotizaciones/nueva?clienteId=${clienteId}`}
               >
-                Crear cotizacion
+                Cotizar
               </Link>
             ) : null}
             {canCreateFollowup ? (
-              <a
-                className={buttonVariants({ size: "sm", variant: "outline" })}
-                href="#seguimientos"
-              >
-                Agendar seguimiento
-              </a>
+              <FollowupForm
+                assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
+                buttonClassName="h-8 border-white/20 bg-white/10 px-2.5 text-[11px] text-white hover:bg-white/20 hover:text-white"
+                buttonLabel="Seguimiento"
+                clienteId={clienteId}
+              />
             ) : null}
             {canCreateInteraction ? (
-              <a
-                className={buttonVariants({ size: "sm", variant: "outline" })}
-                href="#interacciones"
-              >
-                Registrar interaccion
-              </a>
+              <InteractionForm
+                buttonClassName="h-8 border-white/20 bg-white/10 px-2.5 text-[11px] text-white hover:bg-white/20 hover:text-white"
+                buttonLabel="Interacción"
+                clienteId={clienteId}
+              />
             ) : null}
           </>
         }
+        canEdit={canEdit}
         customer={customer.data}
         lastActivityAt={lastActivityAt}
         stats={{
@@ -149,11 +138,7 @@ export default async function CustomerDetailPage({
         }}
       />
 
-      <section className="space-y-4">
-        <SectionHeader
-          description="Linea de tiempo consolidada con gestiones y seguimientos."
-          title="Historial del cliente"
-        />
+      <section>
         <CustomerTimeline
           followups={followupRows}
           interactions={interactionRows}
@@ -161,71 +146,6 @@ export default async function CustomerDetailPage({
           sales={saleRows}
         />
       </section>
-
-      {canEdit ? (
-        <CustomerForm
-          assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
-          customer={customer.data}
-          mode="update"
-        />
-      ) : null}
-
-      {canViewQuotes || canCreateQuotes ? (
-        <section className="space-y-4">
-          <SectionHeader
-            description="Cotizaciones basicas asociadas a este cliente."
-            title="Cotizaciones"
-          />
-          <CustomerQuotesList
-            canCreate={canCreateQuotes}
-            clienteId={clienteId}
-            quotes={quoteRows}
-          />
-        </section>
-      ) : null}
-
-      {canViewSales ? (
-        <section className="space-y-4">
-          <SectionHeader
-            description="Ventas generadas para este cliente con datos comerciales congelados."
-            title="Ventas"
-          />
-          <CustomerSalesList sales={saleRows} />
-        </section>
-      ) : null}
-
-      {canViewActivity ? (
-        <div className="grid gap-6 xl:grid-cols-2">
-          <section className="space-y-4" id="interacciones">
-            <SectionHeader
-              actions={canCreateInteraction ? <InteractionForm clienteId={clienteId} /> : undefined}
-              description="Notas, llamadas o mensajes registrados manualmente."
-              title="Interacciones"
-            />
-            <InteractionsList interactions={interactionRows} />
-          </section>
-
-          <section className="space-y-4" id="seguimientos">
-            <SectionHeader
-              actions={
-                canCreateFollowup ? (
-                  <FollowupForm
-                    assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
-                    clienteId={clienteId}
-                  />
-                ) : undefined
-              }
-              description="Pendientes comerciales asociados al cliente."
-              title="Seguimientos"
-            />
-            <FollowupsList
-              canEdit={canEditFollowup}
-              clienteId={clienteId}
-              followups={followupRows}
-            />
-          </section>
-        </div>
-      ) : null}
     </section>
   );
 }
