@@ -12,6 +12,8 @@ const tierDatabaseMigration = source("database/migrations/0071_meta_volume_tier_
 const tierSupabaseMigration = source("supabase/migrations/20260814220000_meta_volume_tier_pricing.sql");
 const rateDatabaseMigration = source("database/migrations/0072_seed_meta_rates_2026_08_14.sql");
 const rateSupabaseMigration = source("supabase/migrations/20260814221000_seed_meta_rates_2026_08_14.sql");
+const octoberRateDatabaseMigration = source("database/migrations/0078_meta_pricing_october_2026.sql");
+const octoberRateSupabaseMigration = source("supabase/migrations/20261003120000_meta_pricing_october_2026.sql");
 const dispatcher = source("src/modules/whapp/server/campaign-dispatcher.ts");
 const contactPolicy = source("src/modules/whapp/server/messaging-policy.ts");
 const inboxActions = source("src/modules/inbox/actions.ts");
@@ -55,10 +57,26 @@ test("Meta pricing supports delivered-message volume tiers and free entry points
 
 test("current official rates are reproducible for operational markets", () => {
   assert.equal(rateDatabaseMigration.trim(), rateSupabaseMigration.trim());
+  assert.equal(octoberRateDatabaseMigration.trim(), octoberRateSupabaseMigration.trim());
   assert.match(rateDatabaseMigration, /REST_OF_LATIN_AMERICA/);
   assert.match(rateDatabaseMigration, /MEXICO/);
   assert.match(rateDatabaseMigration, /whatsappbusiness\.com\/products\/platform-pricing/);
   assert.match(rateDatabaseMigration, /40000001, null/);
+  assert.match(
+    octoberRateDatabaseMigration,
+    /'REST_OF_LATIN_AMERICA',[\s\S]*?'SERVICE',[\s\S]*?0\.0113/,
+  );
+  assert.match(
+    octoberRateDatabaseMigration,
+    /'MEXICO',[\s\S]*?'SERVICE',[\s\S]*?0\.0085/,
+  );
+  assert.match(
+    octoberRateDatabaseMigration,
+    /'MEXICO',[\s\S]*?'MARKETING',[\s\S]*?0\.0397/,
+  );
+  assert.match(octoberRateDatabaseMigration, /date '2026-09-30'/);
+  assert.match(octoberRateDatabaseMigration, /cost\.billable is true/);
+  assert.match(octoberRateDatabaseMigration, /cost\.free_entry_point is false/);
 });
 
 test("official template sync is the only route to approved sends", () => {
