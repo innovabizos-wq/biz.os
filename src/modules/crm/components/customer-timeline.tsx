@@ -224,7 +224,7 @@ export function CustomerTimeline({
         <div className="relative px-5 py-6 sm:px-6">
           <div
             aria-hidden={true}
-            className="absolute bottom-8 left-[91px] top-8 w-px bg-gradient-to-b from-slate-300 via-slate-200 to-transparent sm:left-[122px]"
+            className="absolute bottom-8 right-[91px] top-8 w-px bg-gradient-to-b from-slate-300 via-slate-200 to-transparent sm:right-[122px]"
           />
           <div className="space-y-5">
             {events.map((event) => {
@@ -233,24 +233,9 @@ export function CustomerTimeline({
 
               return (
                 <div
-                  className="relative grid grid-cols-[68px_30px_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[92px_36px_minmax(0,1fr)] sm:gap-3"
+                  className="relative grid grid-cols-[minmax(0,1fr)_30px_68px] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_36px_92px] sm:gap-3"
                   key={`${event.kind}-${event.id}`}
                 >
-                  <time
-                    className="pt-1 text-right text-[11px] font-semibold leading-tight text-slate-400"
-                    dateTime={event.date}
-                  >
-                    <span className="block text-xs font-black text-slate-700">
-                      {eventDate.day} {eventDate.month}
-                    </span>
-                    <span className="mt-1 block">{eventDate.year}</span>
-                    <span className="mt-1 block text-slate-500">{eventDate.time}</span>
-                  </time>
-                  <div
-                    className={`relative z-10 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border-4 border-white shadow-sm sm:size-9 ${event.accent}`}
-                  >
-                    <Icon aria-hidden={true} size={16} />
-                  </div>
                   <article className="min-w-0 rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 transition hover:border-slate-300 hover:shadow-sm">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
@@ -274,6 +259,21 @@ export function CustomerTimeline({
                       <p className="mt-2 text-xs text-slate-500">{event.detail}</p>
                     ) : null}
                   </article>
+                  <div
+                    className={`relative z-10 mt-0.5 flex size-8 shrink-0 items-center justify-center justify-self-center rounded-full border-4 border-white shadow-sm sm:size-9 ${event.accent}`}
+                  >
+                    <Icon aria-hidden={true} size={16} />
+                  </div>
+                  <time
+                    className="pt-1 text-left text-[11px] font-semibold leading-tight text-slate-400 sm:text-left"
+                    dateTime={event.date}
+                  >
+                    <span className="block text-xs font-black text-slate-700">
+                      {eventDate.day} {eventDate.month}
+                    </span>
+                    <span className="mt-1 block">{eventDate.year}</span>
+                    <span className="mt-1 block text-slate-500">{eventDate.time}</span>
+                  </time>
                 </div>
               );
             })}
