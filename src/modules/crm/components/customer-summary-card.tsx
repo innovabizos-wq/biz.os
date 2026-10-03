@@ -124,8 +124,8 @@ export function CustomerSummaryCard({
                   {customer.nombre}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                  Ficha comercial rapida para entender el estado del cliente, su
-                  contacto y el movimiento reciente sin navegar entre formularios.
+                  Consulta sus datos de contacto, el estado de la relacion y las
+                  ultimas oportunidades, ventas y seguimientos en un solo lugar.
                 </p>
               </div>
             </div>

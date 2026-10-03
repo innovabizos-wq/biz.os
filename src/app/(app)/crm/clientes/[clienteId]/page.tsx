@@ -104,12 +104,6 @@ export default async function CustomerDetailPage({
 
   return (
     <section className="space-y-6">
-      <SectionHeader
-        description="Ficha comercial, historial y acciones para avanzar la relacion."
-        eyebrow="CRM"
-        title={customer.data.nombre}
-      />
-
       {query?.error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           {query.error}
@@ -204,24 +198,26 @@ export default async function CustomerDetailPage({
         <div className="grid gap-6 xl:grid-cols-2">
           <section className="space-y-4" id="interacciones">
             <SectionHeader
+              actions={canCreateInteraction ? <InteractionForm clienteId={clienteId} /> : undefined}
               description="Notas, llamadas o mensajes registrados manualmente."
               title="Interacciones"
             />
-            {canCreateInteraction ? <InteractionForm clienteId={clienteId} /> : null}
             <InteractionsList interactions={interactionRows} />
           </section>
 
           <section className="space-y-4" id="seguimientos">
             <SectionHeader
+              actions={
+                canCreateFollowup ? (
+                  <FollowupForm
+                    assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
+                    clienteId={clienteId}
+                  />
+                ) : undefined
+              }
               description="Pendientes comerciales asociados al cliente."
               title="Seguimientos"
             />
-            {canCreateFollowup ? (
-              <FollowupForm
-                assignableUsers={assignableUsers.ok ? assignableUsers.data : []}
-                clienteId={clienteId}
-              />
-            ) : null}
             <FollowupsList
               canEdit={canEditFollowup}
               clienteId={clienteId}

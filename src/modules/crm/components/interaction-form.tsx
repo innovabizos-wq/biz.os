@@ -1,61 +1,104 @@
-import { CRM_INTERACCION_TIPOS } from "@/modules/crm/constants";
-import { createInteractionAction } from "@/modules/crm/actions";
+"use client";
+
+import { useState } from "react";
+import { FilePlus2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { createInteractionAction } from "@/modules/crm/actions";
+import { CRM_INTERACCION_TIPOS } from "@/modules/crm/constants";
 
 type InteractionFormProps = {
   clienteId: string;
 };
 
+const interactionTypeLabels: Record<(typeof CRM_INTERACCION_TIPOS)[number], string> = {
+  correo: "Correo",
+  llamada: "Llamada",
+  nota: "Nota",
+  reunion: "Reunión",
+  sistema: "Sistema",
+  whatsapp: "WhatsApp",
+};
+
 export function InteractionForm({ clienteId }: InteractionFormProps) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <form
-      action={createInteractionAction}
-      className="grid gap-4 rounded-lg border bg-background p-5 shadow-sm"
-    >
-      <input name="clienteId" type="hidden" value={clienteId} />
-      <div>
-        <h3 className="text-base font-semibold">Nueva interaccion</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Registro manual. No integra WhatsApp ni llamadas reales todavia.
-        </p>
-      </div>
-
-      <label className="space-y-2 text-sm font-medium">
-        Tipo
-        <select
-          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-          defaultValue="nota"
-          name="tipo"
-          required
-        >
-          {CRM_INTERACCION_TIPOS.map((tipo) => (
-            <option key={tipo} value={tipo}>
-              {tipo}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="space-y-2 text-sm font-medium">
-        Resultado
-        <input
-          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-          name="resultado"
-        />
-      </label>
-
-      <label className="space-y-2 text-sm font-medium">
-        Resumen
-        <textarea
-          className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm"
-          name="resumen"
-          required
-        />
-      </label>
-
-      <Button className="w-fit" type="submit">
-        Registrar interaccion
+    <Dialog onOpenChange={setOpen} open={open}>
+      <Button
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <FilePlus2 aria-hidden={true} />
+        Nueva interacción
       </Button>
-    </form>
+      <DialogContent className="max-w-lg rounded-[26px] p-0">
+        <DialogHeader className="border-b border-slate-200 px-6 py-5">
+          <DialogTitle className="text-xl font-black text-slate-950">
+            Registrar interacción
+          </DialogTitle>
+          <DialogDescription>
+            Guarda una nota, llamada o conversación importante para este cliente.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form action={createInteractionAction} className="grid gap-4 px-6 py-5">
+          <input name="clienteId" type="hidden" value={clienteId} />
+          <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+            Tipo de interacción
+            <select
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              defaultValue="nota"
+              name="tipo"
+              required
+            >
+              {CRM_INTERACCION_TIPOS.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {interactionTypeLabels[tipo]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+            Resultado o detalle breve
+            <input
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              name="resultado"
+              placeholder="Ej. Solicitó una cotización"
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+            ¿Qué ocurrió?
+            <textarea
+              className="min-h-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              name="resumen"
+              placeholder="Escribe la información que quieras conservar en el historial."
+              required
+            />
+          </label>
+
+          <DialogFooter className="-mx-6 -mb-5 border-t border-slate-200 bg-slate-50 px-6 py-4">
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              Cancelar
+            </DialogClose>
+            <Button type="submit">Guardar interacción</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
