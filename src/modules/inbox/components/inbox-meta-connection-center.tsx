@@ -43,9 +43,16 @@ function hasPublicConfiguration(
   network: InboxMetaChannel,
 ) {
   if (network === "whatsapp") {
+    const isSharedNumber =
+      channel.configuracionPublica.whatsapp_account_model === "shared_waac_pma";
+
     return Boolean(
       channel.configuracionPublica.phone_number_id &&
-        channel.configuracionPublica.waba_id,
+        channel.configuracionPublica.app_id &&
+        (isSharedNumber
+          ? channel.configuracionPublica.waac_id &&
+            channel.configuracionPublica.pma_id
+          : channel.configuracionPublica.waba_id),
     );
   }
 

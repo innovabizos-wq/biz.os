@@ -148,6 +148,18 @@ function getChannelValue(channel: InboxChannelConfig | undefined): InboxMetaChan
     : "whatsapp";
 }
 
+function getWhatsAppAccountModel(channel: InboxChannelConfig | undefined) {
+  return channel?.configuracionPublica.whatsapp_account_model === "shared_waac_pma"
+    ? "shared_waac_pma"
+    : "legacy_waba";
+}
+
+function getAutomationOwner(channel: InboxChannelConfig | undefined) {
+  const owner = channel?.configuracionPublica.automation_owner;
+
+  return owner === "external" || owner === "manual" ? owner : "bizos";
+}
+
 export function InboxMetaChannelForm({
   channel,
   mode,
@@ -157,6 +169,9 @@ export function InboxMetaChannelForm({
   const initialChannel = getChannelValue(channel);
   const [selectedChannel, setSelectedChannel] =
     useState<InboxMetaChannel>(initialChannel);
+  const [whatsappAccountModel, setWhatsappAccountModel] = useState<
+    "legacy_waba" | "shared_waac_pma"
+  >(getWhatsAppAccountModel(channel));
   const selectedHelp = channelFieldHelp[selectedChannel];
 
   return (
@@ -217,25 +232,123 @@ export function InboxMetaChannelForm({
       />
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {selectedHelp.fields.map((field) => (
-          <label className="space-y-1 text-sm" key={field.name}>
-            <span className="font-medium">
-              {field.label}
-              {field.required ? <span className="text-destructive"> *</span> : null}
-            </span>
-            <input
-              className="h-9 w-full rounded-md border bg-background px-3"
-              defaultValue={getConfigText(channel, field.key)}
-              name={field.name}
-              placeholder={field.placeholder}
-              required={field.required}
-            />
-            <span className="block text-xs text-muted-foreground">
-              {field.help}
-            </span>
-          </label>
-        ))}
+        {selectedHelp.fields.map((field) => {
+          const required =
+            field.key === "waba_id" && selectedChannel === "whatsapp"
+              ? whatsappAccountModel === "legacy_waba"
+              : field.required;
+
+          return (
+            <label className="space-y-1 text-sm" key={field.name}>
+              <span className="font-medium">
+                {field.label}
+                {required ? <span className="text-destructive"> *</span> : null}
+              </span>
+              <input
+                className="h-9 w-full rounded-md border bg-background px-3"
+                defaultValue={getConfigText(channel, field.key)}
+                name={field.name}
+                placeholder={field.placeholder}
+                required={required}
+              />
+              <span className="block text-xs text-muted-foreground">
+                {field.help}
+              </span>
+            </label>
+          );
+        })}
       </div>
+
+      {selectedChannel === "whatsapp" ? (
+        <section className="mt-4 rounded-lg border bg-muted/30 p-4">
+          <div>
+            <p className="font-semibold">Modelo de cuenta WhatsApp</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Usa "numero compartido" solo cuando Meta haya autorizado este
+              mismo numero para biz.os y otro proveedor, como Callbell.
+            </p>
+          </div>
+
+          <label className="mt-4 block space-y-1 text-sm">
+            <span className="font-medium">Uso del numero</span>
+            <select
+              className="h-9 w-full rounded-md border bg-background px-3 md:w-96"
+              name="whatsappAccountModel"
+              onChange={(event) =>
+                setWhatsappAccountModel(
+                  event.target.value as "legacy_waba" | "shared_waac_pma",
+                )
+              }
+              value={whatsappAccountModel}
+            >
+              <option value="legacy_waba">Cuenta WABA tradicional</option>
+              <option value="shared_waac_pma">
+                Numero compartido entre proveedores (WAAC / PMA)
+              </option>
+            </select>
+          </label>
+
+          {whatsappAccountModel === "shared_waac_pma" ? (
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">
+                  WAAC ID <span className="text-destructive">*</span>
+                </span>
+                <input
+                  className="h-9 w-full rounded-md border bg-background px-3"
+                  defaultValue={getConfigText(channel, "waac_id")}
+                  name="waacId"
+                  placeholder="ID de la WhatsApp Account compartida"
+                  required
+                />
+                <span className="block text-xs text-muted-foreground">
+                  Identifica el numero compartido que Meta autorizo.
+                </span>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">
+                  PMA ID de biz.os <span className="text-destructive">*</span>
+                </span>
+                <input
+                  className="h-9 w-full rounded-md border bg-background px-3"
+                  defaultValue={getConfigText(channel, "pma_id")}
+                  name="pmaId"
+                  placeholder="Cuenta de mensajeria que factura biz.os"
+                  required
+                />
+                <span className="block text-xs text-muted-foreground">
+                  Se usa para atribuir a biz.os sus costos de mensajeria.
+                </span>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Proveedor adicional</span>
+                <input
+                  className="h-9 w-full rounded-md border bg-background px-3"
+                  defaultValue={getConfigText(channel, "external_partner")}
+                  name="externalPartner"
+                  placeholder="Ej. Callbell"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Quien controla automatizaciones</span>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3"
+                  defaultValue={getAutomationOwner(channel)}
+                  name="automationOwner"
+                >
+                  <option value="bizos">biz.os</option>
+                  <option value="external">Proveedor adicional</option>
+                  <option value="manual">Solo equipo humano</option>
+                </select>
+                <span className="block text-xs text-muted-foreground">
+                  Si no es biz.os, las campanas quedan bloqueadas para evitar
+                  envios duplicados.
+                </span>
+              </label>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {mode === "update" ? (
         <label className="mt-4 block space-y-1 text-sm">

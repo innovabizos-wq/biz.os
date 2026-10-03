@@ -99,14 +99,21 @@ export const changeInboxConversationStatusSchema = z.object({
 
 export const createMetaChannelSchema = z.object({
   appId: optionalTextSchema,
+  automationOwner: z.enum(["bizos", "external", "manual"]).default("bizos"),
   businessId: optionalTextSchema,
   canal: inboxMetaChannelSchema,
+  externalPartner: optionalTextSchema,
   identificadorExterno: optionalTextSchema,
   instagramBusinessAccountId: optionalTextSchema,
   nombre: nonEmptyTextSchema,
   pageId: optionalTextSchema,
   phoneNumberId: optionalTextSchema,
+  pmaId: optionalTextSchema,
+  waacId: optionalTextSchema,
   wabaId: optionalTextSchema,
+  whatsappAccountModel: z
+    .enum(["legacy_waba", "shared_waac_pma"])
+    .default("legacy_waba"),
 });
 
 export const updateMetaChannelConfigSchema = createMetaChannelSchema.extend({

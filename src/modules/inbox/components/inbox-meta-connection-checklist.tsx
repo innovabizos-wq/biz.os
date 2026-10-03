@@ -47,7 +47,20 @@ export function InboxMetaConnectionChecklist({
       ? channel.canal
       : "whatsapp";
   const publicFields = requiredPublicFields[channelKey];
-  const publicReady = publicFields.every(([key]) => hasConfigValue(channel, key));
+  const isSharedWhatsApp =
+    channelKey === "whatsapp" &&
+    channel.configuracionPublica.whatsapp_account_model === "shared_waac_pma";
+  const resolvedPublicFields = isSharedWhatsApp
+    ? [
+        ["phone_number_id", "Phone Number ID"],
+        ["waac_id", "WAAC ID"],
+        ["pma_id", "PMA ID de biz.os"],
+        ["app_id", "App ID"],
+      ]
+    : publicFields;
+  const publicReady = resolvedPublicFields.every(([key]) =>
+    hasConfigValue(channel, key),
+  );
   const secretsReady = Boolean(
     metaStatus?.tieneAccessToken &&
       metaStatus.tieneAppSecret &&
@@ -83,7 +96,7 @@ export function InboxMetaConnectionChecklist({
           <div>
             <p className="font-medium">Configuracion publica del canal</p>
             <p className="text-muted-foreground">
-              Requerido: {publicFields.map(([, label]) => label).join(", ")}.
+              Requerido: {resolvedPublicFields.map(([, label]) => label).join(", ")}.
             </p>
           </div>
         </div>

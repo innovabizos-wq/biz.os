@@ -165,6 +165,32 @@ async function validateDispatchGuard(
   campaign: CampaignDispatchCampaignRow,
   template: CampaignDispatchTemplateRow,
 ) {
+  const { data: channelData, error: channelError } = await supabase
+    .from("inbox_canales")
+    .select("configuracion_publica")
+    .eq("empresa_id", campaign.empresa_id)
+    .eq("id", campaign.canal_id)
+    .maybeSingle<{ configuracion_publica: unknown }>();
+  if (channelError) {
+    return "No se pudo validar la configuracion del canal WhatsApp.";
+  }
+
+  const channelConfig = asRecord(channelData?.configuracion_publica);
+  if (channelConfig.whatsapp_account_model === "shared_waac_pma") {
+    if (
+      typeof channelConfig.waac_id !== "string" ||
+      !channelConfig.waac_id ||
+      typeof channelConfig.pma_id !== "string" ||
+      !channelConfig.pma_id
+    ) {
+      return "El numero compartido requiere WAAC ID y PMA ID antes de automatizar envios.";
+    }
+
+    if (channelConfig.automation_owner !== "bizos") {
+      return "Las campanas de biz.os estan desactivadas porque otro proveedor o el equipo manual controla las automatizaciones de este numero compartido.";
+    }
+  }
+
   const { data: policyData } = await supabase
     .from("inbox_meta_politicas_envio")
     .select(

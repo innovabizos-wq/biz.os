@@ -60,9 +60,59 @@ type RpcIdRow = {
   id?: string;
 };
 
+type WhatsAppAccountModelInput = {
+  automationOwner: "bizos" | "external" | "manual";
+  canal: "facebook" | "instagram" | "whatsapp";
+  externalPartner?: string;
+  pmaId?: string;
+  waacId?: string;
+  whatsappAccountModel: "legacy_waba" | "shared_waac_pma";
+};
+
 type VerifyTokenRow = {
   verify_token?: string;
 };
+
+function getWhatsAppAccountModelError(input: WhatsAppAccountModelInput) {
+  if (
+    input.canal !== "whatsapp" ||
+    input.whatsappAccountModel !== "shared_waac_pma"
+  ) {
+    return null;
+  }
+
+  if (!input.waacId || !input.pmaId) {
+    return "Para un numero compartido debes indicar WAAC ID y el PMA ID de biz.os.";
+  }
+
+  if (input.automationOwner === "external" && !input.externalPartner) {
+    return "Indica el proveedor externo que controla las automatizaciones.";
+  }
+
+  return null;
+}
+
+async function saveWhatsAppAccountModel(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  canalId: string,
+  input: WhatsAppAccountModelInput,
+) {
+  if (input.canal !== "whatsapp") return null;
+
+  const { error } = await supabase.rpc(
+    "actualizar_inbox_canal_meta_numero_compartido",
+    {
+      p_automation_owner: input.automationOwner,
+      p_canal_id: canalId,
+      p_external_partner: input.externalPartner ?? null,
+      p_pma_id: input.pmaId ?? null,
+      p_waac_id: input.waacId ?? null,
+      p_whatsapp_account_model: input.whatsappAccountModel,
+    },
+  );
+
+  return error;
+}
 
 type WhatsAppSendConfigRow = {
   access_token?: string;
@@ -519,6 +569,11 @@ export async function createMetaChannelAction(formData: FormData) {
     redirectWithError("/inbox/canales/nuevo", "Datos de canal Meta invalidos.");
   }
 
+  const accountModelError = getWhatsAppAccountModelError(parsed.data);
+  if (accountModelError) {
+    redirectWithError("/inbox/canales/nuevo", accountModelError);
+  }
+
   await assertInboxPermission("inbox.channels.manage", "/inbox/canales/nuevo");
 
   const supabase = await createClient();
@@ -526,7 +581,10 @@ export async function createMetaChannelAction(formData: FormData) {
     p_app_id: parsed.data.appId ?? null,
     p_business_id: parsed.data.businessId ?? null,
     p_canal: parsed.data.canal,
-    p_identificador_externo: parsed.data.identificadorExterno ?? null,
+    p_identificador_externo:
+      parsed.data.canal === "whatsapp"
+        ? parsed.data.phoneNumberId ?? parsed.data.identificadorExterno ?? null
+        : parsed.data.identificadorExterno ?? null,
     p_instagram_business_account_id:
       parsed.data.instagramBusinessAccountId ?? null,
     p_nombre: parsed.data.nombre,
@@ -547,6 +605,23 @@ export async function createMetaChannelAction(formData: FormData) {
 
   const canalId = (data as RpcIdRow[] | null)?.[0]?.id;
 
+  if (canalId) {
+    const accountModelSaveError = await saveWhatsAppAccountModel(
+      supabase,
+      canalId,
+      parsed.data,
+    );
+    if (accountModelSaveError) {
+      logInboxActionError("createMetaChannelAction.accountModel", accountModelSaveError, {
+        canalId,
+      });
+      redirectWithError(
+        `/inbox/canales/${canalId}`,
+        `El canal fue creado, pero no se pudo guardar la configuracion WAAC/PMA: ${safeErrorMessage(accountModelSaveError)}`,
+      );
+    }
+  }
+
   await supabase.rpc("recalcular_salud_modulos_empresa_actual");
   revalidateInboxPaths(undefined, canalId);
   redirect(canalId ? `/inbox/canales/${canalId}` : "/inbox/canales");
@@ -563,6 +638,11 @@ export async function updateMetaChannelConfigAction(formData: FormData) {
     redirectWithError(fallbackPath, "Datos de configuracion Meta invalidos.");
   }
 
+  const accountModelError = getWhatsAppAccountModelError(parsed.data);
+  if (accountModelError) {
+    redirectWithError(fallbackPath, accountModelError);
+  }
+
   await assertInboxPermission("inbox.channels.manage", fallbackPath);
 
   const supabase = await createClient();
@@ -571,7 +651,10 @@ export async function updateMetaChannelConfigAction(formData: FormData) {
     p_business_id: parsed.data.businessId ?? null,
     p_canal_id: parsed.data.canalId,
     p_conexion_estado: parsed.data.conexionEstado,
-    p_identificador_externo: parsed.data.identificadorExterno ?? null,
+    p_identificador_externo:
+      parsed.data.canal === "whatsapp"
+        ? parsed.data.phoneNumberId ?? parsed.data.identificadorExterno ?? null
+        : parsed.data.identificadorExterno ?? null,
     p_instagram_business_account_id:
       parsed.data.instagramBusinessAccountId ?? null,
     p_nombre: parsed.data.nombre,
@@ -587,6 +670,23 @@ export async function updateMetaChannelConfigAction(formData: FormData) {
     redirectWithError(
       fallbackPath,
       `No se pudo actualizar el canal Meta: ${safeErrorMessage(error)}`,
+    );
+  }
+
+  const accountModelSaveError = await saveWhatsAppAccountModel(
+    supabase,
+    parsed.data.canalId,
+    parsed.data,
+  );
+  if (accountModelSaveError) {
+    logInboxActionError(
+      "updateMetaChannelConfigAction.accountModel",
+      accountModelSaveError,
+      { canalId: parsed.data.canalId },
+    );
+    redirectWithError(
+      fallbackPath,
+      `No se pudo guardar la configuracion WAAC/PMA: ${safeErrorMessage(accountModelSaveError)}`,
     );
   }
 

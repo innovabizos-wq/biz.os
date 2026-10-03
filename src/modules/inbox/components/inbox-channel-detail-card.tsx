@@ -19,6 +19,11 @@ export function InboxChannelDetailCard({
   const businessId = channel.configuracionPublica.business_id;
   const pageId = channel.configuracionPublica.page_id;
   const instagramId = channel.configuracionPublica.instagram_business_account_id;
+  const whatsappAccountModel = channel.configuracionPublica.whatsapp_account_model;
+  const waacId = channel.configuracionPublica.waac_id;
+  const pmaId = channel.configuracionPublica.pma_id;
+  const externalPartner = channel.configuracionPublica.external_partner;
+  const automationOwner = channel.configuracionPublica.automation_owner;
   const tokenSuffix = metaStatus?.accessTokenSuffix
     ? `...${metaStatus.accessTokenSuffix}`
     : "No disponible";
@@ -77,6 +82,50 @@ export function InboxChannelDetailCard({
                 {typeof wabaId === "string" && wabaId ? wabaId : "No registrado"}
               </dd>
             </div>
+            {channel.canal === "whatsapp" ? (
+              <>
+                <div>
+                  <dt className="text-muted-foreground">Modelo de cuenta</dt>
+                  <dd>
+                    {whatsappAccountModel === "shared_waac_pma"
+                      ? "Numero compartido (WAAC / PMA)"
+                      : "WABA tradicional"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">waac_id</dt>
+                  <dd className="break-all font-mono text-xs">
+                    {typeof waacId === "string" && waacId
+                      ? waacId
+                      : "No aplica"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">pma_id de biz.os</dt>
+                  <dd className="break-all font-mono text-xs">
+                    {typeof pmaId === "string" && pmaId ? pmaId : "No aplica"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Proveedor adicional</dt>
+                  <dd>
+                    {typeof externalPartner === "string" && externalPartner
+                      ? externalPartner
+                      : "No registrado"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Automatizaciones</dt>
+                  <dd>
+                    {automationOwner === "external"
+                      ? "Proveedor adicional"
+                      : automationOwner === "manual"
+                        ? "Solo equipo humano"
+                        : "biz.os"}
+                  </dd>
+                </div>
+              </>
+            ) : null}
             <div>
               <dt className="text-muted-foreground">app_id</dt>
               <dd className="break-all font-mono text-xs">
